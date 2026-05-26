@@ -1,0 +1,158 @@
+# yaml-language-server: $schema=../../spore-os-protocol/versions/v1/spore.manifest.v1.schema.yaml
+
+id: dev.sporeos.SPORE
+name: Spore OS
+description: The central hub of the Spore ecosystem.
+schema: SPORE/v1d0
+version: 0.0.1
+app: n/a
+
+api:
+  - name: SPORE.help
+    description: Get generic help.
+    usage:
+      - SPORE.node.help
+    outputs:
+      - name: nodeinfo
+        type: object
+        description: Node information of dev.sporeos.SPORE
+
+  - name: SPORE.node.install
+    description: Install a node.
+    usage:
+      - SPORE.node.install path=/path/to/manifest/node.manifest.spore.yaml
+      - SPORE.node.install path=(dialog ext=[ '.manifest.spore.yaml' ])
+    inputs:
+      - name: path
+        type: string
+        description: Path to .manifest.spore.yaml file.
+        required: true
+    outputs: []
+
+  - name: SPORE.node.uninstall
+    description: Uninstall a node.
+    usage:
+      - SPORE.node.uninstall node=node
+    inputs:
+      - name: node
+        type: string
+        description: Node ID
+        required: false
+      - name: path
+        type: string
+        description: Path to .manifest.spore.yaml file.
+        required: false
+    outputs: []
+    notes:
+      - Only one of 'node', 'path' required.
+
+  - name: SPORE.node.spawn
+    description: Start a node.
+    usage:
+      - SPORE.node.spawn node=node
+    inputs:
+      - name: node
+        type: string
+        description: Node ID
+        required: true
+    outputs: []
+    notes:
+      - Nodes will spawn headless.
+
+  - name: SPORE.node.kill
+    description: Stop a node.
+    usage:
+      - SPORE.node.kill node=node
+    inputs:
+      - name: node
+        type: string
+        description: Node ID
+        required: true
+    outputs: []
+
+  - name: SPORE.node.list
+    description: Get a list of installed nodes by ID.
+    usage:
+      - SPORE.node.list
+      - SPORE.node.list connected
+    inputs:
+      - name: connected
+        type: flag
+        description: Append the 'connected' token to each node that is currently connected.
+    outputs:
+      - name: nodes
+        type: array
+        description: List of node IDs. Additional information controlled by flags.
+
+  - name: SPORE.node.help
+    description: Get help with a node.
+    usage:
+      - SPORE.node.help node=node
+    inputs:
+      - name: node
+        type: string
+        description: Node ID
+        required: true
+    outputs:
+      - name: nodeinfo
+        type: object
+        description: Node information
+
+  - name: SPORE.command.list
+    description: Get list of commands.
+    usage:
+      - SPORE.command.list
+        SPORE.command.list node=node
+    inputs:
+      - name: node
+        type: string
+        description: Node ID.
+        required: true
+    outputs:
+      - name: commands
+        type: array
+        description: List of commands.
+
+  - name: SPORE.command.help
+    description: Get help with a command.
+    usage:
+      - SPORE.command.help command=command
+    inputs:
+      - name: command
+        type: string
+        description: Command shorthand.
+        required: true
+    outputs:
+      - name: commandinfo
+        type: object
+        description: Command information.
+
+  - name: SPORE.error.list
+    description: Get a list of error codes.
+    usage:
+      - SPORE.error.list
+      - SPORE.error.list node=node
+    inputs:
+      - name: node
+        type: string
+        description: Node ID. Omit for standard error codes.
+        required: false
+    outputs:
+      - name: errors
+        type: array
+        description: List of error code names.
+
+  - name: SPORE.error.help
+    description: Get help for an error code.
+    usage:
+      - SPORE.error.help error=RouteNotFound
+      - SPORE.error.help error=clock.err.invalid_timezone
+    inputs:
+      - name: error
+        type: string
+        description: Error code.
+        required: true
+    outputs:
+      - name: errorinfo
+        type: object
+        description: Error information.

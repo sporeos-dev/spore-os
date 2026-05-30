@@ -1,4 +1,4 @@
-// Copyright 2026 mharr
+// Copyright 2026 Matt HarrisonHarrison
 // SPDX-License-Identifier: AGPL-3.0-only
 
 //go:build !linux

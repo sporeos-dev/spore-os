@@ -1,4 +1,4 @@
-// Copyright 2026 Matt Harrison
+// Copyright 2026 mharr
 // SPDX-License-Identifier: AGPL-3.0-only
 
 package logging

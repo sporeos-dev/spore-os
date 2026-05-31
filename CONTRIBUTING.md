@@ -23,10 +23,21 @@ We use an automated system to manage CLAs. You do not need to download, print, o
 
 > **Note**: If you are contributing on behalf of an employer or organization, please ensure your employer has approved this agreement. If you are not the sole copyright owner of the contribution, all co-authors must also sign.
 
+## Branching Strategy
+
+- **`main`** — stable, clean integration. Only receives merges from `develop` branches via pull request.
+- **`develop`** — active integration branch. Day-to-day work lands here. Expected to be messy at times.
+- **`release/x.x.x`** — cut from `main` when preparing a release. Only bug fixes go in at this stage.
+- **Feature branches** — branch from `main`, merge back to `develop` via pull request.
+
+CI runs on every push to `develop`, `main`, and `release/**`. Pull requests targeting `main` or `release/**` additionally run static analysis before merge.
+
+On **Windows**, a Unix-compatible shell is required to run the project scripts (e.g. [Git Bash](https://git-scm.com/downloads)).
+
 ## Development Guidelines
 
 - **Code Style**: Follow the existing coding conventions in the repository.
-- **Testing**: Ensure all tests pass before submitting a PR.
+- **Testing**: Ensure all tests pass before submitting a PR. Run `make check` && `make analyze` locally before pushing.
 - **Commits**: Write clear, descriptive commit messages.
 - **Issues**: If you find a bug or have a feature request, please open an issue first to discuss it.
 

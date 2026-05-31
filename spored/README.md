@@ -1,3 +1,7 @@
+> For project overview, contributing guidelines, code of conduct, security policy,
+> and licensing information, see the
+> [sporeos-dev organization README](https://github.com/sporeos-dev/.github).
+
 # spore-os
 
 `spored` is the central IPC hub daemon of the Spore OS ecosystem. It runs as a dedicated system user via launchd (macOS), systemd (Linux), or the Windows SCM.

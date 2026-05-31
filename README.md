@@ -1,8 +1,6 @@
 
+> For project overview, contributing guidelines, code of conduct, security policy,
+> and licensing information, see the
+> [sporeos-dev organization README](https://github.com/sporeos-dev/.github).
+
 # Spore OS
-
-## License
-
-This project is currently licensed under the **AGPL-3.0**.  
-We plan to offer a **commercial license** in the future for proprietary use.  
-👉 [Read our full Licensing Roadmap & Policy](./LICENSING.md) 

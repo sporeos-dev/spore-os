@@ -16,7 +16,7 @@ import (
 )
 
 var svcConfig = &service.Config{
-	Name:        "dev.spore.spored",
+	Name:        "dev.sporeos.spored",
 	DisplayName: "Spore OS Daemon",
 	Description: "The Spore OS IPC hub daemon.",
 	// UserName runs the daemon as the dedicated _spore system account.

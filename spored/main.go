@@ -16,7 +16,7 @@ import (
 )
 
 var svcConfig = &service.Config{
-	Name:        "dev.spore.spored",
+	Name:        "dev.sporeos.spored",
 	DisplayName: "Spore OS Daemon",
 	Description: "The Spore OS IPC hub daemon.",
 	// UserName runs the daemon as the dedicated _spore system account.
@@ -36,6 +36,9 @@ func main() {
 	slog.SetDefault(slog.New(logging.NewPlainHandler(slog.LevelDebug)))
 
 	prg := &program{}
+	if runtime.GOOS == "windows" {
+		svcConfig.UserName = ""
+	}
 	svc, err := service.New(prg, svcConfig)
 	if err != nil {
 		slog.Error("Failed to create service", "error", err)

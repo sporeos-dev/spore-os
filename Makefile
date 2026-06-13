@@ -5,9 +5,6 @@ SPORED_DIR := spored
 .PHONY: check analyze setup
 
 check:
-	@echo "==> Cleaning build and test cache..."
-	@cd $(SPORED_DIR) && go clean -cache -testcache
-	
 	@echo "==> Building..."
 	@cd $(SPORED_DIR) && go build ./...
 	
@@ -30,9 +27,6 @@ analyze:
 	@cd $(SPORED_DIR) && go test -coverprofile=coverage.out ./...
 	@cd $(SPORED_DIR) && go tool cover -func=coverage.out
 
-	@echo "==> Running staticcheck..."
-	@cd $(SPORED_DIR) && staticcheck ./...
-
 	@echo "==> Running golangci-lint..."
 	@cd $(SPORED_DIR) && golangci-lint run ./...
 
@@ -42,9 +36,6 @@ analyze:
 	@echo "==> Analysis complete."
 
 setup:
-	@echo "==> Installing staticcheck..."
-	@go install honnef.co/go/tools/cmd/staticcheck@latest
-
 	@echo "==> Installing golangci-lint..."
 	@go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 

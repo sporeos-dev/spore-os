@@ -26,6 +26,15 @@ import (
 // permission to recreate it. /Library/Application Support/spore-os/ is owned
 // by _spore, persists across reboots, and requires no extra setup plist.
 func socketPath() string {
+	if override := os.Getenv("SPORE_DATA_DIR"); override != "" {
+		if runtime.GOOS == "windows" {
+			os.MkdirAll(override, 0755)
+			return filepath.Join(override, "spore.sock")
+		}
+		dir := filepath.Join(override, "run")
+		os.MkdirAll(dir, 0755)
+		return filepath.Join(dir, "spore.sock")
+	}
 	switch runtime.GOOS {
 	case "darwin":
 		dir := "/Library/Application Support/spore-os/run"

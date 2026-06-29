@@ -4,6 +4,8 @@
 package registry
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,7 +19,7 @@ name: Test
 description: A test node.
 schema: SPORE/v1d0
 version: 1.0.0
-app: ./test
+app: "n/a"
 api: []
 `
 
@@ -44,6 +46,10 @@ func openRegistry(t *testing.T) *Registry {
 	}
 	return r
 }
+
+// =============================================================================
+// Add tests
+// =============================================================================
 
 func TestRegistry_Add_WrongExtension(t *testing.T) {
 	r := openRegistry(t)
@@ -94,8 +100,8 @@ func TestRegistry_Add_Valid(t *testing.T) {
 	if err := r.Add(path); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	manifestsDir, _ := ManifestsDir()
-	expectedPath := filepath.Join(manifestsDir, "com.example.test.manifest.spore.yaml")
+	storeDir, _ := StoreDir()
+	expectedPath := filepath.Join(storeDir, "com.example.test", "com.example.test.manifest.spore.yaml")
 	if len(r.Paths()) != 1 || r.Paths()[0] != expectedPath {
 		t.Errorf("expected system path %q to be registered, got: %v", expectedPath, r.Paths())
 	}
@@ -104,13 +110,17 @@ func TestRegistry_Add_Valid(t *testing.T) {
 // =============================================================================
 // SPEC §8.2: "Relative paths are relative to the manifest directory."
 // The stored copy must carry an absolute app: path so it remains correct after
-// the copy is moved to the daemon-owned manifests directory.
+// the copy is moved to the daemon-owned store directory.
 // =============================================================================
 
 func TestRegistry_Add_ResolvesRelativeAppPath(t *testing.T) {
 	r := openRegistry(t)
 	dir := t.TempDir()
-	// app: is a bare relative name — should resolve to dir/node-a
+	// Create a dummy binary alongside the manifest.
+	binaryPath := filepath.Join(dir, "node-a")
+	if err := os.WriteFile(binaryPath, []byte("#!/bin/sh"), 0755); err != nil {
+		t.Fatalf("create dummy binary: %v", err)
+	}
 	yaml := `id: com.example.test
 name: Test
 description: A test node.
@@ -125,29 +135,38 @@ api: []
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	manifestsDir, _ := ManifestsDir()
-	copyPath := filepath.Join(manifestsDir, "com.example.test.manifest.spore.yaml")
+	storeDir, _ := StoreDir()
+	copyPath := filepath.Join(storeDir, "com.example.test", "com.example.test.manifest.spore.yaml")
 	m, err := loadStoredManifest(t, copyPath)
 	if err != nil {
 		t.Fatalf("failed to load stored copy: %v", err)
 	}
 
-	want := filepath.Join(dir, "node-a")
+	// app: should now point to the binary copy inside the store.
+	want := filepath.Join(storeDir, "com.example.test", "node-a")
 	if m.App != want {
 		t.Errorf("app: in stored copy: got %q, want %q", m.App, want)
 	}
+	// The binary itself should exist in the store.
+	if _, err := os.Stat(want); err != nil {
+		t.Errorf("binary not found in store at %q: %v", want, err)
+	}
 }
 
-func TestRegistry_Add_PreservesAbsoluteAppPath(t *testing.T) {
+func TestRegistry_Add_CopiesBinaryToStore(t *testing.T) {
 	r := openRegistry(t)
 	dir := t.TempDir()
-	absApp := "/usr/local/bin/myapp"
+	// Place a dummy binary at an absolute path inside a temp dir.
+	binaryPath := filepath.Join(dir, "myapp")
+	if err := os.WriteFile(binaryPath, []byte("#!/bin/sh"), 0755); err != nil {
+		t.Fatalf("create dummy binary: %v", err)
+	}
 	yaml := `id: com.example.test
 name: Test
 description: A test node.
 schema: SPORE/v1d0
 version: 1.0.0
-app: ` + absApp + `
+app: ` + binaryPath + `
 api: []
 `
 	path := writeTempManifest(t, dir, "node.manifest.spore.yaml", yaml)
@@ -156,15 +175,20 @@ api: []
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	manifestsDir, _ := ManifestsDir()
-	copyPath := filepath.Join(manifestsDir, "com.example.test.manifest.spore.yaml")
+	storeDir, _ := StoreDir()
+	copyPath := filepath.Join(storeDir, "com.example.test", "com.example.test.manifest.spore.yaml")
 	m, err := loadStoredManifest(t, copyPath)
 	if err != nil {
 		t.Fatalf("failed to load stored copy: %v", err)
 	}
 
-	if m.App != absApp {
-		t.Errorf("app: in stored copy: got %q, want %q", m.App, absApp)
+	// app: should point to the binary copy inside the store, not the original.
+	want := filepath.Join(storeDir, "com.example.test", "myapp")
+	if m.App != want {
+		t.Errorf("app: in stored copy: got %q, want %q", m.App, want)
+	}
+	if _, err := os.Stat(want); err != nil {
+		t.Errorf("binary not found in store at %q: %v", want, err)
 	}
 }
 
@@ -185,8 +209,8 @@ api: []
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	manifestsDir, _ := ManifestsDir()
-	copyPath := filepath.Join(manifestsDir, "com.example.test.manifest.spore.yaml")
+	storeDir, _ := StoreDir()
+	copyPath := filepath.Join(storeDir, "com.example.test", "com.example.test.manifest.spore.yaml")
 	m, err := loadStoredManifest(t, copyPath)
 	if err != nil {
 		t.Fatalf("failed to load stored copy: %v", err)
@@ -196,6 +220,144 @@ api: []
 		t.Errorf("app: in stored copy: got %q, want \"n/a\"", m.App)
 	}
 }
+
+// =============================================================================
+// Open tests — checksum verification
+// =============================================================================
+
+// writeRegistryYAML writes a nodes.registry.yaml directly into the data root.
+// Used to simulate what the external installer would produce.
+func writeRegistryYAML(t *testing.T, rf registryFile) {
+	t.Helper()
+	registryPath, err := RegistryPath()
+	if err != nil {
+		t.Fatalf("RegistryPath: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(registryPath), 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	data, err := yaml.Marshal(rf)
+	if err != nil {
+		t.Fatalf("marshal registry: %v", err)
+	}
+	if err := os.WriteFile(registryPath, data, 0644); err != nil {
+		t.Fatalf("write nodes.registry.yaml: %v", err)
+	}
+}
+
+// writeStoreManifest places content at store/<name>/<name>.manifest.spore.yaml
+// and returns the path and its sha256:<hex> checksum.
+func writeStoreManifest(t *testing.T, name, content string) (path, checksum string) {
+	t.Helper()
+	storeDir, err := StoreDir()
+	if err != nil {
+		t.Fatalf("StoreDir: %v", err)
+	}
+	nodeDir := filepath.Join(storeDir, name)
+	if err := os.MkdirAll(nodeDir, 0755); err != nil {
+		t.Fatalf("mkdir store/%s: %v", name, err)
+	}
+	path = filepath.Join(nodeDir, name+".manifest.spore.yaml")
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+	sum := sha256.Sum256([]byte(content))
+	checksum = "sha256:" + hex.EncodeToString(sum[:])
+	return path, checksum
+}
+
+func TestRegistry_Open_MissingFile(t *testing.T) {
+	// No nodes.registry.yaml — Open should succeed with an empty registry.
+	t.Setenv("SPORE_DATA_DIR", t.TempDir())
+	r := &Registry{}
+	if err := r.Open(); err != nil {
+		t.Fatalf("Open with no registry file: %v", err)
+	}
+	if len(r.Paths()) != 0 {
+		t.Errorf("expected no paths, got %v", r.Paths())
+	}
+}
+
+func TestRegistry_Open_ValidEntry(t *testing.T) {
+	t.Setenv("SPORE_DATA_DIR", t.TempDir())
+	path, checksum := writeStoreManifest(t, "com.example.test", validManifestYAML)
+	writeRegistryYAML(t, registryFile{
+		Version: 1,
+		Nodes:   []registryEntry{{Name: "Test", Manifest: path, Checksum: checksum}},
+	})
+
+	r := &Registry{}
+	if err := r.Open(); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if len(r.Paths()) != 1 || r.Paths()[0] != path {
+		t.Errorf("expected [%q], got %v", path, r.Paths())
+	}
+}
+
+func TestRegistry_Open_ChecksumMismatch(t *testing.T) {
+	// A tampered checksum must cause the entry to be silently skipped.
+	t.Setenv("SPORE_DATA_DIR", t.TempDir())
+	path, _ := writeStoreManifest(t, "com.example.test", validManifestYAML)
+	writeRegistryYAML(t, registryFile{
+		Version: 1,
+		Nodes:   []registryEntry{{Name: "Test", Manifest: path, Checksum: "sha256:000000"}},
+	})
+
+	r := &Registry{}
+	if err := r.Open(); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if len(r.Paths()) != 0 {
+		t.Errorf("expected tampered entry to be skipped, got paths: %v", r.Paths())
+	}
+}
+
+func TestRegistry_Open_ManifestFileMissing(t *testing.T) {
+	// A registry entry whose manifest file has been deleted is silently skipped.
+	t.Setenv("SPORE_DATA_DIR", t.TempDir())
+	storeDir, _ := StoreDir()
+	ghostPath := filepath.Join(storeDir, "com.example.ghost", "com.example.ghost.manifest.spore.yaml")
+	writeRegistryYAML(t, registryFile{
+		Version: 1,
+		Nodes:   []registryEntry{{Name: "Ghost", Manifest: ghostPath, Checksum: "sha256:abc"}},
+	})
+
+	r := &Registry{}
+	if err := r.Open(); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if len(r.Paths()) != 0 {
+		t.Errorf("expected missing manifest to be skipped, got paths: %v", r.Paths())
+	}
+}
+
+func TestRegistry_Open_PartialLoad(t *testing.T) {
+	// Mix of a valid and a tampered entry — only the valid one should load.
+	t.Setenv("SPORE_DATA_DIR", t.TempDir())
+	goodPath, goodSum := writeStoreManifest(t, "com.example.good", validManifestYAML)
+	badPath, _ := writeStoreManifest(t, "com.example.bad", validManifestYAML)
+	writeRegistryYAML(t, registryFile{
+		Version: 1,
+		Nodes: []registryEntry{
+			{Name: "Good", Manifest: goodPath, Checksum: goodSum},
+			{Name: "Bad", Manifest: badPath, Checksum: "sha256:tampered"},
+		},
+	})
+
+	r := &Registry{}
+	if err := r.Open(); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	paths := r.Paths()
+	if len(paths) != 1 || paths[0] != goodPath {
+		t.Errorf("expected only good entry, got %v", paths)
+	}
+}
+
+// =============================================================================
+// Helpers
+// =============================================================================
 
 // loadStoredManifest reads and unmarshals a stored manifest YAML file.
 func loadStoredManifest(t *testing.T, path string) (*storedApp, error) {
@@ -214,4 +376,3 @@ func loadStoredManifest(t *testing.T, path string) (*storedApp, error) {
 type storedApp struct {
 	App string `yaml:"app"`
 }
-

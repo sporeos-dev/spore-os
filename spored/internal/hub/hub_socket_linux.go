@@ -8,20 +8,16 @@ package hub
 import (
 	"os"
 	"path/filepath"
+	"spored/internal/registry"
 )
 
 // socketPath returns the path for the Unix domain socket.
-// /run/spore/ is the standard Linux location for system daemon sockets,
-// equivalent to /var/run/spore/ (they are the same directory on modern systems).
-// The directory is created by the installer owned by _spore; MkdirAll is a
-// safety net only.
+// The socket lives at the data root: /var/lib/spore-os/spore.sock.
+// The directory is created by the installer; MkdirAll is a safety net only.
 func socketPath() string {
-	if override := os.Getenv("SPORE_DATA_DIR"); override != "" {
-		dir := filepath.Join(override, "run")
-		os.MkdirAll(dir, 0755)
-		return filepath.Join(dir, "spore.sock")
+	if root, err := registry.DataRoot(); err == nil {
+		os.MkdirAll(root, 0755)
+		return filepath.Join(root, "spore.sock")
 	}
-	const dir = "/run/spore"
-	os.MkdirAll(dir, 0755)
-	return dir + "/spore.sock"
+	return "/tmp/spore.sock"
 }

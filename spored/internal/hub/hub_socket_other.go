@@ -1,4 +1,4 @@
-// Copyright 2026 Matt HarrisonHarrison
+// Copyright 2026 Matt Harrison
 // SPDX-License-Identifier: AGPL-3.0-only
 
 //go:build !linux
@@ -8,43 +8,21 @@ package hub
 import (
 	"os"
 	"path/filepath"
-	"runtime"
+	"spored/internal/registry"
 )
 
 // socketPath returns the path for the Unix domain socket.
 //
-// System-level daemon: the socket lives in a directory created by the
-// installer and owned by _spore. The daemon creates the socket file itself.
-// The directory is 0755 so that client processes (running as regular users)
-// can reach the socket. The socket is world-connectable — peer credentials
-// are the actual access gate, not filesystem permissions.
+// The socket lives at the data root alongside nodes.registry.yaml:
 //
-//	macOS:   /Library/Application Support/spore-os/run/spore.sock
-//	Windows: C:\ProgramData\spore-os\spore.sock
+//	macOS:   /Library/Application Support/spore-os/spore.sock
+//	Windows: %LOCALAPPDATA%\spore-os\spore.sock
 //
-// Note: /var/run is cleared by macOS on every boot and the _spore user lacks
-// permission to recreate it. /Library/Application Support/spore-os/ is owned
-// by _spore, persists across reboots, and requires no extra setup plist.
+// The directory is created by the installer; MkdirAll is a safety net only.
 func socketPath() string {
-	if override := os.Getenv("SPORE_DATA_DIR"); override != "" {
-		if runtime.GOOS == "windows" {
-			os.MkdirAll(override, 0755)
-			return filepath.Join(override, "spore.sock")
-		}
-		dir := filepath.Join(override, "run")
-		os.MkdirAll(dir, 0755)
-		return filepath.Join(dir, "spore.sock")
+	if root, err := registry.DataRoot(); err == nil {
+		os.MkdirAll(root, 0755)
+		return filepath.Join(root, "spore.sock")
 	}
-	switch runtime.GOOS {
-	case "darwin":
-		dir := "/Library/Application Support/spore-os/run"
-		os.MkdirAll(dir, 0755)
-		return filepath.Join(dir, "spore.sock")
-	case "windows":
-		dir := `C:\ProgramData\spore-os`
-		os.MkdirAll(dir, 0755)
-		return filepath.Join(dir, "spore.sock")
-	default:
-		return "/tmp/spore.sock"
-	}
+	return "/tmp/spore.sock"
 }

@@ -17,6 +17,9 @@ coverage.*
 *.coverprofile
 profile.cov
 
+# exe
+spored/spored
+
 # Dependency directories (remove the comment below to include it)
 # vendor/
 

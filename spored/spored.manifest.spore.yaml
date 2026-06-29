@@ -411,13 +411,17 @@ api:
         description: Flag present if verification successful.
       - name: failed
         type: flag
-        description: Flag present if verification failed.i
+        description: Flag present if verification failed.
 
   - name: SPORE.developer.manifest.load
     description: Loads a different Spore OS .manifest.spore.yaml
     risk: protected
     usage:
-      - SPORE.developer.manifest.load path
+      - SPORE.developer.manifest.load path=/path/to/replacement/spored.manfest.spore.yaml
+    inputs:
+      - name: path
+        type: string
+        description: Path to the replacement manifest.
 
 topics:
   - name: SPORE.node.installed

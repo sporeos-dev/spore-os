@@ -4,7 +4,11 @@
 package registry
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"spored/internal/manifest"
@@ -14,45 +18,80 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-type Registry struct {
-	paths []string
+// registryFile is the on-disk structure of nodes.registry.yaml.
+type registryFile struct {
+	Version int             `yaml:"version"`
+	Nodes   []registryEntry `yaml:"nodes"`
 }
 
+// registryEntry is one installed node in nodes.registry.yaml.
+type registryEntry struct {
+	Name     string `yaml:"name"`
+	Manifest string `yaml:"manifest"`
+	Checksum string `yaml:"checksum"`
+}
+
+type Registry struct {
+	entries []registryEntry
+}
+
+// Open reads nodes.registry.yaml, re-hashes every manifest at the recorded
+// path, and only keeps entries whose checksum matches. A missing registry file
+// is not an error — it means no nodes have been installed yet.
 func (r *Registry) Open() error {
-	
 	registryPath, err := RegistryPath()
 	if err != nil {
 		return err
 	}
 
-	EnsureRegistryDir(registryPath)
-	if _, err := os.Stat(registryPath); os.IsNotExist(err) {
-		file, err := os.Create(registryPath)
-		if err != nil {
-			return err
-		}
-		file.Close()
-	}
-
 	data, err := os.ReadFile(registryPath)
+	if os.IsNotExist(err) {
+		r.entries = nil
+		return nil
+	}
 	if err != nil {
-		return err
+		return fmt.Errorf("registry: read nodes.registry.yaml: %w", err)
 	}
 
-	r.paths = make([]string, 0)
-	for _, line := range strings.Split(string(data), "\n") {
-		if line != "" {
-			r.paths = append(r.paths, line)
-		}
+	var rf registryFile
+	if err := yaml.Unmarshal(data, &rf); err != nil {
+		return fmt.Errorf("registry: parse nodes.registry.yaml: %w", err)
 	}
-	
+
+	r.entries = nil
+	for _, entry := range rf.Nodes {
+		got, err := checksumFile(entry.Manifest)
+		if err != nil {
+			slog.Warn("Registry: cannot read manifest, skipping node",
+				"name", entry.Name, "manifest", entry.Manifest, "error", err)
+			continue
+		}
+		if got != entry.Checksum {
+			slog.Warn("Registry: checksum mismatch, refusing to load node",
+				"name", entry.Name, "manifest", entry.Manifest,
+				"expected", entry.Checksum, "got", got)
+			continue
+		}
+		r.entries = append(r.entries, entry)
+	}
+
 	return nil
 }
 
+// Paths returns the manifest file paths for all verified entries.
 func (r *Registry) Paths() []string {
-	return r.paths
+	paths := make([]string, 0, len(r.entries))
+	for _, e := range r.entries {
+		paths = append(paths, e.Manifest)
+	}
+	return paths
 }
 
+// Add installs a node manifest. It validates the manifest, resolves any
+// relative app: path, copies the file into store/<id>/<id>.manifest.spore.yaml,
+// computes a SHA-256 checksum of the stored copy, then writes the entry into
+// nodes.registry.yaml. Calling Add again for the same node ID overwrites the
+// existing entry (useful for upgrades).
 func (r *Registry) Add(path string) error {
 	if !strings.HasSuffix(path, ".manifest.spore.yaml") {
 		return fmt.Errorf("registry: %q is not a .manifest.spore.yaml file", path)
@@ -67,26 +106,37 @@ func (r *Registry) Add(path string) error {
 		return fmt.Errorf("registry: invalid manifest %q: %w", path, err)
 	}
 
-	// Resolve app: to an absolute path before writing the stored copy.
-	// Relative paths in app: are defined (SPEC §8.2) as relative to the source
-	// manifest's directory. After copying, m.Path points to the system copy, so
-	// we must canonicalise now while the source directory is still known.
+	// Resolve app: relative to the source manifest's directory (SPEC §8.2)
+	// before we copy anything — the source directory won't be relevant once
+	// everything is in the store.
 	resolvedApp, err := utilities.ResolveAppPath(m.App, filepath.Dir(path))
 	if err != nil {
 		return fmt.Errorf("registry: resolve app path: %w", err)
 	}
 	m.App = resolvedApp
 
-	// Copy the manifest into the daemon-owned nodes directory so _spore can
-	// always read it, regardless of where the source file lives.
-	nodesDir, err := ManifestsDir()
+	// Create store/<id>/ to hold both the binary and the manifest.
+	storeDir, err := StoreDir()
 	if err != nil {
-		return fmt.Errorf("registry: nodes dir: %w", err)
+		return fmt.Errorf("registry: store dir: %w", err)
 	}
-	if err := os.MkdirAll(nodesDir, 0755); err != nil {
-		return fmt.Errorf("registry: create nodes dir: %w", err)
+	nodeDir := filepath.Join(storeDir, m.ID)
+	if err := os.MkdirAll(nodeDir, 0755); err != nil {
+		return fmt.Errorf("registry: create node dir: %w", err)
 	}
-	systemPath := filepath.Join(nodesDir, m.ID+".manifest.spore.yaml")
+
+	// Copy the app binary into store/<id>/<binary-name> and update app: to the
+	// store path. Skip for nodes that declare app: n/a (daemon-only / virtual).
+	if m.App != "n/a" {
+		appDest := filepath.Join(nodeDir, filepath.Base(m.App))
+		if err := copyFile(m.App, appDest, 0755); err != nil {
+			return fmt.Errorf("registry: copy app binary: %w", err)
+		}
+		m.App = appDest
+	}
+
+	// Write the manifest (with the updated app: path) into store/<id>/.
+	systemPath := filepath.Join(nodeDir, m.ID+".manifest.spore.yaml")
 	data, err := yaml.Marshal(m)
 	if err != nil {
 		return fmt.Errorf("registry: serialise manifest: %w", err)
@@ -95,24 +145,55 @@ func (r *Registry) Add(path string) error {
 		return fmt.Errorf("registry: write manifest copy: %w", err)
 	}
 
-	r.paths = append(r.paths, systemPath)
+	// Compute the checksum of what we actually wrote.
+	checksum, err := checksumFile(systemPath)
+	if err != nil {
+		return fmt.Errorf("registry: compute checksum: %w", err)
+	}
+
+	// Add or replace the entry for this node.
+	entry := registryEntry{Name: m.Name, Manifest: systemPath, Checksum: checksum}
+	replaced := false
+	for i, e := range r.entries {
+		if e.Manifest == systemPath {
+			r.entries[i] = entry
+			replaced = true
+			break
+		}
+	}
+	if !replaced {
+		r.entries = append(r.entries, entry)
+	}
+
 	return r.save()
 }
 
-func (r *Registry) Remove(path string) error {
-	newPaths := make([]string, 0, len(r.paths))
-	for _, p := range r.paths {
-		if p != path {
-			newPaths = append(newPaths, p)
+// Remove removes the entry with the given manifest path from the registry and
+// updates nodes.registry.yaml. If the manifest lives inside the store directory
+// it is also deleted from disk.
+func (r *Registry) Remove(manifestPath string) error {
+	var remaining []registryEntry
+	found := false
+	for _, e := range r.entries {
+		if e.Manifest == manifestPath {
+			found = true
+		} else {
+			remaining = append(remaining, e)
 		}
 	}
-	r.paths = newPaths
+	if !found {
+		return fmt.Errorf("registry: manifest not registered: %q", manifestPath)
+	}
+	r.entries = remaining
+
 	if err := r.save(); err != nil {
 		return err
 	}
-	// Clean up the managed copy if it lives in the nodes directory.
-	if nodesDir, err := ManifestsDir(); err == nil && strings.HasPrefix(path, nodesDir) {
-		_ = os.Remove(path)
+
+	// Clean up the manifest file and its per-node directory from store/.
+	if storeDir, err := StoreDir(); err == nil && strings.HasPrefix(manifestPath, storeDir) {
+		_ = os.Remove(manifestPath)
+		_ = os.Remove(filepath.Dir(manifestPath))
 	}
 	return nil
 }
@@ -122,9 +203,47 @@ func (r *Registry) save() error {
 	if err != nil {
 		return err
 	}
-	content := strings.Join(r.paths, "\n")
-	if len(r.paths) > 0 {
-		content += "\n"
+	if err := EnsureRegistryDir(registryPath); err != nil {
+		return fmt.Errorf("registry: ensure dir: %w", err)
 	}
-	return os.WriteFile(registryPath, []byte(content), 0600)
+	nodes := r.entries
+	if nodes == nil {
+		nodes = []registryEntry{}
+	}
+	rf := registryFile{Version: 1, Nodes: nodes}
+	data, err := yaml.Marshal(rf)
+	if err != nil {
+		return fmt.Errorf("registry: marshal: %w", err)
+	}
+	return os.WriteFile(registryPath, data, 0600)
+}
+
+// checksumFile computes the SHA-256 of the file at path and returns it as
+// "sha256:<lowercasehex>".
+func checksumFile(path string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(data)
+	return "sha256:" + hex.EncodeToString(sum[:]), nil
+}
+
+// copyFile copies the file at src to dst with the given permission bits,
+// creating or truncating dst. Used to place app binaries in the store.
+func copyFile(src, dst string, mode os.FileMode) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, mode)
+	if err != nil {
+		return err
+	}
+	if _, err = io.Copy(out, in); err != nil {
+		out.Close()
+		return err
+	}
+	return out.Close()
 }

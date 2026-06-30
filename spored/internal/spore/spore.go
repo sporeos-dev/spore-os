@@ -68,7 +68,6 @@ func (s *Spore) Command(incoming message.Message) (message.Message, error) {
 		case "SPORE.command.help":		res, err = s.commandHelp(sporeMessage)
 		case "SPORE.error.list":		res, err = s.errorList(sporeMessage)
 		case "SPORE.error.help":		res, err = s.errorHelp(sporeMessage)
-		case "SPORE.developer.manifest.replace": res, err = s.developerManifestReplace(sporeMessage)
 		default: 
 			err = errors.New("Spore command not handled")
 	}

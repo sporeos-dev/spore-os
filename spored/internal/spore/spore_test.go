@@ -140,6 +140,22 @@ func (w *mockWitness) Incoming(msg string)             {}
 func (w *mockWitness) Outgoing(msg string)             {}
 func (w *mockWitness) Spore(msg string)                {}
 func (w *mockWitness) Node(msg string, cast string)    {}
+
+type mockBroadcaster struct {
+	published []message.Topic
+}
+
+func (b *mockBroadcaster) Open(hub interfaces.Hub)                       {}
+func (b *mockBroadcaster) ListTopics(node string) []string               { return nil }
+func (b *mockBroadcaster) GetBroadcaster(topic string) (string, error)   { return "", nil }
+func (b *mockBroadcaster) AddTopic(topic string, publisherid string)      {}
+func (b *mockBroadcaster) Subscribe(subscriberid string, topic string)    {}
+func (b *mockBroadcaster) Unsubscribe(subscriberid string, topic string)  {}
+func (b *mockBroadcaster) PurgeNode(nodeID string)                        {}
+func (b *mockBroadcaster) Publish(msg message.Topic) error {
+	b.published = append(b.published, msg)
+	return nil
+}
 // --- Helpers ---
 
 func setupSpore(t *testing.T) (*Spore, *mockHub, *mockRegistry, *mockRouter) {
@@ -148,12 +164,14 @@ func setupSpore(t *testing.T) (*Spore, *mockHub, *mockRegistry, *mockRouter) {
 	hub := &mockHub{nodes: make(map[string]*mockNode)}
 	reg := &mockRegistry{}
 	rtr := &mockRouter{commands: make(map[string]string)}
+	bc := &mockBroadcaster{}
 
 	s := &Spore{}
 	s.hub = hub
 	s.registry = reg
 	s.router = rtr
 	s.witness = &mockWitness{}
+	s.broadcaster = bc
 
 	// Load the actual hub manifest
 	s.manifest, _ = manifest.LoadManifest("../../spored.manifest.spore.yaml")
@@ -656,5 +674,122 @@ func TestSpore_NodeList_IncludesSpore(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("dev.sporeos.SPORE not in node list: %v", nodes)
+	}
+}
+
+// =============================================================================
+// Lifecycle topic publishing
+// =============================================================================
+
+const testManifestContent = `
+id: com.test.lifecycle
+name: Test Node
+description: Test
+schema: SPORE/v0d2
+version: 0.0.1
+app: n/a
+`
+
+func getPublished(s *Spore) []message.Topic {
+	return s.broadcaster.(*mockBroadcaster).published
+}
+
+func TestSpore_NodeInstall_PublishesTopic(t *testing.T) {
+	s, _, reg, _ := setupSpore(t)
+	path := writeTempManifest(t, testManifestContent)
+	reg.paths = append(reg.paths, path)
+
+	in := parseSporeMsg(t, "SPORE.node.install path="+path+" ~h1")
+	_, err := s.Command(in)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	published := getPublished(s)
+	if len(published) != 1 {
+		t.Fatalf("expected 1 published event, got %d", len(published))
+	}
+	if published[0].TopicName() != "SPORE.node.installed" {
+		t.Errorf("expected topic SPORE.node.installed, got %q", published[0].TopicName())
+	}
+}
+
+func TestSpore_NodeUninstall_PublishesTopic(t *testing.T) {
+	s, hub, reg, _ := setupSpore(t)
+	path := writeTempManifest(t, testManifestContent)
+	reg.paths = append(reg.paths, path)
+	m := &manifest.Manifest{ID: "com.test.lifecycle", Path: path}
+	hub.nodes["com.test.lifecycle"] = &mockNode{id: "com.test.lifecycle", manifest: m}
+
+	in := parseSporeMsg(t, "SPORE.node.uninstall node=com.test.lifecycle ~h1")
+	_, err := s.Command(in)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	published := getPublished(s)
+	if len(published) != 1 {
+		t.Fatalf("expected 1 published event, got %d", len(published))
+	}
+	if published[0].TopicName() != "SPORE.node.uninstalled" {
+		t.Errorf("expected topic SPORE.node.uninstalled, got %q", published[0].TopicName())
+	}
+}
+
+func TestSpore_NodeSpawn_PublishesTopic(t *testing.T) {
+	s, hub, _, _ := setupSpore(t)
+	m := &manifest.Manifest{ID: "com.test.lifecycle"}
+	hub.nodes["com.test.lifecycle"] = &mockNode{id: "com.test.lifecycle", manifest: m}
+
+	in := parseSporeMsg(t, "SPORE.node.spawn node=com.test.lifecycle ~h1")
+	_, err := s.Command(in)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	published := getPublished(s)
+	if len(published) != 1 {
+		t.Fatalf("expected 1 published event, got %d", len(published))
+	}
+	if published[0].TopicName() != "SPORE.node.spawned" {
+		t.Errorf("expected topic SPORE.node.spawned, got %q", published[0].TopicName())
+	}
+}
+
+func TestSpore_NodeKill_PublishesTopic(t *testing.T) {
+	s, hub, _, _ := setupSpore(t)
+	m := &manifest.Manifest{ID: "com.test.lifecycle"}
+	hub.nodes["com.test.lifecycle"] = &mockNode{id: "com.test.lifecycle", manifest: m, isConnected: true}
+
+	in := parseSporeMsg(t, "SPORE.node.kill node=com.test.lifecycle ~h1")
+	_, err := s.Command(in)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	published := getPublished(s)
+	if len(published) != 1 {
+		t.Fatalf("expected 1 published event, got %d", len(published))
+	}
+	if published[0].TopicName() != "SPORE.node.killed" {
+		t.Errorf("expected topic SPORE.node.killed, got %q", published[0].TopicName())
+	}
+}
+
+func TestSpore_LifecycleEvent_ContainsNodeID(t *testing.T) {
+	s, hub, _, _ := setupSpore(t)
+	m := &manifest.Manifest{ID: "com.test.lifecycle"}
+	hub.nodes["com.test.lifecycle"] = &mockNode{id: "com.test.lifecycle", manifest: m}
+
+	in := parseSporeMsg(t, "SPORE.node.spawn node=com.test.lifecycle ~h1")
+	s.Command(in)
+
+	published := getPublished(s)
+	if len(published) == 0 {
+		t.Fatal("no published events")
+	}
+	raw := published[0].ToString()
+	if !strings.Contains(raw, "node=com.test.lifecycle") {
+		t.Errorf("expected node= in publish payload, got %q", raw)
 	}
 }

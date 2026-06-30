@@ -26,6 +26,9 @@ func (s *Spore) nodeInstall(msg *message.Spore) (string, error) {
 	}
 	//fmt.Sprintf(`~%s:SPORE.unknown error code=MessageMalformed what="%s"`, handle, err.Error())
 	s.witness.Spore(message.SporeEvent("info", "Node installed", "path="+path))
+	if m, loadErr := manifest.LoadManifest(path); loadErr == nil {
+		s.publishEvent("SPORE.node.installed", "node="+m.ID)
+	}
 	return s.returnCapture(msg, map[string]string{}, []string{}), nil
 }
 
@@ -71,6 +74,9 @@ func (s *Spore) nodeUninstall(msg *message.Spore) (string, error) {
 	}
 
 	s.witness.Spore(message.SporeEvent("info", "Node uninstalled", "node="+nodeid))
+	if nodeid != "n/a" {
+		s.publishEvent("SPORE.node.uninstalled", "node="+nodeid)
+	}
 	return s.returnCapture(msg, map[string]string{}, []string{}), nil
 }
 
@@ -85,6 +91,7 @@ func (s *Spore) nodeSpawn(msg *message.Spore) (string, error) {
 	}
 
 	s.witness.Spore(message.SporeEvent("info", "Node spawned", "node="+nodeid))
+	s.publishEvent("SPORE.node.spawned", "node="+nodeid)
 	return s.returnCapture(msg, map[string]string{}, []string{}), nil
 }
 
@@ -99,6 +106,7 @@ func (s *Spore) nodeKill(msg *message.Spore) (string, error) {
 	}
 
 	s.witness.Spore(message.SporeEvent("info", "Node killed", "node="+nodeid))
+	s.publishEvent("SPORE.node.killed", "node="+nodeid)
 	return s.returnCapture(msg, map[string]string{}, []string{}), nil
 }
 

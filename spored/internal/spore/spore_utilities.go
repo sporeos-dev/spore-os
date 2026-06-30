@@ -9,6 +9,28 @@ import (
 	"strings"
 )
 
+// publishEvent constructs and broadcasts a lifecycle topic event.
+// Best-effort — failures are logged to witness but don't affect the caller.
+func (s *Spore) publishEvent(topic string, args ...string) {
+	if s.broadcaster == nil {
+		return
+	}
+	raw := "publish " + topic
+	for _, arg := range args {
+		raw += " " + arg
+	}
+	pub, err := message.Parse(raw, "dev.sporeos.SPORE")
+	if err != nil {
+		s.witness.Spore(message.SporeEvent("warn", "Failed to build publish event", "topic="+topic))
+		return
+	}
+	if t, ok := pub.(message.Topic); ok {
+		if err := s.broadcaster.Publish(t); err != nil {
+			s.witness.Spore(message.SporeEvent("warn", "Failed to publish event", "topic="+topic))
+		}
+	}
+}
+
 func (s *Spore) returnCapture(msg *message.Spore, args map[string]string, flags []string) string {
 	parts := []string{ fmt.Sprintf("~%s:%s ok capture=dev.sporeos.SPORE", msg.Handle(), msg.Command()) }
 	parts = append(parts, flags...)

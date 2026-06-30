@@ -29,6 +29,7 @@ func (s* Spore) IsSpore() bool       { return true }
 func (s* Spore) IsError() bool       { return false }
 func (s* Spore) IsCustomError() bool { return false }
 func (s* Spore) IsCancelled() bool   { return false }
+func (s* Spore) IsPublish() bool     { return false }
 
 func (s* Spore) Parse(raw string, from string) error {
 	s.raw = raw

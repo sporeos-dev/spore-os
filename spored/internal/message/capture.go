@@ -25,6 +25,7 @@ func (c* Capture) IsSpore() bool       { return false }
 func (c* Capture) IsError() bool       { return false }
 func (c* Capture) IsCustomError() bool { return false }
 func (c* Capture) IsCancelled() bool   { return false }
+func (c* Capture) IsPublish() bool     { return false }
 
 func (c* Capture) Parse(raw string, from string) error {
 	c.raw = raw

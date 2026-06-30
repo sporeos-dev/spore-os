@@ -144,6 +144,7 @@ func (e *CastError) IsSpore() bool        { return false }
 func (e *CastError) IsError() bool        { return true }
 func (e *CastError) IsCustomError() bool  { return false }
 func (e *CastError) IsCancelled() bool    { return false }
+func (e *CastError) IsPublish() bool      { return false }
 func (e *CastError) Parse(_ string, _ string) error { return nil }
 func (e *CastError) Cast() string    { return e.originalMessage.Cast() }
 func (e *CastError) Capture() string { return "SPORE.hub" }
@@ -180,6 +181,7 @@ func (e *CaptureError) IsSpore() bool        { return false }
 func (e *CaptureError) IsError() bool        { return true }
 func (e *CaptureError) IsCustomError() bool  { return false }
 func (e *CaptureError) IsCancelled() bool    { return false }
+func (e *CaptureError) IsPublish() bool      { return false }
 func (e *CaptureError) Parse(_ string, _ string) error { return nil }
 func (e *CaptureError) Cast() string    { return e.originalMessage.Cast() }
 func (e *CaptureError) Capture() string { return "SPORE.hub" }
@@ -214,6 +216,7 @@ func (e *SporeError) IsSpore() bool        { return true }
 func (e *SporeError) IsError() bool        { return true }
 func (e *SporeError) IsCustomError() bool  { return false }
 func (e *SporeError) IsCancelled() bool    { return false }
+func (e *SporeError) IsPublish() bool      { return false }
 func (e *SporeError) Parse(_ string, _ string) error { return nil }
 func (e *SporeError) Cast() string    { return e.originalMessage.Cast() }
 func (e *SporeError) Capture() string { return "SPORE.hub" }
@@ -254,6 +257,7 @@ func (e *NodeError) IsSpore() bool        { return false }
 func (e *NodeError) IsError() bool        { return true }
 func (e *NodeError) IsCustomError() bool  { return e.isCustom }
 func (e *NodeError) IsCancelled() bool    { return false }
+func (e *NodeError) IsPublish() bool      { return false }
 
 func (e *NodeError) Parse(raw string, from string) error {
 	e.raw = raw

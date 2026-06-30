@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"spored/internal/broadcaster"
 	"spored/internal/interfaces"
 	"spored/internal/message"
 	"spored/internal/node"
@@ -32,6 +33,7 @@ type Hub struct {
 	router interfaces.Router
 	registry interfaces.Registry
 	witness interfaces.Witness
+	broadcaster interfaces.Broadcaster
 
 	mu sync.RWMutex
 	nodes map[string] *node.Node
@@ -47,10 +49,12 @@ func (h *Hub) Open() error {
 	h.router = &router.Router{}
 	h.registry = &registry.Registry{}
 	h.witness = &witness.Witness{}
+	h.broadcaster = &broadcaster.Broadcaster{}
 	h.spore = &spore.Spore{}
 
 	h.router.Open(h, h.spore)
-	h.spore.Open(h, h.registry, h.router, h.witness)
+	h.broadcaster.Open(h)
+	h.spore.Open(h, h.registry, h.router, h.witness, h.broadcaster)
 	h.nodes = make(map[string]*node.Node)
 
 	var err error	
@@ -141,13 +145,19 @@ func (h *Hub) AddNode(path string) error {
 	node := &node.Node{
 		Router: h.router,
 		WitnessDispatcher: h.witness,
+		Broadcaster: h.broadcaster,
 	}
 	nodeid, err := node.Open(path)
 	if err != nil {
 		return err
 	}
 	h.witness.Register(node)
-	
+
+	// Register topics declared in this node's manifest.
+	for _, topic := range node.GetManifest().Topics {
+		h.broadcaster.AddTopic(topic.Name, nodeid)
+	}
+
 	h.nodes[nodeid] = node
 	return nil
 }
@@ -169,6 +179,7 @@ func (h *Hub) RemoveNode(nodeid string) error {
 
 	// PurgeNode calls hub.GetNode internally, so it must run outside the hub lock.
 	h.router.PurgeNode(nodeid)
+	h.broadcaster.PurgeNode(nodeid)
 	return nil
 }
 

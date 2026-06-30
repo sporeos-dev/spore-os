@@ -15,6 +15,7 @@ type Message interface {
 	IsError() bool
 	IsCustomError() bool
 	IsCancelled() bool
+	IsPublish() bool
 
 	Parse(raw string, from string) error
 	Cast() string
@@ -52,6 +53,9 @@ func Parse(raw string, from string) (Message, error) {
 			capture := &Capture{}
 			msg = capture
 		}
+	} else if strings.HasPrefix(raw, "publish ") {
+		pub := &Publish{}
+		msg = pub
 	} else {
 		cast := &Cast{}
 		msg = cast

@@ -40,6 +40,7 @@ func (c *Cancelled) IsSpore() bool       { return false }
 func (c *Cancelled) IsError() bool       { return false }
 func (c *Cancelled) IsCustomError() bool { return false }
 func (c *Cancelled) IsCancelled() bool   { return true }
+func (c *Cancelled) IsPublish() bool     { return false }
 
 func (c *Cancelled) Parse(raw string, from string) error {
 	c.raw = raw

@@ -26,6 +26,7 @@ func (c* Cast) IsSpore() bool       { return false }
 func (c* Cast) IsError() bool       { return false }
 func (c* Cast) IsCustomError() bool { return false }
 func (c* Cast) IsCancelled() bool   { return false }
+func (c* Cast) IsPublish() bool     { return false }
 
 func (c* Cast) Parse(raw string, from string) error {
 	c.raw = raw

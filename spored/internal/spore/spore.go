@@ -19,15 +19,17 @@ type Spore struct {
 	registry interfaces.Registry
 	router interfaces.Router
 	witness interfaces.Witness
+	broadcaster interfaces.Broadcaster
 
 	manifest *manifest.Manifest
 }
 
-func (s *Spore) Open(hub interfaces.Hub, registry interfaces.Registry, router interfaces.Router, witness interfaces.Witness) {
+func (s *Spore) Open(hub interfaces.Hub, registry interfaces.Registry, router interfaces.Router, witness interfaces.Witness, broadcaster interfaces.Broadcaster) {
 	s.hub = hub
 	s.registry = registry
 	s.router = router
 	s.witness = witness
+	s.broadcaster = broadcaster
 
 	manifestPath := hubManifestPath()
 	if _, statErr := os.Stat(manifestPath); os.IsNotExist(statErr) {
@@ -68,6 +70,10 @@ func (s *Spore) Command(incoming message.Message) (message.Message, error) {
 		case "SPORE.command.help":		res, err = s.commandHelp(sporeMessage)
 		case "SPORE.error.list":		res, err = s.errorList(sporeMessage)
 		case "SPORE.error.help":		res, err = s.errorHelp(sporeMessage)
+		case "SPORE.topic.list":		res, err = s.topicList(sporeMessage)
+		case "SPORE.topic.help":		res, err = s.topicHelp(sporeMessage)
+		case "SPORE.topic.subscribe":	res, err = s.topicSubscribe(sporeMessage)
+		case "SPORE.topic.unsubscribe":	res, err = s.topicUnsubscribe(sporeMessage)
 		default: 
 			err = errors.New("Spore command not handled")
 	}

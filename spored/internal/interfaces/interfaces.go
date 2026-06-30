@@ -46,9 +46,21 @@ type Router interface {
 	PurgeNode(nodeID string)
 }
 
+// Broadcast pub/sub topics
+type Broadcaster interface {
+	Open(hub Hub)
+	ListTopics(node string) []string
+	GetBroadcaster(topic string) (string, error)
+	AddTopic(topic string, publisherid string)
+	Subscribe(subscriberid string, topic string)
+	Unsubscribe(subscriberid string, topic string)
+	Publish(msg message.Topic) error
+	PurgeNode(nodeID string)
+}
+
 // Spore is what hub uses to handle SPORE.* commands.
 type Spore interface {
-	Open(hub Hub, registry Registry, router Router, witness Witness)
+	Open(hub Hub, registry Registry, router Router, witness Witness, broadcaster Broadcaster)
 	Command(incoming message.Message) (message.Message, error)
 }
 

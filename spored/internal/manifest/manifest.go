@@ -11,16 +11,36 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+type Trust string
+const (
+	TrustSystem Trust = "system"
+	TrustDeveloper Trust = "developer"
+	TrustTrusted Trust = "trusted"
+	TrustStandard Trust = "standard"
+	TrustUntrusted Trust = "untrusted"
+)
+
+type Risk string
+const (
+	RiskBenign Risk = "benign"
+	RiskStandard Risk = "standard"
+	RiskPersonal Risk = "personal"
+	RiskSecret Risk = "secret"
+	RiskProtected Risk = "protected"
+)
+
 type Manifest struct {
 	ID          string          `yaml:"id"`
 	Name        string          `yaml:"name"`
 	Description string          `yaml:"description"`
+	Trust		Trust			`yaml:"trust"`
 	Schema      string          `yaml:"schema"`
 	Version     string          `yaml:"version"`
 	App         string          `yaml:"app"`
 	Autostart   bool            `yaml:"autostart"`
 	Witness		bool			`yaml:"witness"`
 	Api         []Command       `yaml:"api"`
+	Topics		[]Topic			`yaml:"topics"`	
 	Errors      []ManifestError `yaml:"errors"`
 
 	Path 		string `yaml:"-"`
@@ -29,10 +49,20 @@ type Manifest struct {
 type Command struct {
 	Name        string    `yaml:"name"`
 	Description string    `yaml:"description"`
+	Risk		Risk	  `yaml:"risk"`
 	Usage       []string  `yaml:"usage"`
 	Inputs      *[]Input  `yaml:"inputs"`
 	Outputs     *[]Output `yaml:"outputs"`
 	Notes       *[]string `yaml:"notes"`
+}
+
+type Topic struct {
+	Name		string	  `yaml:"name"`
+	Description string	  `yaml:"description"`
+	Risk		Risk	  `yaml:"risk"`
+	Usage		[]string  `yaml:"usage"`
+	Outputs		*[]Output `yaml:"outputs"`
+	Notes		*[]string `yaml:"notes"`
 }
 
 type Input struct {

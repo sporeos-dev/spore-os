@@ -26,6 +26,7 @@ type Router interface {
 type Node struct {
 	Router             Router
 	WitnessDispatcher  interfaces.Witness
+	Broadcaster        interfaces.Broadcaster
 	connection *connection.Connection
 	Manifest *manifest.Manifest
 
@@ -67,6 +68,9 @@ func (n *Node) Disconnect() error {
 // cleaned up immediately rather than leaking until the caster retries.
 func (n *Node) Disconnected() {
 	n.Router.PurgeNode(n.Manifest.ID)
+	if n.Broadcaster != nil {
+		n.Broadcaster.PurgeNode(n.Manifest.ID)
+	}
 }
 
 func (n *Node) Id() string {
@@ -74,6 +78,11 @@ func (n *Node) Id() string {
 }
 
 func (n *Node) Route(msg message.Message) error {
+	if msg.IsPublish() {
+		if pub, ok := msg.(*message.Publish); ok && n.Broadcaster != nil {
+			return n.Broadcaster.Publish(pub)
+		}
+	}
 	if msg.IsCast() {
 		cast := msg.(*message.Cast)
 		if cast.HasFlag("json") {

@@ -72,7 +72,7 @@ func (n *mockNode) GetManifest() *manifest.Manifest {
 	return &manifest.Manifest{ID: n.id}
 }
 
-func (n *mockNode) IsConnected() bool      { return false }
+func (n *mockNode) IsConnected() bool      { return true }
 func (n *mockNode) GetPID() int            { return 0 }
 func (n *mockNode) SendWitness(msg string) {}
 func (n *mockNode) WitnessNode(msg string) {}
@@ -495,7 +495,8 @@ func TestPurgeNode_HandleFreeAfterReceiverDisconnect(t *testing.T) {
 
 	r.PurgeNode("dev.sporeos.echo")
 
-	// Remove echo from the hub and add it back so routing works.
+	// Routes persist across disconnect, so the command is still registered.
+	// The re-AddRoute here is a no-op but harmless.
 	r.AddRoute("echo", "dev.sporeos.echo")
 
 	castRaw := "echo ~h1 expression=hello cast=dev.sporeos.cli"

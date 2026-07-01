@@ -83,8 +83,8 @@ func StandardErrors() []ErrorInfo {
 		{ErrorCodeRuntime,            "A runtime error occurred during execution.", nil},
 		{ErrorCodeLogic,              "A logic error in the node's internal processing.", nil},
 		// Route
-		{ErrorCodeRouteNotFound,       "No node is registered to handle the requested command.", []string{"Command name misspelled", "Node not yet spawned"}},
-		{ErrorCodeRouteNotConnected,   "The target node is registered but not currently connected.", nil},
+		{ErrorCodeRouteNotFound,       "No installed node declares this subject — no manifest in the registry owns it.", []string{"Command name misspelled", "Node uninstalled"}},
+		{ErrorCodeRouteNotConnected,   "The subject is declared in an installed node's manifest, but that node is not currently connected.", []string{"Node process not running"}},
 		{ErrorCodeRouteNotAvailable,   "The target node is connected but unable to accept the message.", nil},
 		{ErrorCodeRouteNotAllowed,     "The caller does not have permission to use this route.", nil},
 		{ErrorCodeRouteNotImplemented, "The route exists in the manifest but is not implemented.", nil},

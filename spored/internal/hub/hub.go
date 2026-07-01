@@ -177,8 +177,10 @@ func (h *Hub) RemoveNode(nodeid string) error {
 
 	h.mu.Unlock()
 
-	// PurgeNode calls hub.GetNode internally, so it must run outside the hub lock.
+	// PurgeNode cleans up in-flight handles; RemoveRoutes removes command
+	// registrations so future callers get RouteNotFound, not RouteNotConnected.
 	h.router.PurgeNode(nodeid)
+	h.router.RemoveRoutes(nodeid)
 	h.broadcaster.PurgeNode(nodeid)
 	return nil
 }

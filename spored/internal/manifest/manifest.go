@@ -85,12 +85,13 @@ type ManifestError struct {
 }
 
 // reservedInputNames are keywords that may not be used as input argument names.
-// These are hub-injected routing fields and caller-behavior flags whose presence
-// on an inbound call has protocol meaning.
+// These are hub-injected routing fields, caller-behavior flags, and response
+// status flags whose presence on the wire has protocol meaning.
 // Note: all names with the spore_ prefix are also reserved (checked separately).
 var reservedInputNames = map[string]bool{
 	"cast": true, "capture": true,
 	"code": true, "what": true, "ok": true, "json": true,
+	"error": true, "custom_error": true, "cancelled": true,
 }
 
 // reservedOutputNames are keywords that may not be used as output field names.
@@ -115,6 +116,11 @@ func validateManifest(m *Manifest) error {
 		// No subject may be named 'witness'.
 		if cmd.Name == "witness" || strings.HasPrefix(cmd.Name, "witness.") {
 			return fmt.Errorf("command %q uses the reserved 'witness' name", cmd.Name)
+		}
+		// SPEC §6.6: 'publish' is a reserved line-prefix token on the wire.
+		// No subject may be named 'publish'.
+		if cmd.Name == "publish" || strings.HasPrefix(cmd.Name, "publish.") {
+			return fmt.Errorf("command %q uses the reserved 'publish' name", cmd.Name)
 		}
 
 		if cmd.Inputs != nil {

@@ -175,6 +175,11 @@ func (r *Router) Route(msg message.Message) error {
 			r.SendError(msg, message.ErrorCodeRouteNotConnected, "receiver node unavailable: "+nodeid)
 			return err
 		}
+		if !node.IsConnected() {
+			delete(r.replies, handle)
+			r.SendError(msg, message.ErrorCodeRouteNotConnected, "node is installed but not connected: "+nodeid)
+			return errors.New("node not connected: " + nodeid)
+		}
 		if err = node.Send(msg); err != nil {
 			delete(r.replies, handle)
 			r.SendError(msg, message.ErrorCodeConnectionFailure, "failed to deliver cast to receiver")
@@ -270,6 +275,20 @@ func (r *Router) ListCommands(node string) []string {
 	return res
 }
 
+// RemoveRoutes removes all commands registered for a node from the routing
+// table. Called on uninstall (hub.RemoveNode) so that future calls to those
+// subjects return RouteNotFound. This is distinct from PurgeNode, which only
+// cleans up in-flight handles and is called on disconnect.
+func (r *Router) RemoveRoutes(nodeID string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for cmd, owner := range r.commands {
+		if owner == nodeID {
+			delete(r.commands, cmd)
+		}
+	}
+}
+
 // PurgeNode is called when a node disconnects. It finds all in-flight handles
 // associated with the disconnected node and cleans up:
 //
@@ -291,12 +310,10 @@ func (r *Router) ListCommands(node string) []string {
 func (r *Router) PurgeNode(nodeID string) {
 	r.mu.Lock()
 
-	// Remove all commands owned by this node.
-	for cmd, owner := range r.commands {
-		if owner == nodeID {
-			delete(r.commands, cmd)
-		}
-	}
+	// NOTE: commands are intentionally NOT removed here. Routes persist while a
+	// node is installed so that callers receive RouteNotConnected (not
+	// RouteNotFound) when a node disconnects and reconnects. Use RemoveRoutes
+	// to delete commands (called on uninstall via hub.RemoveNode).
 
 	// Collect reply entries to act on.
 	type pendingReply struct {

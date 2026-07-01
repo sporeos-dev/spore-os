@@ -40,6 +40,7 @@ type Registry interface {
 type Router interface {
 	Open(hub Hub, spore Spore)
 	AddRoute(command string, nodeid string)
+	RemoveRoutes(nodeID string)
 	Route(msg message.Message) error
 	GetRoute(command string) (string, error)
 	ListCommands(node string) []string

@@ -90,7 +90,14 @@ func (p *Publish) Command() string { return p.topicName }
 // Handle returns empty — publish messages have no handle.
 func (p *Publish) Handle() string { return "" }
 
-func (p *Publish) ToString() string          { return p.raw }
+func (p *Publish) ToString() string {
+	// When delivering to a subscriber (destination set), the hub injects cast=
+	// (publisher ID) and capture= (subscriber ID) per SPEC §10.2.
+	if p.destination != "" {
+		return p.raw + " cast=" + p.source + " capture=" + p.destination
+	}
+	return p.raw
+}
 func (p *Publish) SetMessageId(mid int64)    { p.mid = mid }
 func (p *Publish) MessageId() int64          { return p.mid }
 func (p *Publish) SetDestination(dst string) { p.destination = dst }

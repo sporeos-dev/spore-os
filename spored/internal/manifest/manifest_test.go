@@ -22,6 +22,8 @@ func TestManifest_RejectsReservedInputNames(t *testing.T) {
 	reserved := []string{
 		"cast", "capture",
 		"code", "what", "ok", "json",
+		// SPEC §6.6: response status flags are reserved as both input and output names
+		"error", "custom_error", "cancelled",
 		// SPEC §6.6: all spore_-prefixed names are reserved
 		"spore_error", "spore_incoming", "spore_time", "spore_anything",
 	}
@@ -47,36 +49,6 @@ api:
 		_, err := LoadManifest(path)
 		if err == nil {
 			t.Errorf("expected error for reserved input name %q, but got nil", name)
-		}
-	}
-}
-
-func TestManifest_AllowsResponseStatusFlagsAsInputNames(t *testing.T) {
-	// error, custom_error, cancelled are response status flags — reserved as outputs
-	// but valid as input names (e.g. SPORE.error.help error=RouteNotFound)
-	allowed := []string{"error", "custom_error", "cancelled"}
-
-	for _, name := range allowed {
-		yaml := `
-id: com.test.node
-name: Test Node
-description: A test node.
-schema: SPORE/v1d0
-app: ./test
-api:
-  - name: test.command
-    description: A test command.
-    usage:
-      - test.command
-    inputs:
-      - name: ` + name + `
-        type: string
-        description: Should be allowed.
-`
-		path := writeTempManifest(t, yaml)
-		_, err := LoadManifest(path)
-		if err != nil {
-			t.Errorf("expected no error for input name %q, but got: %v", name, err)
 		}
 	}
 }
@@ -110,6 +82,29 @@ api:
 		_, err := LoadManifest(path)
 		if err == nil {
 			t.Errorf("expected error for reserved output name %q, but got nil", name)
+		}
+	}
+}
+
+func TestManifest_RejectsPublishReservedSubjectName(t *testing.T) {
+	// SPEC §6.6: 'publish' is a reserved line-prefix token. No subject may be named 'publish'.
+	for _, name := range []string{"publish", "publish.something"} {
+		yaml := `
+id: com.test.node
+name: Test Node
+description: A test node.
+schema: SPORE/v1d0
+app: ./test
+api:
+  - name: ` + name + `
+    description: Should be rejected.
+    usage:
+      - test
+`
+		path := writeTempManifest(t, yaml)
+		_, err := LoadManifest(path)
+		if err == nil {
+			t.Errorf("expected error for reserved subject name %q, but got nil", name)
 		}
 	}
 }

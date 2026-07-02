@@ -7,8 +7,9 @@ id: dev.sporeos.SPORE
 name: Spore OS
 description: The central hub of the Spore ecosystem.
 trust: system
+
 schema: SPORE/v0d2
-version: 0.0.1
+version: 0.2.0
 app: n/a
 
 api:
@@ -412,16 +413,6 @@ api:
       - name: failed
         type: flag
         description: Flag present if verification failed.
-
-  - name: SPORE.developer.manifest.load
-    description: Loads a different Spore OS .manifest.spore.yaml
-    risk: protected
-    usage:
-      - SPORE.developer.manifest.load path=/path/to/replacement/spored.manfest.spore.yaml
-    inputs:
-      - name: path
-        type: string
-        description: Path to the replacement manifest.
 
 topics:
   - name: SPORE.node.installed

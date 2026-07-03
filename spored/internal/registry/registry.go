@@ -7,12 +7,9 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"io"
 	"log/slog"
 	"os"
-	"path/filepath"
 	"spored/internal/manifest"
-	"spored/internal/utilities"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -25,6 +22,8 @@ type registryFile struct {
 }
 
 // registryEntry is one installed node in nodes.registry.yaml.
+// Manifest points to the manifest at its original installed location —
+// nothing is copied into the data root.
 type registryEntry struct {
 	Name     string `yaml:"name"`
 	Manifest string `yaml:"manifest"`
@@ -87,11 +86,11 @@ func (r *Registry) Paths() []string {
 	return paths
 }
 
-// Add installs a node manifest. It validates the manifest, resolves any
-// relative app: path, copies the file into store/<id>/<id>.manifest.spore.yaml,
-// computes a SHA-256 checksum of the stored copy, then writes the entry into
-// nodes.registry.yaml. Calling Add again for the same node ID overwrites the
-// existing entry (useful for upgrades).
+// Add registers a manifest path. It validates the manifest, computes a
+// SHA-256 checksum of the file at its current location, and writes the entry
+// into nodes.registry.yaml. Nothing is copied — the manifest stays where it is.
+// Calling Add again for the same path refreshes the checksum (useful after
+// an upgrade).
 func (r *Registry) Add(path string) error {
 	if !strings.HasSuffix(path, ".manifest.spore.yaml") {
 		return fmt.Errorf("registry: %q is not a .manifest.spore.yaml file", path)
@@ -106,56 +105,15 @@ func (r *Registry) Add(path string) error {
 		return fmt.Errorf("registry: invalid manifest %q: %w", path, err)
 	}
 
-	// Resolve app: relative to the source manifest's directory (SPEC §8.2)
-	// before we copy anything — the source directory won't be relevant once
-	// everything is in the store.
-	resolvedApp, err := utilities.ResolveAppPath(m.App, filepath.Dir(path))
+	checksum, err := checksumFile(path)
 	if err != nil {
-		return fmt.Errorf("registry: resolve app path: %w", err)
-	}
-	m.App = resolvedApp
-
-	// Create store/<id>/ to hold both the binary and the manifest.
-	storeDir, err := StoreDir()
-	if err != nil {
-		return fmt.Errorf("registry: store dir: %w", err)
-	}
-	nodeDir := filepath.Join(storeDir, m.ID)
-	if err := os.MkdirAll(nodeDir, 0755); err != nil {
-		return fmt.Errorf("registry: create node dir: %w", err)
+		return fmt.Errorf("registry: checksum manifest: %w", err)
 	}
 
-	// Copy the app binary into store/<id>/<binary-name> and update app: to the
-	// store path. Skip for nodes that declare app: n/a (daemon-only / virtual).
-	if m.App != "n/a" {
-		appDest := filepath.Join(nodeDir, filepath.Base(m.App))
-		if err := copyFile(m.App, appDest, 0755); err != nil {
-			return fmt.Errorf("registry: copy app binary: %w", err)
-		}
-		m.App = appDest
-	}
-
-	// Write the manifest (with the updated app: path) into store/<id>/.
-	systemPath := filepath.Join(nodeDir, m.ID+".manifest.spore.yaml")
-	data, err := yaml.Marshal(m)
-	if err != nil {
-		return fmt.Errorf("registry: serialise manifest: %w", err)
-	}
-	if err := os.WriteFile(systemPath, data, 0644); err != nil {
-		return fmt.Errorf("registry: write manifest copy: %w", err)
-	}
-
-	// Compute the checksum of what we actually wrote.
-	checksum, err := checksumFile(systemPath)
-	if err != nil {
-		return fmt.Errorf("registry: compute checksum: %w", err)
-	}
-
-	// Add or replace the entry for this node.
-	entry := registryEntry{Name: m.Name, Manifest: systemPath, Checksum: checksum}
+	entry := registryEntry{Name: m.Name, Manifest: path, Checksum: checksum}
 	replaced := false
 	for i, e := range r.entries {
-		if e.Manifest == systemPath {
+		if e.Manifest == path {
 			r.entries[i] = entry
 			replaced = true
 			break
@@ -169,8 +127,7 @@ func (r *Registry) Add(path string) error {
 }
 
 // Remove removes the entry with the given manifest path from the registry and
-// updates nodes.registry.yaml. If the manifest lives inside the store directory
-// it is also deleted from disk.
+// updates nodes.registry.yaml.
 func (r *Registry) Remove(manifestPath string) error {
 	var remaining []registryEntry
 	found := false
@@ -185,17 +142,7 @@ func (r *Registry) Remove(manifestPath string) error {
 		return fmt.Errorf("registry: manifest not registered: %q", manifestPath)
 	}
 	r.entries = remaining
-
-	if err := r.save(); err != nil {
-		return err
-	}
-
-	// Clean up the manifest file and its per-node directory from store/.
-	if storeDir, err := StoreDir(); err == nil && strings.HasPrefix(manifestPath, storeDir) {
-		_ = os.Remove(manifestPath)
-		_ = os.Remove(filepath.Dir(manifestPath))
-	}
-	return nil
+	return r.save()
 }
 
 func (r *Registry) save() error {
@@ -229,21 +176,4 @@ func checksumFile(path string) (string, error) {
 	return "sha256:" + hex.EncodeToString(sum[:]), nil
 }
 
-// copyFile copies the file at src to dst with the given permission bits,
-// creating or truncating dst. Used to place app binaries in the store.
-func copyFile(src, dst string, mode os.FileMode) error {
-	in, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, mode)
-	if err != nil {
-		return err
-	}
-	if _, err = io.Copy(out, in); err != nil {
-		out.Close()
-		return err
-	}
-	return out.Close()
-}
+

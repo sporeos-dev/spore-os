@@ -48,16 +48,6 @@ func RegistryPath() (string, error) {
 	return filepath.Join(root, "nodes.registry.yaml"), nil
 }
 
-// StoreDir returns the root of the per-node manifest store.
-// Each installed node lives at store/<id>/<id>.manifest.spore.yaml.
-func StoreDir() (string, error) {
-	root, err := DataRoot()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(root, "store"), nil
-}
-
 // EnsureRegistryDir creates the directory containing regPath if it does not
 // already exist. Called before any write to nodes.registry.yaml so the path
 // is valid even on a first install via SPORE.node.install.

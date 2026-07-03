@@ -131,6 +131,7 @@ func (r *mockRouter) ListCommands(node string) []string {
 	return res
 }
 func (r *mockRouter) PurgeNode(nodeID string) {}
+func (r *mockRouter) RemoveRoutes(nodeID string) {}
 
 type mockWitness struct{}
 

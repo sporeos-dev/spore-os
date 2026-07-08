@@ -118,6 +118,23 @@ func (c* Capture) SetMessageId(mid int64) {
 	c.mid = mid
 }
 
+// GetArg extracts a key=value field from the capture's payload.
+// Returns the value and true if the key is present, or ("", false) if not.
+func (c *Capture) GetArg(key string) (string, bool) {
+	parts, err := Tokenize(c.raw)
+	if err != nil {
+		return "", false
+	}
+	prefix := key + "="
+	for _, part := range parts[1:] {
+		if strings.HasPrefix(part, prefix) {
+			return unquoteValue(strings.TrimPrefix(part, prefix)), true
+		}
+	}
+	return "", false
+}
+
+
 func (c* Capture) MessageId() int64 {
 	return c.mid
 }

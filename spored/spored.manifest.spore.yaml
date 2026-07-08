@@ -51,7 +51,7 @@ api:
         required: false
     outputs: []
     notes:
-      - Only one of 'node', 'path' required.
+      - One of 'node', 'path' required.
 
   - name: SPORE.node.spawn
     description: Start a node.

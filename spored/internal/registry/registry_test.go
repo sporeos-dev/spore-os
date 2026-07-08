@@ -23,6 +23,18 @@ app: "n/a"
 api: []
 `
 
+// manifestWithBinary returns a manifest YAML referencing the given binary path.
+func manifestWithBinary(binaryPath string) string {
+	return `id: com.example.test
+name: Test
+description: A test node.
+schema: SPORE/v1d0
+version: 1.0.0
+app: ` + binaryPath + `
+api: []
+`
+}
+
 const invalidManifestYAML = `id: SPORE.reserved
 name: Bad
 `
@@ -267,4 +279,134 @@ func TestRegistry_Open_PartialLoad(t *testing.T) {
 	}
 }
 
+// =============================================================================
+// Binary checksum tests
+// =============================================================================
+
+func writeTempBinary(t *testing.T, dir, filename, content string) string {
+	t.Helper()
+	path := filepath.Join(dir, filename)
+	if err := os.WriteFile(path, []byte(content), 0755); err != nil {
+		t.Fatalf("failed to write temp binary: %v", err)
+	}
+	return path
+}
+
+func TestRegistry_Add_WithBinary(t *testing.T) {
+	r := openRegistry(t)
+	dir := t.TempDir()
+	binaryPath := writeTempBinary(t, dir, "myapp", "fake binary content")
+	content := manifestWithBinary(binaryPath)
+	manifestPath := writeTempManifest(t, dir, "node.manifest.spore.yaml", content)
+
+	if err := r.Add(manifestPath); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(r.entries) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(r.entries))
+	}
+	entry := r.entries[0]
+	if entry.Binary != binaryPath {
+		t.Errorf("expected Binary %q, got %q", binaryPath, entry.Binary)
+	}
+	if entry.BinaryChecksum == "" {
+		t.Error("expected BinaryChecksum to be set")
+	}
+	if entry.BinaryChecksum != checksumOf("fake binary content") {
+		t.Errorf("BinaryChecksum mismatch: got %q", entry.BinaryChecksum)
+	}
+}
+
+func TestRegistry_Add_BinaryNotFound(t *testing.T) {
+	r := openRegistry(t)
+	dir := t.TempDir()
+	content := manifestWithBinary(filepath.Join(dir, "missing-binary"))
+	manifestPath := writeTempManifest(t, dir, "node.manifest.spore.yaml", content)
+
+	err := r.Add(manifestPath)
+	if err == nil {
+		t.Fatal("expected error when binary is missing")
+	}
+	if !strings.Contains(err.Error(), "checksum binary") {
+		t.Errorf("error should mention 'checksum binary', got: %v", err)
+	}
+}
+
+func TestRegistry_Open_BinaryChecksumMismatch(t *testing.T) {
+	t.Setenv("SPORE_DATA_DIR", t.TempDir())
+	dir := t.TempDir()
+	binaryPath := writeTempBinary(t, dir, "myapp", "fake binary content")
+	content := manifestWithBinary(binaryPath)
+	manifestPath := writeTempManifest(t, dir, "node.manifest.spore.yaml", content)
+	writeRegistryYAML(t, registryFile{
+		Version: 1,
+		Nodes: []registryEntry{{
+			Name:           "Test",
+			Manifest:       manifestPath,
+			Checksum:       checksumOf(content),
+			Binary:         binaryPath,
+			BinaryChecksum: "sha256:000000tampered",
+		}},
+	})
+
+	r := &Registry{}
+	if err := r.Open(); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if len(r.Paths()) != 0 {
+		t.Errorf("expected tampered binary entry to be skipped, got paths: %v", r.Paths())
+	}
+}
+
+func TestRegistry_Open_BinaryMissing(t *testing.T) {
+	t.Setenv("SPORE_DATA_DIR", t.TempDir())
+	dir := t.TempDir()
+	ghostBinary := filepath.Join(dir, "ghost-binary")
+	content := manifestWithBinary(ghostBinary)
+	manifestPath := writeTempManifest(t, dir, "node.manifest.spore.yaml", content)
+	writeRegistryYAML(t, registryFile{
+		Version: 1,
+		Nodes: []registryEntry{{
+			Name:           "Test",
+			Manifest:       manifestPath,
+			Checksum:       checksumOf(content),
+			Binary:         ghostBinary,
+			BinaryChecksum: "sha256:abc",
+		}},
+	})
+
+	r := &Registry{}
+	if err := r.Open(); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if len(r.Paths()) != 0 {
+		t.Errorf("expected missing binary entry to be skipped, got paths: %v", r.Paths())
+	}
+}
+
+func TestRegistry_Open_BinaryValid(t *testing.T) {
+	t.Setenv("SPORE_DATA_DIR", t.TempDir())
+	dir := t.TempDir()
+	binaryPath := writeTempBinary(t, dir, "myapp", "fake binary content")
+	content := manifestWithBinary(binaryPath)
+	manifestPath := writeTempManifest(t, dir, "node.manifest.spore.yaml", content)
+	writeRegistryYAML(t, registryFile{
+		Version: 1,
+		Nodes: []registryEntry{{
+			Name:           "Test",
+			Manifest:       manifestPath,
+			Checksum:       checksumOf(content),
+			Binary:         binaryPath,
+			BinaryChecksum: checksumOf("fake binary content"),
+		}},
+	})
+
+	r := &Registry{}
+	if err := r.Open(); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if len(r.Paths()) != 1 || r.Paths()[0] != manifestPath {
+		t.Errorf("expected entry to load, got paths: %v", r.Paths())
+	}
+}
 

@@ -148,18 +148,24 @@ func LoadManifest(path string) (*Manifest, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	var manifest Manifest
-	manifest.Path = path
-	err = yaml.Unmarshal(data, &manifest)
+	m, err := ParseManifest(string(data))
 	if err != nil {
 		return nil, err
 	}
+	m.Path = path
+	return m, nil
+}
 
-	if err := validateManifest(&manifest); err != nil {
+// ParseManifest parses a manifest from a raw YAML string.
+// The caller is responsible for setting Path on the returned manifest if known.
+func ParseManifest(content string) (*Manifest, error) {
+	var m Manifest
+	if err := yaml.Unmarshal([]byte(content), &m); err != nil {
 		return nil, err
 	}
-
-	return &manifest, nil
+	if err := validateManifest(&m); err != nil {
+		return nil, err
+	}
+	return &m, nil
 }
 

@@ -43,6 +43,12 @@ func (c *Connection) Open(conn net.Conn) error {
 	return nil
 }
 
+// PeerPID returns the OS-assigned PID of the process on the other end of conn.
+// Returns 0 if the PID cannot be determined or the platform does not support it.
+func PeerPID(conn net.Conn) int {
+	return peerPID(conn)
+}
+
 func (c *Connection) Run(node Node) {
 	slog.Info("Connecting", "node", node.Id())
 	c.node = node

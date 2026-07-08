@@ -44,8 +44,9 @@ func (h *mockHub) GetNode(nodeid string) (mockNodeIface, error) {
 	return n, nil
 }
 
-func (h *mockHub) AddNode(path string) error      { return nil }
-func (h *mockHub) RemoveNode(nodeid string) error { return nil }
+func (h *mockHub) AddNode(path string) error                        { return nil }
+func (h *mockHub) AddNodeWithManifest(_ *manifest.Manifest) error   { return nil }
+func (h *mockHub) RemoveNode(nodeid string) error                   { return nil }
 func (h *mockHub) SpawnNode(nodeid string) error  { return nil }
 func (h *mockHub) KillNode(nodeid string) error   { return nil }
 
@@ -298,8 +299,9 @@ func (h *routeTestHub) GetNode(nodeid string) (interfaces.Node, error) {
 	return n, nil
 }
 
-func (h *routeTestHub) AddNode(path string) error      { return nil }
-func (h *routeTestHub) RemoveNode(nodeid string) error { return nil }
+func (h *routeTestHub) AddNode(path string) error                        { return nil }
+func (h *routeTestHub) AddNodeWithManifest(_ *manifest.Manifest) error   { return nil }
+func (h *routeTestHub) RemoveNode(nodeid string) error                   { return nil }
 func (h *routeTestHub) SpawnNode(nodeid string) error  { return nil }
 func (h *routeTestHub) KillNode(nodeid string) error   { return nil }
 

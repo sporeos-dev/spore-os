@@ -39,7 +39,14 @@ func (n *Node) Open(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	n.Manifest = manifest
+	return n.OpenWithManifest(manifest)
+}
+
+// OpenWithManifest initialises the node from an already-parsed manifest,
+// skipping any direct file reads. This is used when the daemon delegated
+// file access to hyphae and the manifest content is already available.
+func (n *Node) OpenWithManifest(m *manifest.Manifest) (string, error) {
+	n.Manifest = m
 	for _, command := range n.Manifest.Api {
 		n.Router.AddRoute(command.Name, n.Manifest.ID)
 	}

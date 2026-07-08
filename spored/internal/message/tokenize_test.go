@@ -455,3 +455,118 @@ func TestUnquoteValue_MismatchedQuotes(t *testing.T) {
 		t.Errorf("expected unchanged mismatched quotes, got %q", got)
 	}
 }
+
+func TestUnquoteValue_EscapedNewline(t *testing.T) {
+	if got := unquoteValue(`"line1\nline2"`); got != "line1\nline2" {
+		t.Errorf("expected unescaped newline, got %q", got)
+	}
+}
+
+func TestUnquoteValue_EscapedCarriageReturn(t *testing.T) {
+	if got := unquoteValue(`"a\rb"`); got != "a\rb" {
+		t.Errorf("expected unescaped CR, got %q", got)
+	}
+}
+
+func TestUnquoteValue_EscapedTab(t *testing.T) {
+	if got := unquoteValue(`"a\tb"`); got != "a\tb" {
+		t.Errorf("expected unescaped tab, got %q", got)
+	}
+}
+
+func TestUnquoteValue_EscapedBackslash(t *testing.T) {
+	if got := unquoteValue(`"a\\b"`); got != `a\b` {
+		t.Errorf("expected single backslash, got %q", got)
+	}
+}
+
+func TestUnquoteValue_EscapedDoubleQuote(t *testing.T) {
+	if got := unquoteValue(`"say \"hi\""`); got != `say "hi"` {
+		t.Errorf("expected unescaped double quotes, got %q", got)
+	}
+}
+
+func TestUnquoteValue_UnknownEscapePreserved(t *testing.T) {
+	// \x is not a known escape — backslash and char are both preserved.
+	if got := unquoteValue(`"a\xb"`); got != `a\xb` {
+		t.Errorf("expected unknown escape preserved, got %q", got)
+	}
+}
+
+func TestUnquoteValue_SingleQuotedNotUnescaped(t *testing.T) {
+	// Backslash inside single-quoted string is not an escape character.
+	if got := unquoteValue(`'a\nb'`); got != `a\nb` {
+		t.Errorf("expected literal backslash-n, got %q", got)
+	}
+}
+
+func TestUnquoteValue_MultilineYAML(t *testing.T) {
+	// Simulate a YAML file content escaped for wire transport.
+	escaped := `"id: aardvark\nname: Aardvark\n"`
+	got := unquoteValue(escaped)
+	want := "id: aardvark\nname: Aardvark\n"
+	if got != want {
+		t.Errorf("expected unescaped YAML content, got %q", got)
+	}
+}
+
+// =============================================================================
+// Tokenize — escape sequences in double-quoted strings
+// =============================================================================
+
+func TestTokenize_DoubleQuoteEscapedNewline(t *testing.T) {
+	// \n inside "..." must be kept as a two-character escape sequence so the
+	// token boundary is not disturbed by the literal newline.
+	tokens, err := Tokenize(`content="line1\nline2"`)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(tokens) != 1 {
+		t.Fatalf("expected 1 token, got %v", tokens)
+	}
+	// The raw token retains the escape; unquoteValue decodes it.
+	if got := unquoteValue(tokens[0][len("content="):]); got != "line1\nline2" {
+		t.Errorf("expected decoded newline, got %q", got)
+	}
+}
+
+func TestTokenize_DoubleQuoteEscapedQuote(t *testing.T) {
+	tokens, err := Tokenize(`msg="say \"hi\""`)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(tokens) != 1 {
+		t.Fatalf("expected 1 token, got %v", tokens)
+	}
+	if got := unquoteValue(tokens[0][len("msg="):]); got != `say "hi"` {
+		t.Errorf("expected decoded double-quote, got %q", got)
+	}
+}
+
+func TestTokenize_DoubleQuoteEscapedBackslash(t *testing.T) {
+	tokens, err := Tokenize(`path="C:\\Users\\test"`)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(tokens) != 1 {
+		t.Fatalf("expected 1 token, got %v", tokens)
+	}
+	if got := unquoteValue(tokens[0][len("path="):]); got != `C:\Users\test` {
+		t.Errorf("expected decoded backslashes, got %q", got)
+	}
+}
+
+func TestTokenize_DoubleQuoteMultilineDoesNotSplit(t *testing.T) {
+	// The tokenizer operates on a single-line string. Callers encode \n before
+	// putting content on the wire; this test verifies the escape is preserved.
+	tokens, err := Tokenize(`cmd content="first\nsecond\nthird" flag`)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(tokens) != 3 {
+		t.Fatalf("expected 3 tokens, got %v", tokens)
+	}
+	if tokens[1] != `content="first\nsecond\nthird"` {
+		t.Errorf("unexpected content token: %q", tokens[1])
+	}
+}

@@ -14,6 +14,7 @@ type Hub interface {
 	ListNodes() []string
 	GetNode(nodeid string) (Node, error)
 	AddNode(path string) error
+	AddNodeWithManifest(m *manifest.Manifest) error
 	RemoveNode(nodeid string) error
 	SpawnNode(nodeid string) error
 	KillNode(nodeid string) error
@@ -33,7 +34,11 @@ type Registry interface {
 	Open() error
 	Paths() []string
 	Add(path string) error
+	AddEntry(manifestPath, manifestContent, manifestChecksum, binaryPath, binaryChecksum string) error
 	Remove(path string) error
+	ManifestVerified(manifestPath string) bool
+	ManifestChecksumFor(manifestPath string) (checksum string, ok bool)
+	BinaryChecksumFor(manifestPath string) (binaryPath string, checksum string, ok bool)
 }
 
 // Router is what hub uses to route messages.
@@ -45,6 +50,10 @@ type Router interface {
 	GetRoute(command string) (string, error)
 	ListCommands(node string) []string
 	PurgeNode(nodeID string)
+	// RequestNode sends a command to a connected node and blocks until the reply
+	// arrives (or the call times out). It is used by the hub for internal
+	// service calls such as delegating file reads to spore-hyphae.
+	RequestNode(nodeID string, command string, args map[string]string) (message.Message, error)
 }
 
 // Broadcast pub/sub topics

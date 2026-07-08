@@ -9,17 +9,20 @@ import (
 	"log/slog"
 	"spored/internal/interfaces"
 	"spored/internal/message"
+	"strings"
 	"sync"
+	"time"
 )
 
 type Router struct {
 	hub   interfaces.Hub
 	spore interfaces.Spore
 
-	mu       sync.RWMutex
-	commands map[string]string       // [clock.get_time] = dev.sporeos.clock
-	replies  map[string]replyEntry   // [~handle] = {caster, receiver, command}
-	pending  map[string]*pendingSlot // [~~XXXX handle value] = inline slot
+	mu          sync.RWMutex
+	commands    map[string]string          // [clock.get_time] = dev.sporeos.clock
+	replies     map[string]replyEntry      // [~handle] = {caster, receiver, command}
+	pending     map[string]*pendingSlot    // [~~XXXX handle value] = inline slot
+	hubRequests map[string]chan message.Message // [~XXXX] = reply channel for hub-initiated calls
 }
 
 // replyEntry tracks an in-flight call waiting for a response.
@@ -42,6 +45,7 @@ func (r *Router) Open(hub interfaces.Hub, spore interfaces.Spore) {
 	r.commands = make(map[string]string)
 	r.pending = make(map[string]*pendingSlot)
 	r.replies = make(map[string]replyEntry)
+	r.hubRequests = make(map[string]chan message.Message)
 }
 
 func (r *Router) AddRoute(command string, nodeid string) {
@@ -75,9 +79,17 @@ func (r *Router) Route(msg message.Message) error {
 		handle := msg.Handle()
 		r.mu.RLock()
 		_, isPending := r.pending[handle]
+		ch, isHubReq := r.hubRequests[handle]
 		r.mu.RUnlock()
 		if isPending {
 			return r.handleInlineResponse(handle, msg)
+		}
+		if isHubReq {
+			r.mu.Lock()
+			delete(r.hubRequests, handle)
+			r.mu.Unlock()
+			ch <- msg
+			return nil
 		}
 	}
 
@@ -398,5 +410,76 @@ func (r *Router) sendPurgeError(handle, command, casterNodeID, disconnectedNodeI
 	}
 	if err = casterNode.Send(errMsg); err != nil {
 		slog.Warn("PurgeNode: failed to deliver error to caster", "caster", casterNodeID, "handle", handle)
+	}
+}
+
+const hubRequestTimeout = 10 * time.Second
+
+// hubNodeID is the node ID the hub uses as the cast= origin for internal
+// requests. Matches the id field in spored.manifest.spore.yaml.
+const hubNodeID = "dev.sporeos.SPORE"
+
+// RequestNode sends command to the named node and blocks until the reply
+// arrives or hubRequestTimeout elapses. args values that contain spaces are
+// automatically quoted. Returns an error if the node is not connected, the
+// send fails, the node returns an error reply, or the call times out.
+func (r *Router) RequestNode(nodeID string, command string, args map[string]string) (message.Message, error) {
+	node, err := r.hub.GetNode(nodeID)
+	if err != nil {
+		return nil, fmt.Errorf("router: RequestNode %s: node not found: %w", command, err)
+	}
+	if !node.IsConnected() {
+		return nil, fmt.Errorf("router: RequestNode %s: %s is not connected", command, nodeID)
+	}
+
+	handle := generateInlineHandle() // "~XXXX"
+	wireToken := "~" + handle        // "~~XXXX" on the wire
+
+	// Build raw cast string.
+	var sb strings.Builder
+	sb.WriteString(command)
+	sb.WriteString(" ")
+	sb.WriteString(wireToken)
+	for k, v := range args {
+		sb.WriteString(" ")
+		sb.WriteString(k)
+		sb.WriteString("=")
+		if strings.ContainsAny(v, " \t\"") {
+			sb.WriteString(`"`)
+			sb.WriteString(strings.ReplaceAll(v, `"`, `\"`))
+			sb.WriteString(`"`)
+		} else {
+			sb.WriteString(v)
+		}
+	}
+
+	msg, err := message.Parse(sb.String(), hubNodeID)
+	if err != nil {
+		return nil, fmt.Errorf("router: RequestNode %s: build message: %w", command, err)
+	}
+
+	ch := make(chan message.Message, 1)
+	r.mu.Lock()
+	r.hubRequests[handle] = ch
+	r.mu.Unlock()
+
+	if err := node.Send(msg); err != nil {
+		r.mu.Lock()
+		delete(r.hubRequests, handle)
+		r.mu.Unlock()
+		return nil, fmt.Errorf("router: RequestNode %s: send: %w", command, err)
+	}
+
+	select {
+	case reply := <-ch:
+		if reply.IsError() {
+			return nil, fmt.Errorf("router: RequestNode %s: node error: %s", command, reply.ToString())
+		}
+		return reply, nil
+	case <-time.After(hubRequestTimeout):
+		r.mu.Lock()
+		delete(r.hubRequests, handle)
+		r.mu.Unlock()
+		return nil, fmt.Errorf("router: RequestNode %s to %s: timed out after %s", command, nodeID, hubRequestTimeout)
 	}
 }

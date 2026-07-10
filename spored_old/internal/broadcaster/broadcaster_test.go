@@ -47,8 +47,9 @@ func (h *stubHub) GetNode(id string) (interfaces.Node, error) {
 	}
 	return n, nil
 }
-func (h *stubHub) AddNode(_ string) error         { return nil }
-func (h *stubHub) RemoveNode(_ string) error      { return nil }
+func (h *stubHub) AddNode(_ string) error                      { return nil }
+func (h *stubHub) AddNodeWithManifest(_ *manifest.Manifest) error { return nil }
+func (h *stubHub) RemoveNode(_ string) error                   { return nil }
 func (h *stubHub) SpawnNode(_ string) error       { return nil }
 func (h *stubHub) KillNode(_ string) error        { return nil }
 

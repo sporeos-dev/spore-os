@@ -20,42 +20,17 @@ type program struct {
 // It must return quickly — hub.Open() already does this by launching
 // its accept loop in a goroutine.
 func (p *program) Start(s service.Service) error {
-	slog.Debug("Starting program as a service")
-
-	hub, err := hub.New()
-	if err != nil {
-		slog.Error("Failed to start hub", "error", err)
+	p.hub = &hub.Hub{}
+	if err := p.hub.Open(); err != nil {
+		slog.Error("Failure to setup", "error", err)
 		return err
 	}
-	p.hub = hub
 	return nil
 }
 
 // Stop is called by the service manager on SIGINT/SIGTERM or when
 // `spored stop` is run. hub.Close() is synchronous cleanup.
 func (p *program) Stop(s service.Service) error {
-	slog.Debug("Stopping program as a service")
-
 	p.hub.Close()
 	return nil
 }
-
-// run/stop are convenience methods for running the hub in interactive mode
-func (p *program) run() {
-	slog.Debug("Starting program as a console app")
-
-	hub, err := hub.New()
-	if err != nil {
-		panic(err)
-	}
-	p.hub = hub
-
-	select {}
-}
-
-func (p *program) stop() {
-	slog.Debug("Stopping program as a console app")
-
-	p.hub.Close()
-}
-

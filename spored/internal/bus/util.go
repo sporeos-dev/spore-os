@@ -1,0 +1,32 @@
+package bus
+
+import (
+	"fmt"
+	"time"
+)
+
+func buildWitnessMessage(t WitnessType, msg string, n node) string {
+	time := time.Now().UnixMilli()
+	var msgOut string
+
+	switch t {
+	case Incoming:
+		msgOut = fmt.Sprintf("witness %s spore_incoming spore_time=%d", msg, time)
+	case Outgoing:
+		msgOut = fmt.Sprintf("witness %s spore_outgoing spore_time=%d", msg, time)
+	case Spore:
+		msgOut = fmt.Sprintf("witness %s spore_event spore_time=%d", msg, time)
+	case Node:
+		var id string
+		if n == nil {
+			id = "unknown_id"
+		} else {
+			id = n.Id()
+		}
+		msgOut = fmt.Sprintf("witness %s cast=%s spore_node spore_time=%d", msg, id, t)
+	default:
+		msgOut = fmt.Sprintf("witness %s spore_unknown spore_time=%d", msg, time)
+	}
+
+	return msgOut
+}

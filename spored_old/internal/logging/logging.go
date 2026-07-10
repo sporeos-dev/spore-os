@@ -6,7 +6,6 @@ package logging
 import (
 	"context"
 	"fmt"
-	"io"
 	"log/slog"
 	"os"
 	"sync"
@@ -16,17 +15,12 @@ type PlainHandler struct {
 	level slog.Leveler
 	attrs []slog.Attr
 	mu    *sync.Mutex
-	w     io.Writer
 }
 
-func NewPlainHandler(level slog.Leveler, w io.Writer) *PlainHandler {
-	if w == nil {
-		w = os.Stdout
-	}
+func NewPlainHandler(level slog.Leveler) *PlainHandler {
 	return &PlainHandler{
 		level: level,
 		mu:    &sync.Mutex{},
-		w:     w,
 	}
 }
 
@@ -37,18 +31,11 @@ func (h *PlainHandler) Enabled(_ context.Context, level slog.Level) bool {
 func (h *PlainHandler) Handle(_ context.Context, r slog.Record) error {
 	timeStr := r.Time.Format("15:04:05")
 	levelStr := r.Level.String()
-	switch levelStr {
-	case "DEBUG":
-		levelStr = "  [DEBUG]  "
-	case "INFO":
-		levelStr = " -[.INFO]- "
-	case "WARN":
-		levelStr = "!-[.WARN]-!"
-	case "ERROR":
-		levelStr = "X=[ERROR]=X"
+	if len(levelStr) == 4 {
+		levelStr = "." + levelStr
 	}
 
-	msg := fmt.Sprintf("%s %s %s", timeStr, levelStr, r.Message)
+	msg := fmt.Sprintf("%s -=[%s]=- %s", timeStr, levelStr, r.Message)
 
 	for _, a := range h.attrs {
 		msg += fmt.Sprintf(" %s=%v", a.Key, a.Value)
@@ -61,7 +48,7 @@ func (h *PlainHandler) Handle(_ context.Context, r slog.Record) error {
 
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	fmt.Fprintln(h.w, msg)
+	fmt.Fprintln(os.Stdout, msg)
 	return nil
 }
 
@@ -70,7 +57,6 @@ func (h *PlainHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 		level: h.level,
 		attrs: append(append([]slog.Attr{}, h.attrs...), attrs...),
 		mu:    h.mu,
-		w:     h.w,
 	}
 }
 

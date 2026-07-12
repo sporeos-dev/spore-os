@@ -10,6 +10,6 @@ func newApi() *api {
 
 func (a *api) close() {}
 
-func (a *api) register(n node) {}
+func (a *api) register(n inode) {}
 
-func (a *api) unregister(n node) {}
+func (a *api) unregister(n inode) {}

@@ -8,10 +8,14 @@ const (
 	Node
 )
 
-type node interface {
+type ihyphae interface {}
+
+type inodes interface {}
+
+type inode interface {
 	Id() string
 	IsWitness() bool
 	SendRaw(msg string)
 }
 
-type message interface {}
+type ispore interface {}

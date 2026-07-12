@@ -40,6 +40,66 @@ func main() {
 
 	//
 	//
+	// Handle subcommands before anything else.
+	// service.Interactive() is true when run from a terminal (e.g. sudo spored install),
+	// so subcommand handling must live here — outside the interactive/daemon branch —
+	// otherwise commands like "install" are never reached from a shell.
+	//
+	if len(os.Args) > 1 {
+		svc, err := service.New(&program{}, svcConfig)
+		if err != nil {
+			log.Fatalf("Failed to create service: %v", err)
+		}
+
+		if os.Args[1] == "home" {
+			root := pal.DirectoryRoot()
+			open := pal.CommandOpenFileManager()
+			cmd := exec.Command(open, root)
+			if cmd != nil {
+				if err := cmd.Start(); err != nil {
+					log.Fatalf("Could not open file manager: %v", err)
+				}
+			}
+			return
+		}
+
+		// On macOS, kardianos/service uses the deprecated `launchctl load/unload`
+		// API which fails when running as root for system-level LaunchDaemons on
+		// macOS Ventura+. Intercept start/stop/restart here and use the modern
+		// `launchctl bootstrap/bootout` commands instead.
+		// install and uninstall still go through kardianos (plist write/delete).
+		if runtime.GOOS == "darwin" {
+			plist := "/Library/LaunchDaemons/" + svcConfig.Name + ".plist"
+			switch os.Args[1] {
+			case "start":
+				if err := darwinLaunchctl("bootstrap", "system", plist); err != nil {
+					log.Fatalf("Service control failed (start): %v", err)
+				}
+				return
+			case "stop":
+				if err := darwinLaunchctl("bootout", "system", plist); err != nil {
+					log.Printf("Service stop may have failed (not running?): %v", err)
+				}
+				return
+			case "restart":
+				bootstrapScript := "sleep 1 && launchctl bootstrap system " + plist + " &>/dev/null"
+				_ = exec.Command("/bin/sh", "-c", bootstrapScript+" &").Run()
+				_ = darwinLaunchctl("bootout", "system", plist)
+				return
+			case "uninstall":
+				_ = darwinLaunchctl("bootout", "system", plist)
+				// fall through to kardianos to remove the plist file
+			}
+		}
+
+		if err := service.Control(svc, os.Args[1]); err != nil {
+			log.Fatalf("Service control failed (%s): %v", os.Args[1], err)
+		}
+		return
+	}
+
+	//
+	//
 	// setup logging
 	//
 
@@ -99,69 +159,6 @@ func main() {
 		if err != nil {
 			slog.Error("Failed to create service", "error", err)
 			os.Exit(1)
-		}
-
-		// Handle service control subcommands:
-		//   spored home      — open the file manager to the root data directory
-		//   spored install   — register with the OS service manager
-		//   spored uninstall — deregister
-		//   spored start     — start the background daemon
-		//   spored stop      — stop the background daemon
-		//   spored restart   — restart the background daemon
-		if len(os.Args) > 1 {
-			if os.Args[1] == "home" {
-					root := pal.DirectoryRoot()
-					open := pal.CommandOpenFileManager()
-					cmd := exec.Command(open, root)
-					if cmd != nil {
-						if err := cmd.Start(); err != nil {
-							slog.Error("Could not open file manager", "error", err)
-							os.Exit(1)
-						}
-				}
-				return
-			}
-
-			// On macOS, kardianos/service uses the deprecated `launchctl load/unload`
-			// API which fails when running as root for system-level LaunchDaemons on
-			// macOS Ventura+. Intercept start/stop/restart here and use the modern
-			// `launchctl bootstrap/bootout` commands instead.
-			// install and uninstall still go through kardianos (plist write/delete).
-			if runtime.GOOS == "darwin" {
-				plist := "/Library/LaunchDaemons/" + svcConfig.Name + ".plist"
-				switch os.Args[1] {
-				case "start":
-					if err := darwinLaunchctl("bootstrap", "system", plist); err != nil {
-						slog.Error("Service control failed", "action", "start", "error", err)
-						os.Exit(1)
-					}
-					return
-				case "stop":
-					// bootout returns an error if not running; treat that as a warning.
-					if err := darwinLaunchctl("bootout", "system", plist); err != nil {
-						slog.Warn("Service stop may have failed (not running?)", "error", err)
-					}
-					return
-				case "restart":
-					// bootout sends SIGKILL to this process before it can run bootstrap.
-					// Schedule bootstrap in a detached background shell first — the shell
-					// outlives us and runs bootstrap after the old daemon has been torn down.
-					bootstrapScript := "sleep 1 && launchctl bootstrap system " + plist + " &>/dev/null"
-					_ = exec.Command("/bin/sh", "-c", bootstrapScript+" &").Run()
-					_ = darwinLaunchctl("bootout", "system", plist) // ignore not-running error
-					return
-				case "uninstall":
-					// Ensure the daemon is stopped before kardianos deletes the plist.
-					_ = darwinLaunchctl("bootout", "system", plist)
-					// fall through to kardianos to remove the plist file
-				}
-			}
-
-			if err := service.Control(svc, os.Args[1]); err != nil {
-				slog.Error("Service control failed", "action", os.Args[1], "error", err)
-				os.Exit(1)
-			}
-			return
 		}
 
 		// No subcommand: run directly (blocks until signal, same as before).

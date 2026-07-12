@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-func buildWitnessMessage(t WitnessType, msg string, n node) string {
+func buildWitnessMessage(t WitnessType, msg string, n inode) string {
 	time := time.Now().UnixMilli()
 	var msgOut string
 

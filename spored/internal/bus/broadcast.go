@@ -10,6 +10,6 @@ func newBroadcast() *broadcast {
 
 func (b *broadcast) close() {}
 
-func (b *broadcast) register(n node) {}
+func (b *broadcast) register(n inode) {}
 
-func (b *broadcast) unregister(n node) {}
+func (b *broadcast) unregister(n inode) {}

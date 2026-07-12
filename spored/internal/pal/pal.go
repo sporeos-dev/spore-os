@@ -1,8 +1,11 @@
 package pal
 
 import (
+	"net"
+	"os"
 	"path/filepath"
-	"runtime"
+
+	"github.com/kardianos/service"
 )
 
 type pal struct {
@@ -12,20 +15,8 @@ type pal struct {
 var instance *pal
 
 func init() {
-	var impl impl
-	switch runtime.GOOS {
-	case "darwin":
-		impl = newMacos()
-	case "linux":
-		impl = newLinux()
-	case "windows":
-		impl = newWindows()
-	default:
-		panic("unsupported operating system: " + runtime.GOOS)
-	}
-
 	instance = &pal{
-		impl: impl,
+		impl: newImpl(),
 	}
 }
 
@@ -34,12 +25,26 @@ func CommandOpenFileManager() string { return instance.impl.commandOpenFileManag
 func DaemonUsername() string         { return instance.impl.daemonUsername() }
 
 // Directories
-func DirectoryRoot() string    { return instance.impl.directoryRoot() }
-func DirectoryData() string    { return filepath.Join(instance.impl.directoryRoot(), "data") }
-func DirectoryStore() string   { return filepath.Join(instance.impl.directoryRoot(), "store") }
-func DirectoryLogging() string { return instance.impl.directoryLogging() }
+func DirectoryRoot() string      { return instance.impl.directoryRoot() }
+func DirectoryData() string      { return filepath.Join(instance.impl.directoryRoot(), "data") }
+func DirectoryStore() string     { return filepath.Join(instance.impl.directoryRoot(), "store") }
+func DirectoryLogging() string   { return instance.impl.directoryLogging() }
 
 // Files
 func FileRegistry() string { return filepath.Join(instance.impl.directoryRoot(), "nodes.registry.yaml") }
 func FileSocket() string   { return filepath.Join(instance.impl.directoryRoot(), "spored.sock") }
 func FileLog() string      { return filepath.Join(instance.impl.directoryLogging(), "dev.sporeos.spored.log") }
+func FileSporeManifest() string {
+	if service.Interactive() {
+		exe, err := os.Executable()
+		if err == nil {
+			return filepath.Join(filepath.Dir(exe), "spored.manifest.spore.yaml")
+		}
+		return "spored.manifest.spore.yaml"
+	} else {
+		return filepath.Join(instance.impl.directoryRoot(), "spored.manifest.spore.yaml")
+	}
+}
+
+// PeerPID
+func ProcessPath(conn net.Conn) (string, error) { return instance.impl.processPath(conn) }

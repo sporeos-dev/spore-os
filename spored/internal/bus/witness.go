@@ -4,18 +4,18 @@ import "sync"
 
 type witness struct {
 	mu sync.RWMutex
-	witnesses []node
+	witnesses []inode
 }
 
 func newWitness() *witness {
 	return &witness {
-		witnesses: make([]node, 0),
+		witnesses: make([]inode, 0),
 	}
 }
 
 func (w *witness) close() {}
 
-func (w *witness) register(n node) {
+func (w *witness) register(n inode) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	
@@ -26,7 +26,7 @@ func (w *witness) register(n node) {
 	w.witnesses = append(w.witnesses, n)
 }
 
-func (w *witness) unregister(n node) {
+func (w *witness) unregister(n inode) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
@@ -39,7 +39,7 @@ func (w *witness) unregister(n node) {
 	}
 }
 
-func (w *witness) dispatch(t WitnessType, msg string, n node) {
+func (w *witness) dispatch(t WitnessType, msg string, n inode) {
 	
 	msgOut := buildWitnessMessage(t, msg, n)
 	

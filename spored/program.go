@@ -5,6 +5,7 @@ package main
 
 import (
 	"log/slog"
+	"os"
 	"spored/internal/hub"
 
 	"github.com/kardianos/service"
@@ -46,7 +47,8 @@ func (p *program) run() {
 
 	hub, err := hub.New()
 	if err != nil {
-		panic(err)
+		slog.Error("Failed to start hub", "error", err)
+		os.Exit(1)
 	}
 	p.hub = hub
 

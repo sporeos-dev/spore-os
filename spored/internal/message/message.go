@@ -1,9 +1,14 @@
 package message
 
-type Message struct {}
+type Message interface{
 
-func New() *Message {
-	return &Message{}
+	Witness() string
+
+	// pub/sub
+	Topic() string
 }
 
-func (m *Message) Close() {}
+func New() Message {
+
+}
+

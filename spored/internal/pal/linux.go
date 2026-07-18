@@ -20,4 +20,5 @@ func (l *linux) daemonUsername() string { return "spore" }
 func (l *linux) directoryLogging() string { return "/var/log/spore-os" }
 func (l *linux) directoryRoot() string { return "/var/lib/spore-os" }
 
+func (l *linux) processId(conn net.Conn) (int, error) { return -1, errors.New("not impl.") }
 func (l *linux) processPath(conn net.Conn) (string, error) { return "", errors.New("not impl.") } 

@@ -1,13 +1,32 @@
 package spore
 
+import (
+	"spored/internal/manifest"
+	"spored/internal/pal"
+	"spored/internal/utilities/error"
+	"spored/internal/utilities/out"
+	"spored/internal/utilities/status"
+)
+
 type Spore struct {
+	manifest *manifest.Manifest
+
 	bus ibus
 	hyphae ihyphae
 	nodes inodes
 }
 
 func New() *Spore {
-	return &Spore{}
+	m := &manifest.Manifest{
+		Status: status.New(),
+		Path: pal.FileSporeManifest(),
+		ExpectedChecksum: "n/a",
+	}
+	m.Status.Set(status.Verified)
+
+	return &Spore{
+		manifest: m,
+	}
 }
 
 func (s *Spore) Set(bus ibus, hyphae ihyphae, nodes inodes) {
@@ -17,3 +36,61 @@ func (s *Spore) Set(bus ibus, hyphae ihyphae, nodes inodes) {
 }
 
 func (s *Spore) Close() {}
+
+func (s *Spore) ReceiveCast(request icast) *error.Error {
+
+	switch request.Command() {
+	case "SPORE.help": return s.help(request)
+	case "SPORE.info": return s.info(request)
+	case "SPORE.state": return s.state(request)
+		
+	case "SPORE.node.list": return s.nodeList(request)
+	case "SPORE.node.help": return s.nodeHelp(request)
+	case "SPORE.node.state": return s.nodeState(request)
+	case "SPORE.node.install": return s.nodeInstall(request)
+	case "SPORE.node.uninstall": return s.nodeUninstall(request)
+	case "SPORE.node.spawn": return s.nodeSpawn(request)
+	case "SPORE.node.kill": return s.nodeKill(request)
+
+	case "SPORE.command.list": return s.commandList(request)
+	case "SPORE.command.help": return s.commandHelp(request)
+
+	case "SPORE.error.list": return s.errorHelp(request)
+	case "SPORE.error.help": return s.errorHelp(request)
+
+	case "SPORE.topic.list": return s.topicList(request)
+	case "SPORE.topic.help": return s.topicHelp(request)
+	case "SPORE.topic.state": return s.topicState(request)
+	case "SPORE.topic.subscribe": return s.topicSubscribe(request)
+	case "SPORE.topic.unsubscribe": return s.topicUnsubscribe(request)
+
+	case "SPORE.permissions.list": return s.permissionList(request)
+	case "SPORE.permission.request": return s.permissionRequest(request)
+	case "SPORE.permission.grant": return s.permissionGrant(request)
+	case "SPORE.permission.revoke": return s.permissionRevoke(request)
+
+	case "SPORE.security.keyring.list": return s.securityKeyringList(request)
+	case "SPORE.security.keyring.info": return s.securityKeyringInfo(request)
+	case "SPORE.security.keyring.grant": return s.securityKeyringGrant(request)
+	case "SPORE.security.keyring.revoke": return s.securityKeyringRevoke(request)
+	case "SPORE.security.signature.sign": return s.securitySignatureSign(request)
+	case "SPORE.security.signature.verify": return s.securitySignatureVerify(request)
+	}
+
+	return error.New(error.RouteNotImplemented, "spore command unhandled")
+}
+
+func (s *Spore) ReceiveCapture(response icapture, args... any) *error.Error {
+
+	
+
+	return nil
+}
+
+func (s *Spore) respond(response icast, args ...out.IOut) {
+
+}
+
+func (s *Spore) respondError(response icast, err *error.Error) {
+
+}

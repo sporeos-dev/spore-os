@@ -1,6 +1,9 @@
 package bus
 
-import "spored/internal/message"
+import (
+	"spored/internal/message"
+	"spored/internal/utilities/error"
+)
 
 type Bus struct {
 	api *api
@@ -47,6 +50,14 @@ func (b *Bus) Unregister(n inode) {
 func (b *Bus) Route(msg *message.Message) {
 }
 
-func (b *Bus) Witness(t WitnessType, msg string, n inode) {
-	b.witness.dispatch(t, msg, n)
+func (b *Bus) Witness(message message.Message) {
+	b.witness.dispatch(t, message, n)
+}
+
+func (b *Bus) Subscribe(cast string, topic string) *error.Error {
+	return b.broadcast.subscribe(cast, topic)
+}
+
+func (b *Bus) Unsubscribe(cast string, topic string) *error.Error {
+	return b.broadcast.unsubscribe(cast, topic)
 }

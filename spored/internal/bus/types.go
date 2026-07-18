@@ -1,21 +1,20 @@
 package bus
 
-type WitnessType int
-const (
-	Incoming WitnessType = iota
-	Outgoing
-	Spore
-	Node
+import (
+	"spored/internal/message"
+	"spored/internal/utilities/error"
 )
 
 type ihyphae interface {}
 
-type inodes interface {}
+type inodes interface {
+	Publish(message message.Message) *error.Error
+}
 
 type inode interface {
 	Id() string
 	IsWitness() bool
-	SendRaw(msg string)
+	Receive(message message.Message) *error.Error
 }
 
 type ispore interface {}

@@ -1,0 +1,128 @@
+package spore
+
+import (
+	"spored/internal/utilities/error"
+	"spored/internal/utilities/out"
+)
+
+func (s *Spore) topicList(request icast) *error.Error {
+	
+	node := request.ArgIf("node", "all")
+
+	go func() {
+		
+		topics := make([]string, 0)
+
+		if node == "all" {
+
+			for _, nodeid := range s.nodes.GetNodes() {
+				manifest := s.nodes.GetManifest(nodeid)
+				topics = append(topics, manifest.TopicIds()...)
+			}
+
+		} else {
+
+			manifest := s.nodes.GetManifest(node)
+			if manifest == nil {
+				s.respondError(request, error.New(error.RouteNotFound, "node not found"))
+				return
+			}
+			topics = manifest.TopicIds()
+
+		}
+
+		s.respond(request, out.NewArray("topics", topics))
+	}()
+
+	return nil
+}
+
+func (s *Spore) topicHelp(request icast) *error.Error {
+
+	topicid, err := request.Arg("topic")
+	if err != nil {
+		return err
+	}
+
+	go func() {
+
+		for _, nodeid := range s.nodes.GetNodes() {
+			
+			manifest := s.nodes.GetManifest(nodeid)
+			for _, topic := range manifest.Topics {
+				if topicid != topic.Name {
+					continue
+				}
+				
+				response := map[string]any {
+					"id": topic.Name,
+					"name": topic.Name,
+					"description": topic.Description,
+					"node": nodeid,
+					"outputs": topic.Outputs,
+				}
+
+				s.respond(request, out.NewObject("topichelp", response))
+				return
+			}
+		}
+
+		s.respondError(request, error.New(error.RouteNotFound, "topic not found"))
+	}()
+
+	return nil
+}
+
+func (s *Spore) topicState(request icast) *error.Error {
+
+	_, err := request.Arg("topic")
+	if err != nil {
+		return err
+	}
+
+	go func() {
+		s.respondError(request, error.New(error.RouteNotImplemented, "not yet implemented"))
+	}()
+
+	return nil
+}
+
+func (s *Spore) topicSubscribe(request icast) *error.Error {
+
+	topic, err := request.Arg("topic")
+	if err != nil {
+		return err
+	}
+	cast := request.Cast()
+	
+	go func() {
+		err := s.bus.Subscribe(cast, topic)
+		if err != nil {
+			s.respondError(request, err)
+			return
+		}
+		s.respond(request)
+	}()
+
+	return nil
+}
+
+func (s *Spore) topicUnsubscribe(request icast) *error.Error {
+	
+	topic, err := request.Arg("topic")
+	if err != nil {
+		return err
+	}
+	cast := request.Cast()
+
+	go func() {
+		err := s.bus.Unsubscribe(cast, topic)
+		if err != nil {
+			s.respondError(request, err)
+			return
+		}
+		s.respond(request)
+	}()
+
+	return nil
+}

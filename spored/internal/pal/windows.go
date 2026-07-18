@@ -21,4 +21,5 @@ func (w *windows) daemonUsername() string { return "" }
 func (w *windows) directoryLogging() string { return os.Getenv("LOCALAPPDATA") + `\spore-os\logs` }
 func (w *windows) directoryRoot() string { return os.Getenv("LOCALAPPDATA") + `\spore-os` }
 
+func (w *windows) processId(conn net.Conn) (int, error) { return 0, errors.New("not impl.") }
 func (w *windows) processPath(conn net.Conn) (string, error) { return "", errors.New("not impl.") }

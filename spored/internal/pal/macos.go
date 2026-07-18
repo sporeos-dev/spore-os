@@ -28,25 +28,28 @@ func (m *macos) directoryLogging() string { return "/Library/Logs/spore-os" }
 func (m *macos) directoryRoot() string { return "/Library/Application Support/spore-os" }
 
 const localPeerPID = 2
-func (m *macos) processPath(conn net.Conn) (string, error) { 
-	
-	//
-	//
-	// get PID
-	//
-
+func (m *macos) processId(conn net.Conn) (int, error) {
 	uc, ok := conn.(*net.UnixConn)
 	if !ok {
-		return "", errors.New("connection casting failure")
+		return -1, errors.New("connection casting failure")
 	}
 	raw, err := uc.SyscallConn()
 	if err != nil {
-		return "", err
+		return -1, err
 	}
 	var pid int
 	_ = raw.Control(func(fd uintptr) {
 		pid, _ = syscall.GetsockoptInt(int(fd), syscall.AF_UNIX, localPeerPID)
 	})
+	return pid, nil
+}
+
+func (m *macos) processPath(conn net.Conn) (string, error) { 
+	
+	pid, err := m.processId(conn)
+	if err != nil {
+		return "", err
+	}
 	
 	//
 	//

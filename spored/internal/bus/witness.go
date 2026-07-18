@@ -1,6 +1,9 @@
 package bus
 
-import "sync"
+import (
+	"spored/internal/message"
+	"sync"
+)
 
 type witness struct {
 	mu sync.RWMutex
@@ -39,14 +42,12 @@ func (w *witness) unregister(n inode) {
 	}
 }
 
-func (w *witness) dispatch(t WitnessType, msg string, n inode) {
-	
-	msgOut := buildWitnessMessage(t, msg, n)
+func (w *witness) dispatch(t WitnessType, message message.Message, n inode) {
 	
 	w.mu.RLock()
 	defer w.mu.RUnlock()
 
 	for _, el := range w.witnesses {
-		el.SendRaw(msgOut)
+		el.Receive(message)
 	}
 }

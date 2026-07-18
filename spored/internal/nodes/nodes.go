@@ -4,7 +4,11 @@ import (
 	"bufio"
 	"log/slog"
 	"net"
+	"os/exec"
+	"spored/internal/manifest"
+	"spored/internal/registry"
 	"spored/internal/utilities/build"
+	"spored/internal/utilities/file"
 	"strings"
 	"sync"
 	"time"
@@ -15,10 +19,10 @@ import (
 const handshakeTimeout = 5 * time.Second
 
 type Nodes struct {
-	registry *registry
+	registry *registry.Registry
 
 	mu sync.RWMutex
-	nodes map[string]inode
+	nodes map[string]*node
 
 	bus ibus
 	hyphae ihyphae
@@ -27,19 +31,17 @@ type Nodes struct {
 
 func New() *Nodes {
 	nodes := &Nodes{
-		registry: newRegistry(),
-		nodes:   make(map[string]inode),
+		registry: registry.New(),
+		nodes:   make(map[string]*node),
 	}
 
 	nodes.mu.Lock()
 	defer nodes.mu.Unlock()
 
-	s := newSpore(nodes.spore)
-	nodes.nodes[s.id()] = s
-
 	for _, el := range nodes.registry.Elements {
-		n := newNode(el)
-		nodes.nodes[n.id()] = n
+		manifest := manifest.New(el)
+		n := newNode(el, manifest)
+		nodes.nodes[n.registry.ID] = n
 	}
 
 	return nodes
@@ -52,7 +54,7 @@ func (n *Nodes) Set(bus ibus, hyphae ihyphae, spore ispore) {
 }
 
 func (n *Nodes) Close() {
-	n.registry.close()
+	n.registry.Close()
 }
 
 func (n *Nodes) Autostart() {
@@ -97,4 +99,99 @@ func (n *Nodes) HandleConnection(conn net.Conn) {
 	}
 }
 
+//
+//
+// external
+// interfaces
+//
 
+func (n *Nodes) GetNodes() []string {
+
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+
+	nodeids := make([]string, 0, len(n.nodes))
+	for nodeid := range n.nodes {
+		nodeids = append(nodeids, nodeid)
+	}
+
+	return nodeids
+}
+
+func (n *Nodes) GetManifest(nodeid string) *manifest.Manifest {
+
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+
+	node, ok := n.nodes[nodeid]
+	if !ok { return nil }
+	
+	return node.manifest
+}
+
+func (n *Nodes) Install(path string) *error.Error {
+
+	if !file.Exists(path) {
+		return error.New(error.InstallationFailure, "bad path")
+	}
+
+	// readable, handle via spore
+	if file.IsReadable(path) {
+
+		manifest := manifest.ManifestFromPath(path)
+		if manifest == nil {
+			return error.New(error.InstallationFailure, "failed to load manifest")
+		}
+
+		registryElement := registry.ElementFromManifest(manifest)
+		if registryElement == nil {
+			return error.New(error.InstallationFailure, "failed to create registry element")
+		}
+
+		node := newNode(registryElement, manifest)
+		n.nodes[node.registry.ID] = node
+
+	// not readable, handle via hyphae
+	} else {
+
+	}
+
+	return nil
+}
+
+func (n *Nodes) Uninstall(nodeid string) *error.Error {
+	
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	node, ok := n.nodes[nodeid]
+	if !ok {
+		return error.New(error.InstallationFailure, "cannot uninstall; node not installed")
+	}
+
+	delete(n.nodes, nodeid)
+	return n.registry.Remove(node.registry.ID)
+}
+
+func (n *Nodes) Spawn(nodeid string) *error.Error {
+
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+
+	node, ok := n.nodes[nodeid]
+	if !ok {
+		return error.New(error.Generic, "cannot spawn; node not installed")
+	}
+
+	cmd := exec.Command(node.registry.Binary)
+	if err := cmd.Start(); err != nil {
+		return error.New(error.Generic, "failed to spawn node", "error", err.Error())
+	}
+
+	return nil
+}
+
+func (n *Nodes) Kill(nodeid string) *error.Error {
+	return nil
+	
+}

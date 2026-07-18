@@ -14,70 +14,40 @@ app: n/a
 
 api:
   - name: SPORE.help
-    description: Get generic help.
+    description: Get generic help for Spore OS.
     risk: benign
     usage:
-      - SPORE.node.help
+      - SPORE.help
+    inputs: []
     outputs:
-      - name: nodeinfo
+      - name: help
         type: object
-        description: Node information of dev.sporeos.SPORE
+        description: Generic help information.
 
-  - name: SPORE.node.install
-    description: Install a node.
-    risk: protected
-    usage:
-      - SPORE.node.install path=/path/to/manifest/node.manifest.spore.yaml
-    inputs:
-      - name: path
-        type: string
-        description: Path to .manifest.spore.yaml file.
-        required: true
-    outputs: []
-
-  - name: SPORE.node.uninstall
-    description: Uninstall a node.
-    risk: protected
-    usage:
-      - SPORE.node.uninstall node=node
-    inputs:
-      - name: node
-        type: string
-        description: Node ID
-        required: false
-      - name: path
-        type: string
-        description: Path to .manifest.spore.yaml file.
-        required: false
-    outputs: []
-    notes:
-      - One of 'node', 'path' required.
-
-  - name: SPORE.node.spawn
-    description: Start a node.
+  - name: SPORE.info
+    description: Get application information.
     risk: standard
     usage:
-      - SPORE.node.spawn node=node
-    inputs:
-      - name: node
-        type: string
-        description: Node ID
-        required: true
-    outputs: []
-    notes:
-      - Nodes will spawn headless.
+      - SPORE.info
+    inputs: []
+    outputs:
+      - name: info
+        type: object
+        description: Spore OS information.
 
-  - name: SPORE.node.kill
-    description: Stop a node.
+  - name: SPORE.state
+    description: Get application state.
     risk: standard
     usage:
-      - SPORE.node.kill node=node
-    inputs:
-      - name: node
-        type: string
-        description: Node ID
-        required: true
-    outputs: []
+      - SPORE.state
+    inputs: []
+    outputs:
+      - name: state
+        type: object
+        description: Spore OS state.
+
+# ==================================================================================
+# SPORE.node
 
   - name: SPORE.node.list
     description: Get a list of installed nodes by ID.
@@ -102,12 +72,78 @@ api:
     inputs:
       - name: node
         type: string
-        description: Node ID
+        description: Node ID.
         required: true
     outputs:
-      - name: nodeinfo
+      - name: nodehelp
         type: object
-        description: Node information
+        description: Node help information.
+
+  - name: SPORE.node.state
+    description: Get node state.
+    risk: standard
+    usage:
+      - SPORE.node.state node=node
+    inputs:
+      - name: node
+        type: string
+        description: Node ID.
+        required: true
+    outputs:
+      - name: nodestate
+        type: object
+        description: Node state.
+
+  - name: SPORE.node.install
+    description: Install a node.
+    risk: protected
+    usage:
+      - SPORE.node.install path=/path/to/manifest/node.manifest.spore.yaml
+    inputs:
+      - name: path
+        type: string
+        description: Path to .manifest.spore.yaml file.
+        required: true
+    outputs: []
+
+  - name: SPORE.node.uninstall
+    description: Uninstall a node.
+    risk: protected
+    usage:
+      - SPORE.node.uninstall node=node
+    inputs:
+      - name: node
+        type: string
+        description: Node ID.
+        required: false
+    outputs: []
+
+  - name: SPORE.node.spawn
+    description: Start a node.
+    risk: standard
+    usage:
+      - SPORE.node.spawn node=node
+    inputs:
+      - name: node
+        type: string
+        description: Node ID.
+        required: true
+    outputs: []
+
+  - name: SPORE.node.kill
+    description: Stop a node.
+    risk: standard
+    usage:
+      - SPORE.node.kill node=node
+    inputs:
+      - name: node
+        type: string
+        description: Node ID.
+        required: true
+    outputs: []
+
+# ==================================================================================
+# SPORE.command
 
   - name: SPORE.command.list
     description: Get list of commands.
@@ -118,7 +154,7 @@ api:
     inputs:
       - name: node
         type: string
-        description: Node ID. Omit for all.
+        description: Node ID.
         required: false
     outputs:
       - name: commands
@@ -136,9 +172,12 @@ api:
         description: Command shorthand.
         required: true
     outputs:
-      - name: commandinfo
+      - name: commandhelp
         type: object
-        description: Command information.
+        description: Command help information.
+
+# ==================================================================================
+# SPORE.error
 
   - name: SPORE.error.list
     description: Get a list of error codes.
@@ -168,9 +207,12 @@ api:
         description: Error code.
         required: true
     outputs:
-      - name: errorinfo
+      - name: errorhelp
         type: object
-        description: Error information.
+        description: Error help information.
+
+# ==================================================================================
+# SPORE.topic
 
   - name: SPORE.topic.list
     description: Get list of topics.
@@ -199,9 +241,24 @@ api:
         description: Subscription topic.
         required: true
     outputs:
-      - name: topicinfo
+      - name: topichelp
         type: object
-        description: Topic information.
+        description: Topic help information.
+
+  - name: SPORE.topic.state
+    description: State of a topic.
+    risk: standard
+    usage:
+      - SPORE.topic.state topic=topic
+    inputs:
+      - name: topic
+        type: string
+        description: Subscription topic.
+        required: true
+    outputs:
+      - name: topicstate
+        type: object
+        description: Topic state.
 
   - name: SPORE.topic.subscribe
     description: Subscribe to a topic.
@@ -226,6 +283,9 @@ api:
         description: Subscription topic.
         required: true
     outputs: []
+
+# ==================================================================================
+# SPORE.permission
 
   - name: SPORE.permission.list
     description: Get list of permissions.
@@ -318,31 +378,10 @@ api:
         description: Subscription topics.
         required: false
     outputs: []
-    
-  - name: SPORE.security.keyring.grant
-    description: Grant trust to a public key on the security keyring.
-    risk: protected
-    usage:
-      - SPORE.security.keyring.grant path=/path/to/key.gpg
-    inputs:
-      - name: path
-        type: string
-        description: Path to .gpg file.
-        required: true
-    outputs: []
-
-  - name: SPORE.security.keyring.revoke
-    description: Revoke trust of a public key from the security keyring.
-    risk: protected
-    usage:
-      - SPORE.security.keyring.revoke key=key
-    inputs:
-      - name: key
-        type: string
-        description: Public key.
-        required: true
-    outputs: []
   
+# ==================================================================================
+# SPORE.security
+
   - name: SPORE.security.keyring.list
     description: List all public keys on the security keyring.
     risk: protected
@@ -368,6 +407,30 @@ api:
       - name: keyinfo
         type: object
         description: Public key information.
+    
+  - name: SPORE.security.keyring.grant
+    description: Grant trust to a public key on the security keyring.
+    risk: protected
+    usage:
+      - SPORE.security.keyring.grant path=/path/to/key.gpg
+    inputs:
+      - name: path
+        type: string
+        description: Path to .gpg file.
+        required: true
+    outputs: []
+
+  - name: SPORE.security.keyring.revoke
+    description: Revoke trust of a public key from the security keyring.
+    risk: protected
+    usage:
+      - SPORE.security.keyring.revoke key=key
+    inputs:
+      - name: key
+        type: string
+        description: Public key.
+        required: true
+    outputs: []
 
   - name: SPORE.security.signature.sign
     description: Sign a file, producing a signature file.
@@ -413,6 +476,9 @@ api:
       - name: failed
         type: flag
         description: Flag present if verification failed.
+
+# ==================================================================================
+# topics
 
 topics:
   - name: SPORE.node.installed

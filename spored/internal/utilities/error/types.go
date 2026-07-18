@@ -9,6 +9,8 @@ const (
 	ConnectionFailure Code = "ConnectionFailure"
 
 	HandshakeDenial Code = "HandshakeDenial"
+	InstallationFailure Code = "InstallationFailure"
+	RegistryFailure Code = "RegistryFailure"
 
 	// General
 	Generic            Code = "Generic"

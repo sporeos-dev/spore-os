@@ -1,11 +1,15 @@
-package bus
+package message
 
 import (
 	"fmt"
 	"time"
 )
 
-func buildWitnessMessage(t WitnessType, msg string, n inode) string {
+type sporeWitness struct {
+	message string
+}
+
+func Witness(t Type, msg string, n inode) Message {
 	time := time.Now().UnixMilli()
 	var msgOut string
 
@@ -23,10 +27,20 @@ func buildWitnessMessage(t WitnessType, msg string, n inode) string {
 		} else {
 			id = n.Id()
 		}
-		msgOut = fmt.Sprintf("witness %s cast=%s spore_node spore_time=%d", msg, id, t)
+		msgOut = fmt.Sprintf("witness %s cast=%s spore_node spore_time=%d", msg, id, time)
 	default:
 		msgOut = fmt.Sprintf("witness %s spore_unknown spore_time=%d", msg, time)
 	}
 
-	return msgOut
+	return &sporeWitness{message: msgOut}
 }
+
+func (w *sporeWitness) IsWitness() bool {
+	return true
+}
+
+func (w *sporeWitness) Output() string {
+	return w.message
+}
+
+func (w *sporeWitness) Topic() string { return "" }

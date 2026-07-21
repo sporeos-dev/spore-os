@@ -27,7 +27,7 @@ func (s *Spore) errorList(request icast) *error.Error {
 
 		}
 
-		s.respond(request, out.NewArray("errors", errors))
+		s.respond(request, out.Array("errors", errors))
 	}()
 
 	return nil
@@ -36,7 +36,7 @@ func (s *Spore) errorList(request icast) *error.Error {
 func (s *Spore) errorHelp(request icast) *error.Error {
 
 	errid, err := request.Arg("error")
-	if err == nil {
+	if err != nil {
 		return err
 	}
 
@@ -56,12 +56,17 @@ func (s *Spore) errorHelp(request icast) *error.Error {
 					"description": err.Description,
 				}
 				
-				s.respond(request, out.NewObject("errorhelp", response))
+				s.respond(request, out.Object("errorhelp", response))
 				return
 			}
 		}
 		
-		s.respondError(request, error.New(error.RouteNotFound, "error not found"))
+		err := error.New(
+			error.Missing,
+			error.Spore,
+			"error not found",
+			out.Pair("error", errid))
+		s.respondError(request, err)
 	}()
 
 	return nil

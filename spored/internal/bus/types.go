@@ -5,16 +5,16 @@ import (
 	"spored/internal/utilities/error"
 )
 
-type ihyphae interface {}
-
-type inodes interface {
-	Publish(message message.Message) *error.Error
-}
-
-type inode interface {
+type INode interface {
 	Id() string
+	IsConnected() bool
 	IsWitness() bool
 	Receive(message message.Message) *error.Error
 }
+
+type ihyphae interface {}
+
+type inodes interface {}
+
 
 type ispore interface {}

@@ -1,15 +1,15 @@
 package out
 
-type Flag struct {
+type _flag struct {
 	Flag string
 }
 
-func NewFlag(flag string) *Flag {
-	return &Flag{
+func Flag(flag string) *_flag {
+	return &_flag{
 		Flag: flag,
 	}
 }
 
-func (f *Flag) String() string {
+func (f *_flag) String() string {
 	return f.Flag
 }

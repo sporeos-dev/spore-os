@@ -7,6 +7,7 @@ import (
 
 	"spored/internal/pal"
 	"spored/internal/utilities/error"
+	"spored/internal/utilities/out"
 
 	"gopkg.in/yaml.v3"
 )
@@ -52,7 +53,11 @@ func (r *Registry) Remove(id string) *error.Error {
 		return r.save()
 	}
 
-	return error.New(error.RegistryFailure, "registry element missing")
+	return error.New(
+		error.Missing, 
+		error.Registry, 
+		"unable to remove element", 
+		out.Pair("node", id))
 }
 
 func (r *Registry) Load() *error.Error {
@@ -66,14 +71,20 @@ func (r *Registry) load() *error.Error {
 	
 	data, err := os.ReadFile(pal.FileRegistry())
 	if err != nil {
-		slog.Error("Failed to load registry", "error", err)
-		return error.New(error.RegistryFailure, err.Error())
+		return error.New(
+			error.Missing,
+			error.Registry,
+			"unable to read registry",
+			out.Pair("err", err.Error()))
 	}
 
 	err = yaml.Unmarshal(data, r)
 	if err != nil {
-		slog.Error("Failed to parse registry", "error", err)
-		return error.New(error.RegistryFailure, err.Error())
+		return error.New(
+			error.Malformed,
+			error.Registry,
+			"unable to parse registry",
+			out.Pair("err", err.Error()))
 	}
 	
 	return nil
@@ -89,14 +100,20 @@ func (r *Registry) Save() *error.Error {
 func (r *Registry) save() *error.Error {
 	data, err := yaml.Marshal(r)
 	if err != nil {
-		slog.Error("Failed to marshal registry", "error", err)
-		return error.New(error.RegistryFailure, err.Error())
+		return error.New(
+			error.Malformed,
+			error.Registry,
+			"unable to serialize registry",
+			out.Pair("err", err.Error()))
 	}
 
 	err = os.WriteFile(pal.FileRegistry(), data, 0600) // only readable/writable by the spore
 	if err != nil {
-		slog.Error("Failed to save registry", "error", err)
-		return error.New(error.RegistryFailure, err.Error())
+		return error.New(
+			error.Generic,
+			error.Registry, 
+			"unable to write registry",
+			out.Pair("err", err.Error()))
 	}
 	
 	return nil

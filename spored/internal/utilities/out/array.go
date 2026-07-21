@@ -5,16 +5,16 @@ import (
 	"strings"
 )
 
-type Array[T any] struct {
+type array[T any] struct {
 	Key   string
 	Value []T
 }
 
-func NewArray[T any](key string, value []T) *Array[T] {
-	return &Array[T]{Key: key, Value: value}
+func Array[T any](key string, value []T) *array[T] {
+	return &array[T]{Key: key, Value: value}
 }
 
-func (a *Array[T]) String() string {
+func (a *array[T]) String() string {
 	return fmt.Sprintf("%s=[%s]", a.Key, renderArraySlice(a.Value))
 }
 

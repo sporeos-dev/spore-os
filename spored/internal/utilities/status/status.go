@@ -1,31 +1,44 @@
 package status
 
-import "sync/atomic"
+import (
+	"sync"
+)
 
-type Estatus int
+type Estatus string
 const (
-	Unverified Estatus = iota
-	RequiresUserSpace 
-	Verified
+	Unverified Estatus = "Unverified"
+	RequiresUserSpace Estatus = "RequiresUserSpace"
+	Verified Estatus = "Verified"
 
-	Missing
-	FailedChecksum
+	Missing Estatus = "Missing"
+	FailedChecksum Estatus = "FailedChecksum"
 )
 
 type Status struct {
-	atomic.Int32
+	mu sync.RWMutex
+	value Estatus
 }
 
 func New() Status {
 	return Status{
-		Int32: atomic.Int32{}, // 0 value initialization --> Unverified
+		value: Unverified,
 	}
 }
 
 func (s *Status) Get() Estatus {
-	return Estatus(s.Load())
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.value
 }
 
 func (s *Status) Set(newStatus Estatus) {
-	s.Store(int32(newStatus))
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.value = newStatus
+}
+
+func (s *Status) String() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return string(s.value)
 }

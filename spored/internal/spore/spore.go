@@ -77,20 +77,15 @@ func (s *Spore) ReceiveCast(request icast) *error.Error {
 	case "SPORE.security.signature.verify": return s.securitySignatureVerify(request)
 	}
 
-	return error.New(error.RouteNotImplemented, "spore command unhandled")
+	return error.New(
+		error.Missing,
+		error.Spore,
+		"spore command unhandled",
+		out.Pair("command", request.Command()))
 }
 
-func (s *Spore) ReceiveCapture(response icapture, args... any) *error.Error {
+func (s *Spore) ReceiveCapture(response icapture, args... any) *error.Error { return nil }
 
-	
+func (s *Spore) respond(response icast, args ...out.IOut) {}
 
-	return nil
-}
-
-func (s *Spore) respond(response icast, args ...out.IOut) {
-
-}
-
-func (s *Spore) respondError(response icast, err *error.Error) {
-
-}
+func (s *Spore) respondError(response icast, err *error.Error) {}

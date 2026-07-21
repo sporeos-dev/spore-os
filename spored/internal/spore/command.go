@@ -24,14 +24,19 @@ func (s *Spore) commandList(request icast) *error.Error {
 
 			manifest := s.nodes.GetManifest(node)
 			if manifest == nil {
-				s.respondError(request, error.New(error.RouteNotFound, "node not found"))
+				err := error.New(
+					error.Missing,
+					error.Spore,
+					"spore manifest not loaded",
+					out.Pair("command", "SPORE.command.list"))
+				s.respondError(request, err)
 				return
 			}
 			commands = manifest.CommandIds()
 
 		}
 
-		s.respond(request, out.NewArray("commands", commands))
+		s.respond(request, out.Array("commands", commands))
 
 	}()
 
@@ -64,12 +69,17 @@ func (s *Spore) commandHelp(request icast) *error.Error {
 					"outputs": command.Outputs,
 				}
 
-				s.respond(request, out.NewObject("commandhelp", response))
+				s.respond(request, out.Object("commandhelp", response))
 				return
 			}
 		}
 
-		s.respondError(request, error.New(error.RouteNotFound, "command not found"))
+		err := error.New(
+			error.Missing,
+			error.Spore,
+			"command not found",
+			out.Pair("command", "SPORE.command.help"))
+		s.respondError(request, err)
 	}()
 
 	return nil

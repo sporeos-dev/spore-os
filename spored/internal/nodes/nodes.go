@@ -2,13 +2,12 @@ package nodes
 
 import (
 	"bufio"
-	"log/slog"
 	"net"
 	"os/exec"
 	"spored/internal/manifest"
 	"spored/internal/registry"
-	"spored/internal/utilities/build"
 	"spored/internal/utilities/file"
+	"spored/internal/utilities/out"
 	"strings"
 	"sync"
 	"time"
@@ -51,6 +50,12 @@ func (n *Nodes) Set(bus ibus, hyphae ihyphae, spore ispore) {
 	n.bus = bus
 	n.hyphae = hyphae
 	n.spore = spore
+
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+	for _, el := range n.nodes {
+		el.setBus(bus)
+	}
 }
 
 func (n *Nodes) Close() {
@@ -59,6 +64,16 @@ func (n *Nodes) Close() {
 
 func (n *Nodes) Autostart() {
 	
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+	for _, el := range n.nodes {
+		if el.manifest.Autostart {
+			err := n.Spawn(el.registry.ID)
+			if err != nil {
+				// out.Error("failed to autostart node", out.Pair("node", el.registry.ID), out.Pair("error", err.Error()))
+			}
+		}
+	}
 }
 
 func (n *Nodes) HandleConnection(conn net.Conn) {
@@ -68,22 +83,30 @@ func (n *Nodes) HandleConnection(conn net.Conn) {
 	reader := bufio.NewReader(conn)
 	writer := bufio.NewWriter(conn)
 
-	line, err := reader.ReadString('\n')
+	nodeid, err := reader.ReadString('\n')
 	if err != nil {
-		slog.Error("Failed to receive data", "error", err)
-		writer.WriteString(build.Error(error.New(error.HandshakeDenial, "did not receive node id")))
+		sperr := error.New(
+			error.HandshakeDenial,
+			error.Node,
+			"failed initial handshake read",
+			out.Pair("error", err.Error()))
+		writer.WriteString(sperr.Wire())
 		writer.Flush()
 		conn.Close()
 		return
 	}
 
-	nodeid := strings.TrimSpace(line)
+	nodeid = strings.TrimSpace(nodeid)
 	n.mu.RLock()
 	defer n.mu.RUnlock()
 	node, ok := n.nodes[nodeid]
 	if !ok {
-		slog.Error("Unknown node", "nodeid", nodeid)
-		writer.WriteString(build.Error(error.New(error.HandshakeDenial, "node not installed"), "cast", nodeid))
+		sperr := error.New(
+			error.HandshakeDenial,
+			error.Node,
+			"node not installed",
+			out.Pair("node", nodeid))
+		writer.WriteString(sperr.Wire())
 		writer.Flush()
 		conn.Close()
 		return
@@ -92,7 +115,7 @@ func (n *Nodes) HandleConnection(conn net.Conn) {
 	// Handle the connection with the node
 	sp_err := node.handleConnection(conn, reader, writer)
 	if sp_err != nil {
-		writer.WriteString(build.Error(sp_err, "cast", nodeid))
+		writer.WriteString(sp_err.Wire())
 		writer.Flush()
 		conn.Close()
 		return;
@@ -132,23 +155,35 @@ func (n *Nodes) GetManifest(nodeid string) *manifest.Manifest {
 func (n *Nodes) Install(path string) *error.Error {
 
 	if !file.Exists(path) {
-		return error.New(error.InstallationFailure, "bad path")
+		return error.New(
+			error.Missing, 
+			error.Node,
+			"unable to install due to bad path",
+			out.Pair("path", path))
 	}
 
 	// readable, handle via spore
 	if file.IsReadable(path) {
-
 		manifest := manifest.ManifestFromPath(path)
 		if manifest == nil {
-			return error.New(error.InstallationFailure, "failed to load manifest")
+			return error.New(
+				error.Generic,
+				error.Node,
+				"read failure",
+				out.Pair("path", path))
 		}
 
 		registryElement := registry.ElementFromManifest(manifest)
 		if registryElement == nil {
-			return error.New(error.InstallationFailure, "failed to create registry element")
+			return error.New(
+				error.Generic,
+				error.Node,
+				"failed to create registry element",
+				out.Pair("path", path))
 		}
 
 		node := newNode(registryElement, manifest)
+		node.setBus(n.bus)
 		n.nodes[node.registry.ID] = node
 
 	// not readable, handle via hyphae
@@ -166,7 +201,11 @@ func (n *Nodes) Uninstall(nodeid string) *error.Error {
 
 	node, ok := n.nodes[nodeid]
 	if !ok {
-		return error.New(error.InstallationFailure, "cannot uninstall; node not installed")
+		return error.New(
+			error.Missing,
+			error.Node,
+			"cannot uninstall; node not installed",
+			out.Pair("node", nodeid))
 	}
 
 	delete(n.nodes, nodeid)
@@ -180,18 +219,29 @@ func (n *Nodes) Spawn(nodeid string) *error.Error {
 
 	node, ok := n.nodes[nodeid]
 	if !ok {
-		return error.New(error.Generic, "cannot spawn; node not installed")
+		return error.New(
+			error.Missing,
+			error.Node,
+			"cannot spawn; node not installed")
 	}
 
 	cmd := exec.Command(node.registry.Binary)
-	if err := cmd.Start(); err != nil {
-		return error.New(error.Generic, "failed to spawn node", "error", err.Error())
+	err := cmd.Start()
+	if err != nil {
+		return error.New(
+			error.Generic,
+			error.Node,
+			"failed to spawn node",
+			out.Pair("node", nodeid),
+			out.Pair("error", err.Error()))
 	}
 
 	return nil
 }
 
 func (n *Nodes) Kill(nodeid string) *error.Error {
-	return nil
-	
+	return error.New(
+		error.Generic,
+		error.Node,
+		"not yet implemented")
 }

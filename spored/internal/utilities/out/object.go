@@ -6,16 +6,16 @@ import (
 	"strings"
 )
 
-type Object struct {
+type object struct {
 	Key   string
 	Value map[string]any
 }
 
-func NewObject(key string, value map[string]any) *Object {
-	return &Object{Key: key, Value: value}
+func Object(key string, value map[string]any) *object {
+	return &object{Key: key, Value: value}
 }
 
-func (o *Object) String() string {
+func (o *object) String() string {
 	return fmt.Sprintf("%s={%s}", o.Key, renderMap(o.Value))
 }
 

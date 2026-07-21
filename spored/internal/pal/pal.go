@@ -32,7 +32,7 @@ func DirectoryLogging() string   { return instance.impl.directoryLogging() }
 
 // Files
 func FileRegistry() string { return filepath.Join(instance.impl.directoryRoot(), "nodes.registry.yaml") }
-func FileSocket() string   { return filepath.Join(instance.impl.directoryRoot(), "spored.sock") }
+func FileSocket() string   { return filepath.Join(instance.impl.directoryRoot(), "spore.sock") }
 func FileLog() string      { return filepath.Join(instance.impl.directoryLogging(), "dev.sporeos.spored.log") }
 func FileSporeManifest() string {
 	if service.Interactive() {

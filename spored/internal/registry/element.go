@@ -8,7 +8,7 @@ type Element struct {
 	Manifest       string `yaml:"manifest"`
 	Checksum       string `yaml:"checksum"`
 	Binary         string `yaml:"binary"`
-	BinaryChecksum string `yaml:"binary_checksum"`
+	BinaryChecksum string `yaml:"binaryChecksum"`
 }
 
 func ElementFromManifest(manifest imanifest) *Element {

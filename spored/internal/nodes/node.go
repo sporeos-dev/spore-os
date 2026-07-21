@@ -7,8 +7,10 @@ import (
 	"log/slog"
 	"net"
 	"spored/internal/manifest"
+	"spored/internal/message"
 	"spored/internal/registry"
 	"spored/internal/utilities/error"
+	"spored/internal/utilities/out"
 	"spored/internal/utilities/status"
 	"strings"
 	"sync"
@@ -17,6 +19,7 @@ import (
 type node struct {
 	registry *registry.Element
 	manifest *manifest.Manifest
+	bus ibus
 
 	mu sync.RWMutex
 	conn net.Conn
@@ -30,11 +33,11 @@ type node struct {
 //
 
 func newNode(registry *registry.Element, manifest *manifest.Manifest) *node {
-	slog.Debug("Creating new node", "name", registry.Name, "manifest", registry.Manifest, "binary", registry.Binary)
 
 	n := &node{
 		registry: registry,
 		manifest: manifest,
+		bus: nil,
 	}
 
 	n.manifest.Verify()
@@ -45,13 +48,17 @@ func newNode(registry *registry.Element, manifest *manifest.Manifest) *node {
 
 func (n *node) close() {}
 
+func (n *node) setBus(bus ibus) {
+	n.bus = bus
+	n.bus.Register(n)
+}
+
 //
 //
 // inode
 //
 
 func (n *node) handleConnection(conn net.Conn, reader *bufio.Reader, writer *bufio.Writer) *error.Error {
-	slog.Debug("Handling connection for node", "name", n.registry.Name, "manifest", n.registry.Manifest, "binary", n.registry.Binary)
 
 	err := n.checkManifestForFailure()
 	if err != nil {
@@ -70,42 +77,55 @@ func (n *node) handleConnection(conn net.Conn, reader *bufio.Reader, writer *buf
 		return err
 	}
 
+	n.bus.Register(n)
+
 	if n.manifest.Status.Get() != status.Verified {
-		return error.New(error.HandshakeDenial, "unknown manifest verification failure")
+		return error.New(
+			error.HandshakeDenial,
+			error.Spore,
+			"unknown manifest verification failure",
+			out.Pair("node", n.registry.ID),
+			out.Pair("manifest_status", n.manifest.Status.String()))
 	}
 
 	b := newBinary(n.registry)
-	err = checkBinaryForFailure(b)
+	err = n.checkBinaryForFailure(b)
 	if err != nil {
 		return err
 	}
 
 	b.verify(conn)
-	err = checkBinaryForFailure(b)
+	err = n.checkBinaryForFailure(b)
 	if err != nil {
 		return err
 	}
 
 	if b.status.Get() != status.Verified {
-		return error.New(error.HandshakeDenial, "unknown binary verification failure")
+		return error.New(
+			error.HandshakeDenial,
+			error.Spore,
+			"unknown binary verification failure",
+			out.Pair("node", n.registry.ID),
+			out.Pair("binary_status", b.status.String()))
 	}
+
+	writer.WriteString("OK\n")
+	writer.Flush()
 
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	n.conn = conn
 	n.reader = reader
 	n.writer = writer
-	go n.listen()
 
+	go n.listen()
 	return nil
 }
 
 func (n *node) listen() {
-	slog.Info("Connecting", node, n.registry.ID)
 
-	var index int64 = 0
 	for {
-		raw, err := c.reader.ReadString('\n')
+		raw, err := n.reader.ReadString('\n')
 		if err != nil {
 			if err == io.EOF || errors.Is(err, net.ErrClosed) {
 				slog.Info("Disconnecting", "node", n.registry.ID)
@@ -116,23 +136,29 @@ func (n *node) listen() {
 			}
 		}
 		raw = strings.TrimSpace(raw)
-		i := index
-		index++
-
+		// i := index
+		// index++
+		
 		// witnessing starts with witness
 		if strings.HasPrefix(raw, "witness") {
-
+			body := strings.TrimPrefix(raw, "witness ")
+			n.bus.WitnessNode(body, n.registry.ID)
+			continue
 
 		// publishing starts with publish
 		} else if strings.HasPrefix(raw, "publish") {
 
+			slog.Info("PUBLISH")
 
 		// response starts with handle
 		} else if strings.HasPrefix(raw, "~") {
 
+			slog.Info("RESPONSE")
 
 		// fallback to request
 		} else {
+
+			slog.Info("REQUEST")
 
 		}
 	}
@@ -146,6 +172,49 @@ func (n *node) listen() {
 
 //
 //
+// inode
+//
+
+func (n *node) Id() string {
+	return n.registry.ID
+}
+
+func (n *node) IsConnected() bool {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+	return n.conn != nil
+}
+
+func (n *node) IsWitness() bool {
+	if n.manifest == nil {
+		return false
+	}
+	return n.manifest.Witness
+}
+
+func (n *node) Receive(message message.Message) *error.Error {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+
+	println(message.Get())
+
+	if n.writer == nil {
+		return error.New(
+			error.Generic,
+			error.Node,
+			"node not connected",
+			out.Pair("node", n.registry.ID))
+	}
+
+	println(n.registry.ID)
+
+	n.writer.WriteString(message.Get() + "\n")
+	n.writer.Flush()
+	return nil
+}
+
+//
+//
 // private
 //
 
@@ -153,20 +222,39 @@ func (n *node) checkManifestForFailure() *error.Error {
 	s := n.manifest.Status.Get()
 	switch s {
 	case status.Missing:
-		return error.New(error.HandshakeDenial, "missing manifest")
+		return error.New(
+			error.HandshakeDenial,
+			error.Spore,
+			"missing manifest",
+			out.Pair("node", n.registry.ID))
 	case status.FailedChecksum:
-		return error.New(error.HandshakeDenial, "invalid manifest")
+		return error.New(
+			error.HandshakeDenial,
+			error.Spore,
+			"invalid manifest",
+			out.Pair("node", n.registry.ID),
+			out.Pair("expected_checksum", n.manifest.ExpectedChecksum))
 	}
 	return nil
 }
 
-func checkBinaryForFailure(b *binary) *error.Error {
+func (n *node) checkBinaryForFailure(b *binary) *error.Error {
 	s := b.status.Get()
 	switch s {
 	case status.Missing:
-		return error.New(error.HandshakeDenial, "missing binary")
+		return error.New(
+			error.HandshakeDenial,
+			error.Spore,
+			"missing binary",
+			out.Pair("node", n.registry.ID),
+			out.Pair("path", b.path))
 	case status.FailedChecksum:
-		return error.New(error.HandshakeDenial, "invalid binary")
+		return error.New(
+			error.HandshakeDenial,
+			error.Spore,
+			"failed checksum",
+			out.Pair("node", n.registry.ID),
+			out.Pair("expected_checksum", b.expectedChecksum))
 	}
 	return nil
 }

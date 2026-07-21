@@ -2,7 +2,6 @@ package hub
 
 import (
 	"errors"
-	"log/slog"
 	"net"
 	"os"
 	"spored/internal/bus"
@@ -10,6 +9,8 @@ import (
 	"spored/internal/nodes"
 	"spored/internal/pal"
 	"spored/internal/spore"
+	"spored/internal/utilities/error"
+	"spored/internal/utilities/out"
 )
 
 type Hub struct {
@@ -21,7 +22,7 @@ type Hub struct {
 	listener net.Listener
 }
 
-func New() (*Hub, error) {
+func New() (*Hub, *error.Error) {
 	
 	h := &Hub{
 		bus: bus.New(),
@@ -36,7 +37,6 @@ func New() (*Hub, error) {
 	h.spore.Set(h.bus, h.hyphae, h.nodes)
 
 	go h.listen()
-
 	return h, nil
 }
 
@@ -57,10 +57,23 @@ func (h *Hub) listen() {
 	os.Remove(pal.FileSocket())
 	listener, err := net.Listen("unix", pal.FileSocket())
 	if err != nil {
-		slog.Error("Failed to listen on socket", "error", err)
+		error.New(
+			error.InitializationFailure,
+			error.Hub,
+			"Failed to listen on socket",
+			out.Pair("error", err.Error()))
 		return
 	}
 	h.listener = listener
+	err = os.Chmod(pal.FileSocket(), 0777)
+	if err != nil {
+		error.New(
+			error.InitializationFailure,
+			error.Hub,
+			"Failed to set permissions on socket",
+			out.Pair("error", err.Error()))
+		return;
+	}
 	defer h.listener.Close()
 	
 	h.nodes.Autostart()
@@ -71,7 +84,11 @@ func (h *Hub) listen() {
 			if errors.Is(err, net.ErrClosed) {
 				break
 			}
-			slog.Error("Failed to accept connection", "error", err)
+			error.New(
+				error.ConnectionFailure,
+				error.Hub,
+				"Failed to accept new connection",
+				out.Pair("error", err.Error()))
 			continue
 		}
 		

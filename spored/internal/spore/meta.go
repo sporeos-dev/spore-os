@@ -32,7 +32,7 @@ func (s *Spore) help(request icast) *error.Error {
 			},
 		}
 
-		s.respond(request, out.NewObject("help", response))
+		s.respond(request, out.Object("help", response))
 	}()
 	
 	return nil
@@ -49,7 +49,7 @@ func (s *Spore) info(request icast) *error.Error {
 			"topics": s.manifest.TopicIds(),
 		}
 
-		s.respond(request, out.NewObject("info", response))
+		s.respond(request, out.Object("info", response))
 	}()
 
 	return nil
@@ -58,7 +58,11 @@ func (s *Spore) info(request icast) *error.Error {
 func (s *Spore) state(request icast) *error.Error {
 
 	go func() {
-		s.respondError(request, error.New(error.RouteNotImplemented, "not yet implemented"))
+		err := error.New(
+			error.NotImplemented,
+			error.Spore,
+			"spore state not yet implemented")
+		s.respondError(request, err)
 	}()
 
 	return nil

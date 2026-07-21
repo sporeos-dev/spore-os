@@ -22,6 +22,8 @@ type inodes interface {
 }
 
 type icast interface {
+	Get() string
+
 	Command() string
 	Cast() string
 	Arg(key string) (string, *error.Error)

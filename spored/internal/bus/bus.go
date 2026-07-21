@@ -35,13 +35,13 @@ func (b *Bus) Close() {
 	b.witness.close()
 }
 
-func (b *Bus) Register(n inode) {
+func (b *Bus) Register(n INode) {
 	b.api.register(n)
 	b.broadcast.register(n)
 	b.witness.register(n)
 }
 
-func (b *Bus) Unregister(n inode) {
+func (b *Bus) Unregister(n INode) {
 	b.api.unregister(n)
 	b.broadcast.unregister(n)
 	b.witness.unregister(n)
@@ -50,8 +50,20 @@ func (b *Bus) Unregister(n inode) {
 func (b *Bus) Route(msg *message.Message) {
 }
 
-func (b *Bus) Witness(message message.Message) {
-	b.witness.dispatch(t, message, n)
+func (b *Bus) WitnessIn(message string, id string) {
+	b.witness.in(message, id)
+}
+
+func (b *Bus) WitnessOut(message string, id string) {
+	b.witness.out(message, id)
+}
+
+func (b *Bus) WitnessSpore(message string) {
+	b.witness.spore(message)
+}
+
+func (b *Bus) WitnessNode(message string, id string) {
+	b.witness.node(message, id)
 }
 
 func (b *Bus) Subscribe(cast string, topic string) *error.Error {

@@ -8,26 +8,26 @@ import (
 
 type broadcast struct {
 	mu sync.RWMutex
-	nodes map[string]inode
+	nodes map[string]INode
 	subscriptions map[string][]string // map[topic][]nodeid
 }
 
 func newBroadcast() *broadcast {
 	return &broadcast {
-		nodes: make(map[string]inode),
+		nodes: make(map[string]INode),
 		subscriptions: make(map[string][]string),
 	}
 }
 
 func (b *broadcast) close() {}
 
-func (b *broadcast) register(n inode) {
+func (b *broadcast) register(n INode) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.nodes[n.Id()] = n
 }
 
-func (b *broadcast) unregister(n inode) {
+func (b *broadcast) unregister(n INode) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	delete(b.nodes, n.Id())
@@ -54,22 +54,22 @@ func (b *broadcast) unsubscribe(cast string, topic string) *error.Error {
 }
 
 func (b *broadcast) publish(bus Bus, message message.Message) {
-	b.mu.RLock()
-	defer b.mu.RUnlock()
+	// b.mu.RLock()
+	// defer b.mu.RUnlock()
 
-	topic := message.Topic()
-	subscribers, ok := b.subscriptions[topic]
-	if !ok {
-		return
-	}
-	for _, nodeID := range subscribers {
-		node, ok := b.nodes[nodeID]
-		if !ok {
-			continue
-		}
-		err := node.Receive(message)
-		if err != nil {
-			bus.Witness(message.Spore, )
-		}
-	}
+	// topic := message.Topic()
+	// subscribers, ok := b.subscriptions[topic]
+	// if !ok {
+	// 	return
+	// }
+	// for _, nodeID := range subscribers {
+	// 	node, ok := b.nodes[nodeID]
+	// 	if !ok {
+	// 		continue
+	// 	}
+	// 	err := node.Receive(message)
+	// 	if err != nil {
+	// 		// TODO
+	// 	}
+	// }
 }

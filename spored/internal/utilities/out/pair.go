@@ -2,18 +2,18 @@ package out
 
 import "fmt"
 
-type Pair struct {
+type pair struct {
 	Key string
 	Value string
 }
 
-func NewPair(key string, value string) *Pair {
-	return &Pair {
+func Pair(key string, value string) *pair {
+	return &pair {
 		Key: key,
 		Value: value,
 	}
 }
 
-func (p *Pair) String() string {
+func (p *pair) String() string {
 	return fmt.Sprintf(`%s="%s"`, p.Key, p.Value)
 }

@@ -24,14 +24,18 @@ func (s *Spore) topicList(request icast) *error.Error {
 
 			manifest := s.nodes.GetManifest(node)
 			if manifest == nil {
-				s.respondError(request, error.New(error.RouteNotFound, "node not found"))
+				err := error.New(
+					error.Missing,
+					error.Spore,
+					"spore manifest not loaded")
+				s.respondError(request, err)
 				return
 			}
 			topics = manifest.TopicIds()
 
 		}
 
-		s.respond(request, out.NewArray("topics", topics))
+		s.respond(request, out.Array("topics", topics))
 	}()
 
 	return nil
@@ -62,12 +66,17 @@ func (s *Spore) topicHelp(request icast) *error.Error {
 					"outputs": topic.Outputs,
 				}
 
-				s.respond(request, out.NewObject("topichelp", response))
+				s.respond(request, out.Object("topichelp", response))
 				return
 			}
 		}
 
-		s.respondError(request, error.New(error.RouteNotFound, "topic not found"))
+		err := error.New(
+			error.Missing,
+			error.Spore,
+			"topic not found",
+			out.Pair("topic", topicid))
+		s.respondError(request, err)
 	}()
 
 	return nil
@@ -81,9 +90,12 @@ func (s *Spore) topicState(request icast) *error.Error {
 	}
 
 	go func() {
-		s.respondError(request, error.New(error.RouteNotImplemented, "not yet implemented"))
+		err := error.New(
+			error.NotImplemented,
+			error.Spore,
+			"spore topic state not yet implemented")
+		s.respondError(request, err)
 	}()
-
 	return nil
 }
 

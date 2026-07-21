@@ -1,11 +1,12 @@
 package spore
 
 import (
+	"spored/internal/message"
 	"spored/internal/utilities/error"
 	"spored/internal/utilities/out"
 )
 
-func (s *Spore) help(request icast) *error.Error {
+func (s *Spore) help(request message.Message) *error.Error {
 
 	go func() {
 		response := map[string]any {
@@ -38,7 +39,7 @@ func (s *Spore) help(request icast) *error.Error {
 	return nil
 }
 
-func (s *Spore) info(request icast) *error.Error {
+func (s *Spore) info(request message.Message) *error.Error {
 
 	go func() {
 		response := map[string]any {
@@ -55,7 +56,7 @@ func (s *Spore) info(request icast) *error.Error {
 	return nil
 }
 
-func (s *Spore) state(request icast) *error.Error {
+func (s *Spore) state(request message.Message) *error.Error {
 
 	go func() {
 		err := error.New(

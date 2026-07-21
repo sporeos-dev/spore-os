@@ -1,11 +1,12 @@
 package spore
 
 import (
+	"spored/internal/message"
 	"spored/internal/utilities/error"
 	"spored/internal/utilities/out"
 )
 
-func (s *Spore) nodeList(request icast) *error.Error {
+func (s *Spore) nodeList(request message.Message) *error.Error {
 
 	go func() {
 		nodeids := s.nodes.GetNodes()
@@ -15,7 +16,7 @@ func (s *Spore) nodeList(request icast) *error.Error {
 	return nil
 }
 
-func (s *Spore) nodeHelp(request icast) *error.Error {
+func (s *Spore) nodeHelp(request message.Message) *error.Error {
 	
 	node, err := request.Arg("node")
 	if err != nil {
@@ -48,7 +49,7 @@ func (s *Spore) nodeHelp(request icast) *error.Error {
 	return nil
 }
 
-func (s *Spore) nodeState(request icast) *error.Error {
+func (s *Spore) nodeState(request message.Message) *error.Error {
 	
 	go func() {
 		err := error.New(
@@ -61,7 +62,7 @@ func (s *Spore) nodeState(request icast) *error.Error {
 	return nil
 }
 
-func (s *Spore) nodeInstall(request icast) *error.Error {
+func (s *Spore) nodeInstall(request message.Message) *error.Error {
 	
 	path, err := request.Arg("path")
 	if err != nil {
@@ -80,7 +81,7 @@ func (s *Spore) nodeInstall(request icast) *error.Error {
 	return nil
 }
 
-func (s *Spore) nodeUninstall(request icast) *error.Error {
+func (s *Spore) nodeUninstall(request message.Message) *error.Error {
 	
 	node, err := request.Arg("node")
 	if err != nil {
@@ -99,7 +100,7 @@ func (s *Spore) nodeUninstall(request icast) *error.Error {
 	return nil
 }
 
-func (s *Spore) nodeSpawn(request icast) *error.Error {
+func (s *Spore) nodeSpawn(request message.Message) *error.Error {
 
 	node, err := request.Arg("node")
 	if err != nil {
@@ -118,7 +119,7 @@ func (s *Spore) nodeSpawn(request icast) *error.Error {
 	return nil
 }
 
-func (s *Spore) nodeKill(request icast) *error.Error {
+func (s *Spore) nodeKill(request message.Message) *error.Error {
 
 	node, err := request.Arg("node")
 	if err != nil {

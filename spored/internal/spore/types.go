@@ -1,6 +1,7 @@
 package spore
 
 import (
+	"spored/internal/bus"
 	"spored/internal/manifest"
 	"spored/internal/utilities/error"
 )
@@ -8,6 +9,8 @@ import (
 type ibus interface {
 	Subscribe(cast string, topic string) *error.Error
 	Unsubscribe(cast string, topic string) *error.Error
+	Register(node bus.INode)
+	Unregister(node bus.INode)
 }
 
 type ihyphae interface {}
@@ -20,17 +23,4 @@ type inodes interface {
 	Spawn(nodeid string) *error.Error
 	Kill(nodeid string) *error.Error
 }
-
-type icast interface {
-	Get() string
-
-	Command() string
-	Cast() string
-	Arg(key string) (string, *error.Error)
-	ArgIf(key string, ifnot string) string
-	Flag(flag string) bool
-}
-
-type icapture interface {}
-
 

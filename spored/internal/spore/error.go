@@ -1,11 +1,12 @@
 package spore
 
 import (
+	"spored/internal/message"
 	"spored/internal/utilities/error"
 	"spored/internal/utilities/out"
 )
 
-func (s *Spore) errorList(request icast) *error.Error {
+func (s *Spore) errorList(request message.Message) *error.Error {
 
 	node := request.ArgIf("node", "all")
 	
@@ -33,7 +34,7 @@ func (s *Spore) errorList(request icast) *error.Error {
 	return nil
 }
 
-func (s *Spore) errorHelp(request icast) *error.Error {
+func (s *Spore) errorHelp(request message.Message) *error.Error {
 
 	errid, err := request.Arg("error")
 	if err != nil {

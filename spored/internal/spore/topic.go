@@ -1,11 +1,12 @@
 package spore
 
 import (
+	"spored/internal/message"
 	"spored/internal/utilities/error"
 	"spored/internal/utilities/out"
 )
 
-func (s *Spore) topicList(request icast) *error.Error {
+func (s *Spore) topicList(request message.Message) *error.Error {
 	
 	node := request.ArgIf("node", "all")
 
@@ -41,7 +42,7 @@ func (s *Spore) topicList(request icast) *error.Error {
 	return nil
 }
 
-func (s *Spore) topicHelp(request icast) *error.Error {
+func (s *Spore) topicHelp(request message.Message) *error.Error {
 
 	topicid, err := request.Arg("topic")
 	if err != nil {
@@ -82,7 +83,7 @@ func (s *Spore) topicHelp(request icast) *error.Error {
 	return nil
 }
 
-func (s *Spore) topicState(request icast) *error.Error {
+func (s *Spore) topicState(request message.Message) *error.Error {
 
 	_, err := request.Arg("topic")
 	if err != nil {
@@ -99,7 +100,7 @@ func (s *Spore) topicState(request icast) *error.Error {
 	return nil
 }
 
-func (s *Spore) topicSubscribe(request icast) *error.Error {
+func (s *Spore) topicSubscribe(request message.Message) *error.Error {
 
 	topic, err := request.Arg("topic")
 	if err != nil {
@@ -119,7 +120,7 @@ func (s *Spore) topicSubscribe(request icast) *error.Error {
 	return nil
 }
 
-func (s *Spore) topicUnsubscribe(request icast) *error.Error {
+func (s *Spore) topicUnsubscribe(request message.Message) *error.Error {
 	
 	topic, err := request.Arg("topic")
 	if err != nil {

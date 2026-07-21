@@ -2,6 +2,7 @@ package message
 
 import (
 	"fmt"
+	"spored/internal/utilities/error"
 	"time"
 )
 
@@ -37,4 +38,40 @@ func Witness(wtype WitnessType, body string, id string) Message {
 
 func (w *witness) Get() string {
 	return w.raw
+}
+
+func (w *witness) IsWitness() bool {
+	return true
+}
+
+func (w *witness) Command() string {
+	return "n/a"
+}
+
+func (w *witness) Cast() string {
+	return "n/a"
+}
+
+func (w *witness) Arg(key string) (string, *error.Error) {
+	return "", error.New(
+		error.NotApplicable,
+		error.Message,
+		"witness messages do not support arguments",
+		nil)
+}
+
+func (w *witness) ArgIf(key string, ifnot string) string {
+	return ifnot
+}
+
+func (w *witness) Flag(flag string) bool {
+	return false
+}
+
+func (w *witness) Handle() string {
+	return "n/a"
+}
+
+func (w *witness) Topic() string {
+	return "n/a"
 }

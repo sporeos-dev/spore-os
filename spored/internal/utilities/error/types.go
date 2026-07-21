@@ -8,6 +8,7 @@ const (
 	InitializationFailure Code = "InitializationFailure"
 	Malformed Code = "Malformed"
 	Missing Code = "Missing"
+	NotApplicable Code = "NotApplicable"
 	NotImplemented Code = "NotImplemented"
 )
 
@@ -17,6 +18,7 @@ const (
 	Hub Module = "Hub"
 	Hyphae Module = "Hyphae"
 	Manifest Module = "Manifest"
+	Message Module = "Message"
 	Node Module = "Node"
 	Permission Module = "Permission"
 	Policy Module = "Policy"

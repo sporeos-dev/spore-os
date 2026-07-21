@@ -2,6 +2,7 @@ package spore
 
 import (
 	"spored/internal/manifest"
+	"spored/internal/message"
 	"spored/internal/pal"
 	"spored/internal/utilities/error"
 	"spored/internal/utilities/out"
@@ -33,12 +34,42 @@ func (s *Spore) Set(bus ibus, hyphae ihyphae, nodes inodes) {
 	s.bus = bus
 	s.hyphae = hyphae
 	s.nodes = nodes
+
+	s.bus.Register(s)
 }
 
-func (s *Spore) Close() {}
+func (s *Spore) Close() {
+	s.bus.Unregister(s)
+}
 
-func (s *Spore) ReceiveCast(request icast) *error.Error {
+func (s *Spore) ReceiveCapture(response message.Message, args... any) *error.Error { return nil }
 
+func (s *Spore) respond(response message.Message, args ...out.IOut) {}
+
+func (s *Spore) respondError(response message.Message, err *error.Error) {}
+
+//
+//
+// INode
+//
+
+func (s *Spore) Id() string {
+	return s.manifest.ID
+}
+
+func (s *Spore) IsConnected() bool {
+	return true
+}
+
+func (s *Spore) IsWitness() bool {
+	return false
+}
+
+func (s *Spore) GetManifest() *manifest.Manifest {
+	return s.manifest
+}
+
+func (s *Spore) Receive(request message.Message) *error.Error {
 	switch request.Command() {
 	case "SPORE.help": return s.help(request)
 	case "SPORE.info": return s.info(request)
@@ -55,7 +86,7 @@ func (s *Spore) ReceiveCast(request icast) *error.Error {
 	case "SPORE.command.list": return s.commandList(request)
 	case "SPORE.command.help": return s.commandHelp(request)
 
-	case "SPORE.error.list": return s.errorHelp(request)
+	case "SPORE.error.list": return s.errorList(request)
 	case "SPORE.error.help": return s.errorHelp(request)
 
 	case "SPORE.topic.list": return s.topicList(request)
@@ -83,9 +114,3 @@ func (s *Spore) ReceiveCast(request icast) *error.Error {
 		"spore command unhandled",
 		out.Pair("command", request.Command()))
 }
-
-func (s *Spore) ReceiveCapture(response icapture, args... any) *error.Error { return nil }
-
-func (s *Spore) respond(response icast, args ...out.IOut) {}
-
-func (s *Spore) respondError(response icast, err *error.Error) {}

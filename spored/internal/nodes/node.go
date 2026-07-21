@@ -3,6 +3,7 @@ package nodes
 import (
 	"bufio"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net"
@@ -46,7 +47,9 @@ func newNode(registry *registry.Element, manifest *manifest.Manifest) *node {
 	return n
 }
 
-func (n *node) close() {}
+func (n *node) close() {
+	n.bus.Unregister(n)
+}
 
 func (n *node) setBus(bus ibus) {
 	n.bus = bus
@@ -141,6 +144,7 @@ func (n *node) listen() {
 		
 		// witnessing starts with witness
 		if strings.HasPrefix(raw, "witness") {
+			
 			body := strings.TrimPrefix(raw, "witness ")
 			n.bus.WitnessNode(body, n.registry.ID)
 			continue
@@ -148,17 +152,41 @@ func (n *node) listen() {
 		// publishing starts with publish
 		} else if strings.HasPrefix(raw, "publish") {
 
-			slog.Info("PUBLISH")
+			n.bus.WitnessIn(raw, n.registry.ID)
+			broadcast, err := message.Broadcast(raw, n.registry.ID)
+			if err != nil {
+				n.Error(err, "", "")
+				continue
+			}
+			if err := n.bus.Broadcast(broadcast); err != nil {
+				n.Error(err, "", "")
+			}
 
 		// response starts with handle
 		} else if strings.HasPrefix(raw, "~") {
 
-			slog.Info("RESPONSE")
+			n.bus.WitnessIn(raw, n.registry.ID)
+			response, err := message.Response(raw, n.registry.ID)
+			if err != nil {
+				n.Error(err, "", "")
+				continue
+			}
+			if err := n.bus.Response(response); err != nil {
+				n.Error(err, response.Handle(), response.Command())
+			}
 
 		// fallback to request
 		} else {
 
-			slog.Info("REQUEST")
+			n.bus.WitnessIn(raw, n.registry.ID)
+			msg, err := message.Request(raw, n.registry.ID)
+			if err != nil {
+				n.Error(err, "", "")
+				continue
+			}
+			if err := n.bus.Request(msg); err != nil {
+				n.Error(err, msg.Handle(), msg.Command())
+			}
 
 		}
 	}
@@ -192,11 +220,13 @@ func (n *node) IsWitness() bool {
 	return n.manifest.Witness
 }
 
+func (n *node) GetManifest() *manifest.Manifest {
+	return n.manifest
+}
+
 func (n *node) Receive(message message.Message) *error.Error {
 	n.mu.RLock()
 	defer n.mu.RUnlock()
-
-	println(message.Get())
 
 	if n.writer == nil {
 		return error.New(
@@ -206,11 +236,31 @@ func (n *node) Receive(message message.Message) *error.Error {
 			out.Pair("node", n.registry.ID))
 	}
 
-	println(n.registry.ID)
-
 	n.writer.WriteString(message.Get() + "\n")
 	n.writer.Flush()
+
+	if !message.IsWitness() {
+		n.bus.WitnessOut(message.Get(), n.registry.ID)
+	}
+
 	return nil
+}
+
+func (n *node) Error(err *error.Error, handle string, subject string) {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+
+	var wire string
+	if handle != "" {
+		wire = fmt.Sprintf("~%s:%s %s", handle, subject, err.Wire())
+	} else {
+		wire = err.Wire()
+	}
+
+	n.writer.WriteString(wire + "\n")
+	n.writer.Flush()
+
+	n.bus.WitnessOut(wire, n.registry.ID)
 }
 
 //

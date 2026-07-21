@@ -9,7 +9,7 @@ import (
 type broadcast struct {
 	mu sync.RWMutex
 	nodes map[string]INode
-	subscriptions map[string][]string // map[topic][]nodeid
+	subscriptions map[string][]string
 }
 
 func newBroadcast() *broadcast {
@@ -53,23 +53,26 @@ func (b *broadcast) unsubscribe(cast string, topic string) *error.Error {
 	return nil
 }
 
-func (b *broadcast) publish(bus Bus, message message.Message) {
-	// b.mu.RLock()
-	// defer b.mu.RUnlock()
+func (b *broadcast) broadcast(msg message.Message) *error.Error {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
 
-	// topic := message.Topic()
-	// subscribers, ok := b.subscriptions[topic]
-	// if !ok {
-	// 	return
-	// }
-	// for _, nodeID := range subscribers {
-	// 	node, ok := b.nodes[nodeID]
-	// 	if !ok {
-	// 		continue
-	// 	}
-	// 	err := node.Receive(message)
-	// 	if err != nil {
-	// 		// TODO
-	// 	}
-	// }
+	topic := msg.Topic()
+	subscribers, ok := b.subscriptions[topic]
+	if !ok {
+		return nil
+	}
+	for _, nodeid := range subscribers {
+		node, ok := b.nodes[nodeid]
+		if !ok {
+			continue
+		}
+		err := node.Receive(msg)
+		if err != nil {
+			// TODO
+			// how should I handle errors
+		}
+	}
+
+	return nil
 }

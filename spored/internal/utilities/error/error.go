@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 )
 
 type Error struct {
@@ -27,7 +28,7 @@ func New(code Code, module Module, what string, out ...fmt.Stringer) *Error {
 		What: what,
 		Extra: extra.String(),
 	}
-	slog.Error("Error occurred", "error", err.Error())
+	slog.Error(err.Error())
 	return err
 }
 
@@ -41,12 +42,17 @@ func (e *Error) Append(out fmt.Stringer) {
 
 func (e *Error) Error() string {
 	if len(e.Extra) > 0 {
-		return fmt.Sprintf("[%s][%s] %s (%s)", e.Code, e.Module, e.What, e.Extra)
+		return fmt.Sprintf("[%s::in::%s] %s (%s)", e.Code, e.Module, e.What, e.Extra)
 	} else {
-		return fmt.Sprintf("[%s][%s] %s", e.Code, e.Module, e.What)
+		return fmt.Sprintf("[%s::in::%s] %s", e.Code, e.Module, e.What)
 	}
 }
 
 func (e *Error) Wire() string {
 	return fmt.Sprintf(`error code=%s module=%s what="%s" extra=[%s]`, e.Code, e.Module, e.What, e.Extra)
+}
+
+func (e *Error) Witness() string {
+	t := time.Now().UnixMilli()
+	return fmt.Sprintf(`witness error code=%s module=%s what="%s" extra=[%s] spore_error spore_time=%d`, e.Code, e.Module, e.What, e.Extra, t)
 }

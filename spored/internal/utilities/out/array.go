@@ -23,5 +23,5 @@ func renderArraySlice[T any](s []T) string {
 	for i, item := range s {
 		parts[i] = renderItem(item)
 	}
-	return strings.Join(parts, " ")
+	return strings.Join(parts, ", ")
 }

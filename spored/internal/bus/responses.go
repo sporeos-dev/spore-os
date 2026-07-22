@@ -26,13 +26,13 @@ func (r *responses) close() {}
 func (r *responses) register(n INode) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.responses[n.Id()] = n.Id()
+	r.nodes[n.Id()] = n
 }
 
 func (r *responses) unregister(n INode) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	delete(r.responses, n.Id())
+	delete(r.nodes, n.Id())
 }
 
 func (r *responses) request(msg message.Message) *error.Error {

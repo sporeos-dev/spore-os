@@ -468,8 +468,8 @@ func TestBroadcast_Fields(t *testing.T) {
 	if val != "com.example.clock" {
 		t.Errorf("Arg(node): got %q", val)
 	}
-	if m.Handle() != "" {
-		t.Errorf("Handle(): expected empty, got %q", m.Handle())
+	if m.Handle() != "n/a" {
+		t.Errorf("Handle(): expected n/a, got %q", m.Handle())
 	}
 }
 

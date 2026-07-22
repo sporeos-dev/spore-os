@@ -1,12 +1,14 @@
 package spore
 
 import (
+	"fmt"
 	"spored/internal/manifest"
 	"spored/internal/message"
 	"spored/internal/pal"
 	"spored/internal/utilities/error"
 	"spored/internal/utilities/out"
 	"spored/internal/utilities/status"
+	"strings"
 )
 
 type Spore struct {
@@ -23,6 +25,7 @@ func New() *Spore {
 		Path: pal.FileSporeManifest(),
 		ExpectedChecksum: "n/a",
 	}
+	m.Load()
 	m.Status.Set(status.Verified)
 
 	return &Spore{
@@ -44,9 +47,33 @@ func (s *Spore) Close() {
 
 func (s *Spore) ReceiveCapture(response message.Message, args... any) *error.Error { return nil }
 
-func (s *Spore) respond(response message.Message, args ...out.IOut) {}
+func (s *Spore) respond(request message.Message, args ...out.IOut) {
+	parts := []string{fmt.Sprintf("~%s:%s", request.Handle(), request.Command())}
+	for _, arg := range args {
+		parts = append(parts, arg.String())
+	}
+	parts = append(parts, "ok")
+	parts = append(parts, fmt.Sprintf("capture=%s", s.manifest.ID))
+	wire := strings.Join(parts, " ")
+	msg, err := message.Response(wire, s.manifest.ID)
+	if err != nil {
+		return
+	}
+	s.bus.Response(msg)
+}
 
-func (s *Spore) respondError(response message.Message, err *error.Error) {}
+func (s *Spore) respondError(request message.Message, err *error.Error) {
+	wire := fmt.Sprintf("~%s:%s %s capture=%s",
+		request.Handle(),
+		request.Command(),
+		err.Wire(),
+		s.manifest.ID)
+	msg, parseErr := message.Response(wire, s.manifest.ID)
+	if parseErr != nil {
+		return
+	}
+	s.bus.Response(msg)
+}
 
 //
 //

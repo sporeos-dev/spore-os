@@ -16,10 +16,15 @@ func (s *Spore) commandList(request message.Message) *error.Error {
 		
 		if node == "all" {
 
+			commands = append(commands, s.manifest.CommandIds()...)
 			for _, nodeid := range s.nodes.GetNodes() {
 				manifest := s.nodes.GetManifest(nodeid)
 				commands = append(commands, manifest.CommandIds()...)
 			}
+
+		} else if node == s.manifest.ID {
+
+			commands = s.manifest.CommandIds()
 
 		} else {
 
@@ -53,6 +58,42 @@ func (s *Spore) commandHelp(request message.Message) *error.Error {
 
 	go func() {
 
+		for _, command := range s.manifest.Api {
+			if commandid != command.Name {
+				continue
+			}
+
+			inputs := []string{}
+			if command.Inputs != nil {
+				for _, input := range *command.Inputs {
+					req := ""
+					if input.Required {
+						req = " *"
+					}
+					inputs = append(inputs, input.Name+" ("+input.Type+")"+req+": "+input.Description)
+				}
+			}
+
+			outputs := []string{}
+			if command.Outputs != nil {
+				for _, output := range *command.Outputs {
+					outputs = append(outputs, output.Name+" ("+output.Type+"): "+output.Description)
+				}
+			}
+
+			s.respond(
+				request,
+				out.Array(command.Name,
+					[]string{
+						command.Description,
+						s.manifest.ID,
+					}),
+				out.Array("Usage", command.Usage),
+				out.Array("Inputs", inputs),
+				out.Array("Outputs", outputs))
+			return
+		}
+
 		for _, nodeid := range s.nodes.GetNodes() {
 			
 			manifest := s.nodes.GetManifest(nodeid)
@@ -61,16 +102,34 @@ func (s *Spore) commandHelp(request message.Message) *error.Error {
 					continue
 				}
 				
-				response := map[string]any {
-					"id": command.Name,
-					"name": command.Name,
-					"description": command.Description,
-					"node": nodeid,
-					"inputs": command.Inputs,
-					"outputs": command.Outputs,
+				inputs := []string{}
+				if command.Inputs != nil {
+					for _, input := range *command.Inputs {
+						req := ""
+						if input.Required {
+							req = " *"
+						}
+						inputs = append(inputs, input.Name+" ("+input.Type+")"+req+": "+input.Description)
+					}
 				}
 
-				s.respond(request, out.Object("commandhelp", response))
+				outputs := []string{}
+				if command.Outputs != nil {
+					for _, output := range *command.Outputs {
+						outputs = append(outputs, output.Name+" ("+output.Type+"): "+output.Description)
+					}
+				}
+
+				s.respond(
+					request,
+					out.Array(command.Name,
+						[]string{
+							command.Description,
+							nodeid,
+						}),
+					out.Array("Usage", command.Usage),
+					out.Array("Inputs", inputs),
+					out.Array("Outputs", outputs))
 				return
 			}
 		}

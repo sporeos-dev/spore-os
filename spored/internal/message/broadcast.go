@@ -1,6 +1,9 @@
 package message
 
-import "spored/internal/utilities/error"
+import (
+	"spored/internal/utilities/error"
+	"spored/internal/utilities/out"
+)
 
 type broadcast struct {
 	raw string
@@ -48,7 +51,7 @@ func (b *broadcast) Arg(key string) (string, *error.Error) {
 	if value, ok := b.args[key]; ok {
 		return value, nil
 	}
-	return "", error.New(error.Missing, error.Message, "key not found")
+	return "", error.New(error.Missing, error.Message, "key not found", out.Pair("key", key))
 }
 
 func (b *broadcast) ArgIf(key string, ifnot string) string {

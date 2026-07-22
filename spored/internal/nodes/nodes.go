@@ -182,6 +182,11 @@ func (n *Nodes) Install(path string) *error.Error {
 				out.Pair("path", path))
 		}
 
+		err := n.registry.Add(registryElement)
+		if err != nil {
+			return err
+		}
+
 		node := newNode(registryElement, manifest)
 		node.setBus(n.bus)
 		n.nodes[node.registry.ID] = node

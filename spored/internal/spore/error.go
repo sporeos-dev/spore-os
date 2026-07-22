@@ -16,14 +16,28 @@ func (s *Spore) errorList(request message.Message) *error.Error {
 
 		if node == "all" {
 
+			errors = append(errors, s.manifest.ErrorIds()...)
 			for _, nodeid := range s.nodes.GetNodes() {
 				manifest := s.nodes.GetManifest(nodeid)
 				errors = append(errors, manifest.ErrorIds()...)
 			}
 
+		} else if node == s.manifest.ID {
+
+			errors = s.manifest.ErrorIds()
+
 		} else {
 
 			manifest := s.nodes.GetManifest(node)
+			if manifest == nil {
+				err := error.New(
+					error.Missing,
+					error.Spore,
+					"spore manifest not loaded",
+					out.Pair("node", node))
+				s.respondError(request, err)
+				return
+			}
 			errors = manifest.ErrorIds()
 
 		}
@@ -43,6 +57,19 @@ func (s *Spore) errorHelp(request message.Message) *error.Error {
 
 	go func() {
 
+		for _, err := range s.manifest.Errors {
+			if errid != err.Name {
+				continue
+			}
+			s.respond(
+				request,
+				out.Array(err.Name,
+					[]string{
+						"Description: " + err.Description,
+					}))
+			return
+		}
+
 		for _, nodeid := range s.nodes.GetNodes() {
 			
 			manifest := s.nodes.GetManifest(nodeid)
@@ -51,13 +78,12 @@ func (s *Spore) errorHelp(request message.Message) *error.Error {
 					continue
 				}
 				
-				response := map[string]any {
-					"id": err.Name,
-					"name": err.Name,
-					"description": err.Description,
-				}
-				
-				s.respond(request, out.Object("errorhelp", response))
+				s.respond(
+					request,
+					out.Array(err.Name,
+						[]string{
+							"Description: " + err.Description,
+						}))
 				return
 			}
 		}

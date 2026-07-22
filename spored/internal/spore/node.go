@@ -1,6 +1,7 @@
 package spore
 
 import (
+	"spored/internal/manifest"
 	"spored/internal/message"
 	"spored/internal/utilities/error"
 	"spored/internal/utilities/out"
@@ -9,7 +10,7 @@ import (
 func (s *Spore) nodeList(request message.Message) *error.Error {
 
 	go func() {
-		nodeids := s.nodes.GetNodes()
+		nodeids := append([]string{s.manifest.ID}, s.nodes.GetNodes()...)
 		s.respond(request, out.Array("nodes", nodeids))		
 	}()
 
@@ -24,8 +25,13 @@ func (s *Spore) nodeHelp(request message.Message) *error.Error {
 	}
 
 	go func() {
-		manifest := s.nodes.GetManifest(node)
-		if manifest == nil {
+		var m *manifest.Manifest
+		if node == s.manifest.ID {
+			m = s.manifest
+		} else {
+			m = s.nodes.GetManifest(node)
+		}
+		if m == nil {
 			err := error.New(
 				error.Missing,
 				error.Spore,
@@ -34,16 +40,16 @@ func (s *Spore) nodeHelp(request message.Message) *error.Error {
 			s.respondError(request, err)
 			return
 		}
-		
-		response := map[string]any {
-			"id": manifest.ID,
-			"name": manifest.Name,
-			"description": manifest.Description,
-			"api": manifest.CommandIds(),
-			"topics": manifest.TopicIds(),
-		}
 
-		s.respond(request, out.Object("nodehelp", response))
+		s.respond(
+			request,
+			out.Array(m.ID,
+				[]string{
+					m.Name,
+					m.Description,
+				}),
+			out.Array("API", m.CommandIds()),
+			out.Array("Topics", m.TopicIds()))
 	}()
 
 	return nil

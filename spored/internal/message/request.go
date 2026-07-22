@@ -1,6 +1,9 @@
 package message
 
-import "spored/internal/utilities/error"
+import (
+	"spored/internal/utilities/error"
+	"spored/internal/utilities/out"
+)
 
 type request struct {
 	raw string
@@ -49,7 +52,7 @@ func (r *request) Arg(key string) (string, *error.Error) {
 	if value, ok := r.args[key]; ok {
 		return value, nil
 	}
-	return "", error.New(error.Missing, error.Message, "key not found")
+	return "", error.New(error.Missing, error.Message, "key not found", out.Pair("key", key))
 }
 
 func (r *request) ArgIf(key string, ifnot string) string {

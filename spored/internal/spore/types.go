@@ -3,6 +3,7 @@ package spore
 import (
 	"spored/internal/bus"
 	"spored/internal/manifest"
+	"spored/internal/message"
 	"spored/internal/utilities/error"
 )
 
@@ -11,6 +12,7 @@ type ibus interface {
 	Unsubscribe(cast string, topic string) *error.Error
 	Register(node bus.INode)
 	Unregister(node bus.INode)
+	Response(msg message.Message) *error.Error
 }
 
 type ihyphae interface {}

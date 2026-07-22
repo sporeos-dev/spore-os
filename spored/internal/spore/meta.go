@@ -9,31 +9,25 @@ import (
 func (s *Spore) help(request message.Message) *error.Error {
 
 	go func() {
-		response := map[string]any {
-			"id": "SPORE.help",
-			"name": "Spore OS Help",
-			"description": "Getting Started...",
-			
-			"contact": map[string]string {
-				"github": "github.com/sporeos-dev",
-				"website": "sporeos.dev",
-			},
 
-			"getting_started": []string {
-				"SPORE.info",
-				"SPORE.node.list",
-				"SPORE.node.help node=node",
-				"SPORE.command.list",
-				"SPORE.command.help command=command",
-			},
-			
-			"version": map[string]string {
-				"schema": s.manifest.Schema,
-				"version": s.manifest.Version,
-			},
-		}
-
-		s.respond(request, out.Object("help", response))
+		s.respond(
+			request, 
+			out.Array("SPORE.help", 
+				[]string{
+					"Spore OS Help",
+					"Schema: " + s.manifest.Schema,
+					"Version: " + s.manifest.Version,
+					"sporeos.dev",
+					"github.com/sporeos-dev",
+				}),
+			out.Array("Getting-started-commands...", 
+				[]string {
+					"SPORE.info",
+					"SPORE.node.list",
+					"SPORE.node.help node=node",
+					"SPORE.command.list",
+					"SPORE.command.help command=command",
+				}))
 	}()
 	
 	return nil
@@ -42,15 +36,20 @@ func (s *Spore) help(request message.Message) *error.Error {
 func (s *Spore) info(request message.Message) *error.Error {
 
 	go func() {
-		response := map[string]any {
-			"id": s.manifest.ID,
-			"name": s.manifest.Name,
-			"description": s.manifest.Description,
-			"api": s.manifest.CommandIds(),
-			"topics": s.manifest.TopicIds(),
-		}
-
-		s.respond(request, out.Object("info", response))
+		s.respond(
+			request,
+			out.Array("SPORE.info",
+				[]string{
+					s.manifest.ID,
+					s.manifest.Name,
+					s.manifest.Description,
+					"Schema: " + s.manifest.Schema,
+					"Version: " + s.manifest.Version,
+				}),
+			out.Array("API",
+				s.manifest.CommandIds()),
+			out.Array("Topics",
+				s.manifest.TopicIds()))
 	}()
 
 	return nil

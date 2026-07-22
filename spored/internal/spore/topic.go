@@ -16,10 +16,15 @@ func (s *Spore) topicList(request message.Message) *error.Error {
 
 		if node == "all" {
 
+			topics = append(topics, s.manifest.TopicIds()...)
 			for _, nodeid := range s.nodes.GetNodes() {
 				manifest := s.nodes.GetManifest(nodeid)
 				topics = append(topics, manifest.TopicIds()...)
 			}
+
+		} else if node == s.manifest.ID {
+
+			topics = s.manifest.TopicIds()
 
 		} else {
 
@@ -51,6 +56,29 @@ func (s *Spore) topicHelp(request message.Message) *error.Error {
 
 	go func() {
 
+		for _, topic := range s.manifest.Topics {
+			if topicid != topic.Name {
+				continue
+			}
+
+			outputs := []string{}
+			if topic.Outputs != nil {
+				for _, output := range *topic.Outputs {
+					outputs = append(outputs, output.Name+" ("+output.Type+"): "+output.Description)
+				}
+			}
+
+			s.respond(
+				request,
+				out.Array(topic.Name,
+					[]string{
+						topic.Description,
+						s.manifest.ID,
+					}),
+				out.Array("Outputs", outputs))
+			return
+		}
+
 		for _, nodeid := range s.nodes.GetNodes() {
 			
 			manifest := s.nodes.GetManifest(nodeid)
@@ -59,15 +87,21 @@ func (s *Spore) topicHelp(request message.Message) *error.Error {
 					continue
 				}
 				
-				response := map[string]any {
-					"id": topic.Name,
-					"name": topic.Name,
-					"description": topic.Description,
-					"node": nodeid,
-					"outputs": topic.Outputs,
+				outputs := []string{}
+				if topic.Outputs != nil {
+					for _, output := range *topic.Outputs {
+						outputs = append(outputs, output.Name+" ("+output.Type+"): "+output.Description)
+					}
 				}
 
-				s.respond(request, out.Object("topichelp", response))
+				s.respond(
+					request,
+					out.Array(topic.Name,
+						[]string{
+							topic.Description,
+							nodeid,
+						}),
+					out.Array("Outputs", outputs))
 				return
 			}
 		}

@@ -10,6 +10,7 @@ const (
 	Missing Code = "Missing"
 	NotApplicable Code = "NotApplicable"
 	NotImplemented Code = "NotImplemented"
+	Timeout Code = "Timeout"
 )
 
 type Module string

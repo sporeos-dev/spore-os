@@ -48,6 +48,8 @@ func (s *Spore) nodeHelp(request message.Message) *error.Error {
 					m.Name,
 					m.Description,
 				}),
+			out.Pair("manifest", m.Path),
+			out.Pair("binary", m.GetBinaryPath()),
 			out.Array("API", m.CommandIds()),
 			out.Array("Topics", m.TopicIds()))
 	}()

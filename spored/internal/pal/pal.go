@@ -4,6 +4,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"spored/internal/utilities/file"
 
 	"github.com/kardianos/service"
 )
@@ -37,10 +38,14 @@ func FileLog() string      { return filepath.Join(instance.impl.directoryLogging
 func FileSporeManifest() string {
 	if service.Interactive() {
 		exe, err := os.Executable()
-		if err == nil {
-			return filepath.Join(filepath.Dir(exe), "spored.manifest.spore.yaml")
+		if err != nil {
+			return "spored.manifest.spore.yaml"
 		}
-		return "spored.manifest.spore.yaml"
+		fp := filepath.Join(filepath.Dir(exe), "spored.manifest.spore.yaml")
+		if !file.IsReadable(fp) {
+			fp = filepath.Join(instance.impl.directoryRoot(), "spored.manifest.spore.yaml")
+		}
+		return fp
 	} else {
 		return filepath.Join(instance.impl.directoryRoot(), "spored.manifest.spore.yaml")
 	}

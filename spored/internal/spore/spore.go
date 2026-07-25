@@ -2,6 +2,7 @@ package spore
 
 import (
 	"fmt"
+	"log/slog"
 	"spored/internal/manifest"
 	"spored/internal/message"
 	"spored/internal/pal"
@@ -27,6 +28,7 @@ func New() *Spore {
 	}
 	m.Load()
 	m.Status.Set(status.Verified)
+	slog.Debug("Spore manifest loaded.", "manifest", m.Path)
 
 	return &Spore{
 		manifest: m,

@@ -2,6 +2,7 @@ package nodes
 
 import (
 	"bufio"
+	"fmt"
 	"net"
 	"os/exec"
 	"spored/internal/manifest"
@@ -70,7 +71,11 @@ func (n *Nodes) Autostart() {
 		if el.manifest.Autostart {
 			err := n.Spawn(el.registry.ID)
 			if err != nil {
-				// out.Error("failed to autostart node", out.Pair("node", el.registry.ID), out.Pair("error", err.Error()))
+				error.New(
+					error.Generic,
+					error.Node,
+					"autostart failure",
+					out.Pair("node", el.registry.ID))
 			}
 		}
 	}
@@ -95,6 +100,8 @@ func (n *Nodes) HandleConnection(conn net.Conn) {
 		conn.Close()
 		return
 	}
+
+	n.bus.WitnessSpore(fmt.Sprintf("Node connection attempted: %s", nodeid))
 
 	nodeid = strings.TrimSpace(nodeid)
 	n.mu.RLock()
@@ -142,6 +149,7 @@ func (n *Nodes) GetNodes() []string {
 }
 
 func (n *Nodes) GetManifest(nodeid string) *manifest.Manifest {
+	nodeid = n.resolveId(nodeid)
 
 	n.mu.RLock()
 	defer n.mu.RUnlock()
@@ -194,12 +202,26 @@ func (n *Nodes) Install(path string) *error.Error {
 	// not readable, handle via hyphae
 	} else {
 
+		manifest, registry, err := n.hyphae.PrepareForInstallation(path)
+		if err != nil {
+			return err
+		}
+
+		err = n.registry.Add(registry)
+		if err != nil {
+			return err
+		}
+
+		node := newNode(registry, manifest)
+		node.setBus(n.bus)
+		n.nodes[node.registry.ID] = node
 	}
 
 	return nil
 }
 
 func (n *Nodes) Uninstall(nodeid string) *error.Error {
+	nodeid = n.resolveId(nodeid)
 	
 	n.mu.Lock()
 	defer n.mu.Unlock()
@@ -218,6 +240,7 @@ func (n *Nodes) Uninstall(nodeid string) *error.Error {
 }
 
 func (n *Nodes) Spawn(nodeid string) *error.Error {
+	nodeid = n.resolveId(nodeid)
 
 	n.mu.RLock()
 	defer n.mu.RUnlock()
@@ -245,8 +268,34 @@ func (n *Nodes) Spawn(nodeid string) *error.Error {
 }
 
 func (n *Nodes) Kill(nodeid string) *error.Error {
+	nodeid = n.resolveId(nodeid)
+
 	return error.New(
 		error.Generic,
 		error.Node,
 		"not yet implemented")
+}
+
+//
+//
+// private
+//
+
+func (n *Nodes) resolveId(nodeid string) string {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+
+	_, ok := n.nodes[nodeid]; 
+	if ok {
+		return nodeid
+	}
+
+	suffix := "." + nodeid
+	for fullid := range n.nodes {
+		if strings.HasSuffix(fullid, suffix) {
+			return fullid
+		}
+	}
+
+	return nodeid
 }

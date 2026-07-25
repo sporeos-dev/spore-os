@@ -91,7 +91,7 @@ func (h *Hub) listen() {
 				out.Pair("error", err.Error()))
 			continue
 		}
-		
+
 		go h.nodes.HandleConnection(conn)
 	}
 }

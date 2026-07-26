@@ -55,12 +55,18 @@ func (a *api) request(msg message.Message) *error.Error {
 	if nodeid, ok := a.commands[msg.Command()]; ok {
 		if node, ok := a.nodes[nodeid]; ok {
 			return node.Receive(msg)
+		} else {
+			return error.New(
+				error.Missing,
+				error.Bus,
+				"node not found",
+				out.Pair("command", msg.Command()))
 		}
 	}
 
 	return error.New(
 		error.Missing,
-		error.Message,
+		error.Bus,
 		"command not found",
 		out.Pair("command", msg.Command()))
 }

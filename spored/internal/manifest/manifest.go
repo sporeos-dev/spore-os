@@ -5,6 +5,7 @@ import (
 	"spored/internal/registry"
 	"spored/internal/utilities/file"
 	"spored/internal/utilities/status"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -118,7 +119,11 @@ func (m *Manifest) Verify() {
 		m.Status.Set(status.FailedChecksum)
 		return
 	}
-	if checksum != m.ExpectedChecksum {
+	expected := m.ExpectedChecksum
+	if !strings.HasPrefix(expected, "sha256:") {
+		expected = "sha256:" + expected
+	}
+	if checksum != expected {
 		m.Status.Set(status.FailedChecksum)
 		return
 	}
@@ -136,6 +141,10 @@ func (m *Manifest) Load() {
 	if err != nil {
 		return
 	}
+}
+
+func (m *Manifest) LoadContent(content string) {
+	yaml.Unmarshal([]byte(content), m)
 }
 
 // 

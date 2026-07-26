@@ -43,6 +43,16 @@ func (h *Hyphae) Close() {
 	h.bus.Unregister(h)
 }
 
+//
+//
+// public
+// hyphae
+//
+
+func (h *Hyphae) ManifestRead(path string) (string, *error.Error) {
+	return h.manifestRead(path)
+}
+
 func (h *Hyphae) PrepareForInstallation(path string) (*manifest.Manifest, *registry.Element, *error.Error) {
 
 	manifestContent, err := h.manifestRead(path)
@@ -82,7 +92,7 @@ func (h *Hyphae) PrepareForInstallation(path string) (*manifest.Manifest, *regis
 	manifest.ExpectedChecksum = manifestChecksum
 	registry.Checksum = manifestChecksum
 
-	binaryChecksum, err := h.fileHash(manifest.App)
+	binaryChecksum, err := h.fileHash(fullBinaryPath)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -91,14 +101,27 @@ func (h *Hyphae) PrepareForInstallation(path string) (*manifest.Manifest, *regis
 	return manifest, registry, nil
 }
 
+func (h *Hyphae) HashFile(path string) (string, *error.Error) {
+	return h.fileHash(path)
+}
+
+func (h *Hyphae) Spawn(path string) *error.Error {
+	return h.nodeSpawn(path)
+}
+
+func (h *Hyphae) Kill(pid int) *error.Error {
+	return h.nodeKill(pid)
+}
+
 //
 //
 // private
+// hyphae calls
 //
 
 func (h *Hyphae) manifestRead(path string) (string, *error.Error) {
 	handle := h.handle()
-	raw := fmt.Sprintf("HYPHAE.manifest.read path=%s %s", path, handle)
+	raw := fmt.Sprintf("HYPHAE.manifest.read path=%s ~%s", path, handle)
 	h.bus.WitnessSpore(raw)
 	msg, err := message.Request(raw, h.Id())
 	if err != nil {
@@ -116,13 +139,19 @@ func (h *Hyphae) manifestRead(path string) (string, *error.Error) {
 	if err != nil {
 		return "", err
 	}
-	_ = response
-	return "", nil
+	if response.Flag("error") {
+		return "", error.New(error.Generic, error.Hyphae, response.ArgIf("what", "manifest read failed"))
+	}
+	content, err := response.Arg("content")
+	if err != nil {
+		return "", err
+	}
+	return content, nil
 }
 
 func (h *Hyphae) binaryHash(pid int) (string, *error.Error) {
 	handle := h.handle()
-	raw := fmt.Sprintf("HYPHAE.binary.hash pid=%d %s", pid, handle)
+	raw := fmt.Sprintf("HYPHAE.binary.hash pid=%d ~%s", pid, handle)
 	h.bus.WitnessSpore(raw)
 	msg, err := message.Request(raw, h.Id())
 	if err != nil {
@@ -139,6 +168,9 @@ func (h *Hyphae) binaryHash(pid int) (string, *error.Error) {
 	response, err := h.waitFor(handle, ch)
 	if err != nil {
 		return "", err
+	}
+	if response.Flag("error") {
+		return "", error.New(error.Generic, error.Hyphae, response.ArgIf("what", "binary hash failed"))
 	}
 	content, err := response.Arg("content")
 	if err != nil {
@@ -149,7 +181,7 @@ func (h *Hyphae) binaryHash(pid int) (string, *error.Error) {
 
 func (h *Hyphae) fileHash(path string) (string, *error.Error) {
 	handle := h.handle()
-	raw := fmt.Sprintf("HYPHAE.file.hash path=%s %s", path, handle)
+	raw := fmt.Sprintf("HYPHAE.file.hash path=%s ~%s", path, handle)
 	h.bus.WitnessSpore(raw)
 	msg, err := message.Request(raw, h.Id())
 	if err != nil {
@@ -167,6 +199,9 @@ func (h *Hyphae) fileHash(path string) (string, *error.Error) {
 	if err != nil {
 		return "", err
 	}
+	if response.Flag("error") {
+		return "", error.New(error.Generic, error.Hyphae, response.ArgIf("what", "file hash failed"))
+	}
 	hash, err := response.Arg("hash")
 	if err != nil {
 		return "", err
@@ -176,7 +211,7 @@ func (h *Hyphae) fileHash(path string) (string, *error.Error) {
 
 func (h *Hyphae) nodeSpawn(path string) *error.Error {
 	handle := h.handle()
-	raw := fmt.Sprintf("HYPHAE.node.spawn path=%s %s", path, handle)
+	raw := fmt.Sprintf("HYPHAE.node.spawn binary=%s ~%s", path, handle)
 	h.bus.WitnessSpore(raw)
 	msg, err := message.Request(raw, h.Id())
 	if err != nil {
@@ -190,13 +225,19 @@ func (h *Hyphae) nodeSpawn(path string) *error.Error {
 		h.pending.mu.Unlock()
 		return err
 	}
-	_, err = h.waitFor(handle, ch)
+	response, err := h.waitFor(handle, ch)
+	if err != nil {
+		return err
+	}
+	if response.Flag("error") {
+		return error.New(error.Generic, error.Hyphae, response.ArgIf("what", "node spawn failed"))
+	}
 	return nil
 }
 
 func (h *Hyphae) nodeKill(pid int) *error.Error {
 	handle := h.handle()
-	raw := fmt.Sprintf("HYPHAE.node.kill pid=%d %s", pid, handle)
+	raw := fmt.Sprintf("HYPHAE.node.kill pid=%d ~%s", pid, handle)
 	h.bus.WitnessSpore(raw)
 	msg, err := message.Request(raw, h.Id())
 	if err != nil {
@@ -210,17 +251,28 @@ func (h *Hyphae) nodeKill(pid int) *error.Error {
 		h.pending.mu.Unlock()
 		return err
 	}
-	_, err = h.waitFor(handle, ch)
-	return err
+	response, err := h.waitFor(handle, ch)
+	if err != nil {
+		return err
+	}
+	if response.Flag("error") {
+		return error.New(error.Generic, error.Hyphae, response.ArgIf("what", "node kill failed"))
+	}
+	return nil
 }
+
+//
+//
+// private
+// hyphae call
+// helpers
+//
 
 func (h *Hyphae) handle() string {
 	h.index++
-	return fmt.Sprintf("~hyphae-%d", h.index)
+	return fmt.Sprintf("hyphae-%d", h.index)
 }
 
-// await registers a channel for the given handle and returns it.
-// Call this before sending the request, then block on the returned channel.
 func (h *Hyphae) await(handle string) chan message.Message {
 	ch := make(chan message.Message, 1)
 	h.pending.mu.Lock()
@@ -229,7 +281,6 @@ func (h *Hyphae) await(handle string) chan message.Message {
 	return ch
 }
 
-// waitFor blocks until a response arrives on ch or 5 seconds elapse.
 func (h *Hyphae) waitFor(handle string, ch chan message.Message) (message.Message, *error.Error) {
 	select {
 	case msg := <-ch:

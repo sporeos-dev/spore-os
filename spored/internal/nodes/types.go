@@ -21,7 +21,11 @@ type ibus interface {
 }
 
 type ihyphae interface {
+	ManifestRead(path string) (string, *error.Error)
+	HashFile(path string) (string, *error.Error)
 	PrepareForInstallation(path string) (manifest *manifest.Manifest, registryElement *registry.Element, err *error.Error)
+	Spawn(path string) *error.Error
+	Kill(pid int) *error.Error
 }
 
 type ispore interface {}

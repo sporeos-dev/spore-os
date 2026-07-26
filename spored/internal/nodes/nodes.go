@@ -9,6 +9,7 @@ import (
 	"spored/internal/registry"
 	"spored/internal/utilities/file"
 	"spored/internal/utilities/out"
+	"spored/internal/utilities/status"
 	"strings"
 	"sync"
 	"time"
@@ -95,13 +96,15 @@ func (n *Nodes) HandleConnection(conn net.Conn) {
 			error.Node,
 			"failed initial handshake read",
 			out.Pair("error", err.Error()))
+		
+		n.bus.WitnessSpore(fmt.Sprintf("Unable to connect to node; failed initial read (error: %s)", sperr.Wire()))
 		writer.WriteString(sperr.Wire())
 		writer.Flush()
 		conn.Close()
 		return
 	}
 
-	n.bus.WitnessSpore(fmt.Sprintf("Node connection attempted: %s", nodeid))
+	n.bus.WitnessSpore(fmt.Sprintf("Node connecting: %s", nodeid))
 
 	nodeid = strings.TrimSpace(nodeid)
 	n.mu.RLock()
@@ -113,6 +116,8 @@ func (n *Nodes) HandleConnection(conn net.Conn) {
 			error.Node,
 			"node not installed",
 			out.Pair("node", nodeid))
+		
+		n.bus.WitnessOut(fmt.Sprintf("Unable to connect to node; node not found (node: %s, error: %s)", nodeid, sperr.Wire()), nodeid)
 		writer.WriteString(sperr.Wire())
 		writer.Flush()
 		conn.Close()
@@ -120,8 +125,9 @@ func (n *Nodes) HandleConnection(conn net.Conn) {
 	}
 
 	// Handle the connection with the node
-	sp_err := node.handleConnection(conn, reader, writer)
+	sp_err := node.handleConnection(conn, reader, writer, n.hyphae)
 	if sp_err != nil {
+		n.bus.WitnessOut(fmt.Sprintf("Unable to connect to node: failed to handle connection (node: %s, error: %s)", nodeid, sp_err.Wire()), nodeid)
 		writer.WriteString(sp_err.Wire())
 		writer.Flush()
 		conn.Close()
@@ -152,11 +158,26 @@ func (n *Nodes) GetManifest(nodeid string) *manifest.Manifest {
 	nodeid = n.resolveId(nodeid)
 
 	n.mu.RLock()
-	defer n.mu.RUnlock()
-
 	node, ok := n.nodes[nodeid]
+	n.mu.RUnlock()
 	if !ok { return nil }
-	
+
+	if node.manifest.ID == "" && n.hyphae != nil {
+		content, err := n.hyphae.ManifestRead(node.manifest.Path)
+		if err == nil {
+			node.manifest.LoadContent(content)
+			checksum, err := n.hyphae.HashFile(node.manifest.Path)
+			if err == nil {
+				if node.manifest.ExpectedChecksum == checksum {
+					node.manifest.Status.Set(status.Verified)
+				} else {
+					node.manifest.Status.Set(status.FailedChecksum)
+				}
+			}
+			n.bus.Register(node)
+		}
+	}
+
 	return node.manifest
 }
 
@@ -253,15 +274,27 @@ func (n *Nodes) Spawn(nodeid string) *error.Error {
 			"cannot spawn; node not installed")
 	}
 
-	cmd := exec.Command(node.registry.Binary)
-	err := cmd.Start()
-	if err != nil {
-		return error.New(
-			error.Generic,
-			error.Node,
-			"failed to spawn node",
-			out.Pair("node", nodeid),
-			out.Pair("error", err.Error()))
+	if file.IsReadable(node.registry.Binary) {
+		cmd := exec.Command(node.registry.Binary)
+		err := cmd.Start()
+		if err != nil {
+			return error.New(
+				error.Generic,
+				error.Node,
+				"failed to spawn node",
+				out.Pair("node", nodeid),
+				out.Pair("error", err.Error()))
+		}
+	} else {
+		err := n.hyphae.Spawn(node.registry.Binary)
+		if err != nil {
+			return error.New(
+				error.Generic,
+				error.Node,
+				"failed to spawn node",
+				out.Pair("node", nodeid),
+				out.Pair("error", err.Error()))
+		}
 	}
 
 	return nil

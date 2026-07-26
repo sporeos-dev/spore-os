@@ -6,6 +6,7 @@ import (
 	"spored/internal/registry"
 	"spored/internal/utilities/file"
 	"spored/internal/utilities/status"
+	"strings"
 )
 
 type binary struct {
@@ -52,7 +53,11 @@ func (b *binary) verify(conn net.Conn) {
 		b.status.Set(status.FailedChecksum)
 		return
 	}
-	if checksum != b.expectedChecksum {
+	expected := b.expectedChecksum
+	if !strings.HasPrefix(expected, "sha256:") {
+		expected = "sha256:" + expected
+	}
+	if checksum != expected {
 		b.status.Set(status.FailedChecksum)
 		return
 	}

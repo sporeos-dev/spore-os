@@ -61,7 +61,7 @@ func (n *node) setBus(bus ibus) {
 // inode
 //
 
-func (n *node) handleConnection(conn net.Conn, reader *bufio.Reader, writer *bufio.Writer) *error.Error {
+func (n *node) handleConnection(conn net.Conn, reader *bufio.Reader, writer *bufio.Writer, hyphae ihyphae) *error.Error {
 
 	err := n.checkManifestForFailure()
 	if err != nil {
@@ -69,6 +69,23 @@ func (n *node) handleConnection(conn net.Conn, reader *bufio.Reader, writer *buf
 	}
 
 	n.manifest.Verify()
+	if n.manifest.Status.Get() == status.RequiresUserSpace {
+		checksum, err := hyphae.HashFile(n.manifest.Path)
+		if err != nil {
+			return err
+		}
+		if checksum == n.manifest.ExpectedChecksum {
+			n.manifest.Status.Set(status.Verified)
+		} else {
+			n.manifest.Status.Set(status.FailedChecksum)
+			return error.New(
+				error.HandshakeDenial,
+				error.Node,
+				"failed manifest verification",
+				out.Pair("checksum", checksum),
+				out.Pair("expected", n.manifest.ExpectedChecksum))
+		}
+	}
 	err = n.checkManifestForFailure()
 	if err != nil {
 		return err
@@ -98,6 +115,23 @@ func (n *node) handleConnection(conn net.Conn, reader *bufio.Reader, writer *buf
 	}
 
 	b.verify(conn)
+	if b.status.Get() == status.RequiresUserSpace {
+		checksum, err := hyphae.HashFile(n.registry.Binary)
+		if err != nil {
+			return err
+		}
+		if checksum == n.registry.BinaryChecksum {
+			b.status.Set(status.Verified)
+		} else {
+			b.status.Set(status.FailedChecksum)
+			return error.New(
+				error.HandshakeDenial,
+				error.Node,
+				"failed manifest verification",
+				out.Pair("checksum", checksum),
+				out.Pair("expected", n.registry.BinaryChecksum))
+		}
+	}
 	err = n.checkBinaryForFailure(b)
 	if err != nil {
 		return err
@@ -112,6 +146,7 @@ func (n *node) handleConnection(conn net.Conn, reader *bufio.Reader, writer *buf
 			out.Pair("binary_status", b.status.String()))
 	}
 
+	n.bus.WitnessOut("OK", n.registry.ID)
 	writer.WriteString("OK\n")
 	writer.Flush()
 

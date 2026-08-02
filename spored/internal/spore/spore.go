@@ -17,9 +17,10 @@ type Spore struct {
 
 	bus ibus
 	hyphae ihyphae
+	permissions ipermissions
 	nodes inodes
 }
-
+	
 func New() *Spore {
 	m := &manifest.Manifest{
 		Status: status.New(),
@@ -35,10 +36,11 @@ func New() *Spore {
 	}
 }
 
-func (s *Spore) Set(bus ibus, hyphae ihyphae, nodes inodes) {
+func (s *Spore) Set(bus ibus, hyphae ihyphae, nodes inodes, permissions ipermissions) {
 	s.bus = bus
 	s.hyphae = hyphae
 	s.nodes = nodes
+	s.permissions = permissions
 
 	s.bus.Register(s)
 }

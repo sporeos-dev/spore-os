@@ -6,7 +6,10 @@ import (
 	"net"
 	"os/exec"
 	"spored/internal/manifest"
+	"spored/internal/message"
+	"spored/internal/permissions"
 	"spored/internal/registry"
+	"spored/internal/utilities/await"
 	"spored/internal/utilities/file"
 	"spored/internal/utilities/out"
 	"spored/internal/utilities/status"
@@ -20,6 +23,9 @@ import (
 const handshakeTimeout = 5 * time.Second
 
 type Nodes struct {
+	index int
+	pending *await.Pending
+
 	registry *registry.Registry
 
 	mu sync.RWMutex
@@ -27,11 +33,14 @@ type Nodes struct {
 
 	bus ibus
 	hyphae ihyphae
+	permissions ipermissions
 	spore ispore
 }
 
 func New() *Nodes {
 	nodes := &Nodes{
+		index : 0,
+		pending: await.New(error.Node),
 		registry: registry.New(),
 		nodes:   make(map[string]*node),
 	}
@@ -48,15 +57,16 @@ func New() *Nodes {
 	return nodes
 }
 
-func (n *Nodes) Set(bus ibus, hyphae ihyphae, spore ispore) {
+func (n *Nodes) Set(bus ibus, hyphae ihyphae, permissions ipermissions, spore ispore) {
 	n.bus = bus
 	n.hyphae = hyphae
+	n.permissions = permissions
 	n.spore = spore
 
 	n.mu.RLock()
 	defer n.mu.RUnlock()
 	for _, el := range n.nodes {
-		el.setBus(bus)
+		el.set(bus, n, permissions)
 	}
 }
 
@@ -69,20 +79,32 @@ func (n *Nodes) Autostart() {
 	n.mu.RLock()
 	defer n.mu.RUnlock()
 	for _, el := range n.nodes {
-		if el.manifest.Autostart {
+		if el.manifest.Start == manifest.Auto {
+			if el.manifest.Space == manifest.Hyphae {
+				n.bus.WitnessSpore(fmt.Sprintf("%s skipped autostarting because it requires hyphae spsace (%s)", el.registry.Name, el.registry.ID))
+				continue
+			}
+
 			err := n.Spawn(el.registry.ID)
 			if err != nil {
-				error.New(
-					error.Generic,
-					error.Node,
-					"autostart failure",
-					out.Pair("node", el.registry.ID))
+				el.Error(
+					error.New(
+						error.Generic,
+						error.Node,
+						"autostart failure",
+						out.Pair("node", el.registry.ID)),
+					"",
+					"")
+				continue
 			}
+
+			n.bus.WitnessSpore(fmt.Sprintf("%s autostarted (%s)", el.registry.Name, el.registry.ID))
 		}
 	}
 }
 
 func (n *Nodes) HandleConnection(conn net.Conn) {
+
 	conn.SetReadDeadline(time.Now().Add(handshakeTimeout))
 	defer conn.SetReadDeadline(time.Time{})
 
@@ -104,9 +126,9 @@ func (n *Nodes) HandleConnection(conn net.Conn) {
 		return
 	}
 
+	nodeid = strings.TrimSpace(nodeid)
 	n.bus.WitnessSpore(fmt.Sprintf("Node connecting: %s", nodeid))
 
-	nodeid = strings.TrimSpace(nodeid)
 	n.mu.RLock()
 	defer n.mu.RUnlock()
 	node, ok := n.nodes[nodeid]
@@ -191,6 +213,8 @@ func (n *Nodes) Install(path string) *error.Error {
 			out.Pair("path", path))
 	}
 
+	var node *node = nil
+
 	// readable, handle via spore
 	if file.IsReadable(path) {
 		manifest := manifest.ManifestFromPath(path)
@@ -200,6 +224,15 @@ func (n *Nodes) Install(path string) *error.Error {
 				error.Node,
 				"read failure",
 				out.Pair("path", path))
+		}
+		
+		if !n.acceptInstallationWarning(manifest) {
+			return error.New(
+				error.UserDenial,
+				error.Node,
+				"installation cancelled due to trust misalignment",
+				out.Pair("node", manifest.ID),
+				out.Pair("trust", string(manifest.Trust)))
 		}
 
 		registryElement := registry.ElementFromManifest(manifest)
@@ -216,8 +249,8 @@ func (n *Nodes) Install(path string) *error.Error {
 			return err
 		}
 
-		node := newNode(registryElement, manifest)
-		node.setBus(n.bus)
+		node = newNode(registryElement, manifest)
+		node.set(n.bus, n, n.permissions)
 		n.nodes[node.registry.ID] = node
 
 	// not readable, handle via hyphae
@@ -227,15 +260,43 @@ func (n *Nodes) Install(path string) *error.Error {
 		if err != nil {
 			return err
 		}
+		
+		if !n.acceptInstallationWarning(manifest) {
+			return error.New(
+				error.UserDenial,
+				error.Node,
+				"installation cancelled due to trust misalignment",
+				out.Pair("node", manifest.ID),
+				out.Pair("trust", string(manifest.Trust)))
+		}
 
 		err = n.registry.Add(registry)
 		if err != nil {
 			return err
 		}
 
-		node := newNode(registry, manifest)
-		node.setBus(n.bus)
+		node = newNode(registry, manifest)
+		node.set(n.bus, n, n.permissions)
 		n.nodes[node.registry.ID] = node
+	}
+
+	if node != nil && 
+		node.manifest.Trust != manifest.System &&
+		node.manifest.Trust != manifest.Developer &&
+		node.manifest.Trust != manifest.Trusted {
+		for _, el := range node.manifest.Permissions {
+			perm, err := n.permissions.Request(node.registry.ID, el.Name, el.Reasons)
+			if err != nil {
+				n.bus.WitnessSpore(fmt.Sprintf("Permission failure during install (%s)", err.Error()))
+				continue
+			}
+			switch perm {
+			case permissions.Always, permissions.Once:
+				n.bus.WitnessSpore(fmt.Sprintf("Permission %s granted to %s.", el.Name, node.registry.ID))	
+			case permissions.No, permissions.Never:
+				n.bus.WitnessSpore(fmt.Sprintf("Permssion %s denied for %s.", el.Name, node.registry.ID))	
+			}
+		}
 	}
 
 	return nil
@@ -261,7 +322,9 @@ func (n *Nodes) Uninstall(nodeid string) *error.Error {
 }
 
 func (n *Nodes) Spawn(nodeid string) *error.Error {
+
 	nodeid = n.resolveId(nodeid)
+	n.bus.WitnessSpore(fmt.Sprintf("Spawning %s", nodeid))
 
 	n.mu.RLock()
 	defer n.mu.RUnlock()
@@ -275,25 +338,45 @@ func (n *Nodes) Spawn(nodeid string) *error.Error {
 	}
 
 	if file.IsReadable(node.registry.Binary) {
-		cmd := exec.Command(node.registry.Binary)
-		err := cmd.Start()
-		if err != nil {
-			return error.New(
-				error.Generic,
-				error.Node,
-				"failed to spawn node",
-				out.Pair("node", nodeid),
-				out.Pair("error", err.Error()))
+		if node.manifest.Space == manifest.Hyphae {
+			err := n.hyphae.Spawn(node.registry.Binary)
+			if err != nil {
+				return error.New(
+					error.Generic,
+					error.Node,
+					"failed to spawn node in the user space, hyphae required",
+					out.Pair("node", nodeid),
+					out.Pair("error", err.Error()))
+			}
+		} else {
+			cmd := exec.Command(node.registry.Binary)
+			err := cmd.Start()
+			if err != nil {
+				return error.New(
+					error.Generic,
+					error.Node,
+					"failed to spawn node in the spore space",
+					out.Pair("node", nodeid),
+					out.Pair("error", err.Error()))
+			}
 		}
 	} else {
-		err := n.hyphae.Spawn(node.registry.Binary)
-		if err != nil {
+		if node.manifest.Space == manifest.Spore {
 			return error.New(
 				error.Generic,
 				error.Node,
-				"failed to spawn node",
-				out.Pair("node", nodeid),
-				out.Pair("error", err.Error()))
+				"failed to spawn node; node requires spore space",
+				out.Pair("node", nodeid))
+		} else {
+			err := n.hyphae.Spawn(node.registry.Binary)
+			if err != nil {
+				return error.New(
+					error.Generic,
+					error.Node,
+					"failed to spawn node in the user space",
+					out.Pair("node", nodeid),
+					out.Pair("error", err.Error()))
+			}
 		}
 	}
 
@@ -306,13 +389,35 @@ func (n *Nodes) Kill(nodeid string) *error.Error {
 	return error.New(
 		error.Generic,
 		error.Node,
-		"not yet implemented")
+		"kill not yet implemented",
+		out.Pair("node", nodeid))
+}
+
+func (n *Nodes) GetState(nodeid string) ([]out.IOut, *error.Error) {
+	nodeid = n.resolveId(nodeid)
+	
+	node, ok := n.nodes[nodeid]
+	if !ok {
+		return nil, error.New(
+			error.Missing,
+			error.Node,
+			"cannot retrieve state; node not installed")
+	}
+
+	return node.state()
 }
 
 //
 //
 // private
+// nodes call
+// helpers
 //
+
+func (n *Nodes) handle() string {
+	n.index++
+	return fmt.Sprintf("nodes-%d", n.index)
+}
 
 func (n *Nodes) resolveId(nodeid string) string {
 	n.mu.RLock()
@@ -331,4 +436,46 @@ func (n *Nodes) resolveId(nodeid string) string {
 	}
 
 	return nodeid
+}
+
+func (n *Nodes) acceptInstallationWarning(m *manifest.Manifest) bool {
+	if m.Trust == manifest.StandardTrust || m.Trust == manifest.Untrusted {
+		return true
+	}
+	
+	handle := n.handle()
+	title := "Installation Warning"
+	var description strings.Builder
+	description.WriteString(fmt.Sprintf(`Do you accept [%s] as a node with a [%s] level of trust?`, m.ID, string(m.Trust)))
+	description.WriteString(fmt.Sprintf(`\n\nThis will grant it permission to all capabilities and is unadvised unless you are absolutely sure of the source.`))
+	raw := fmt.Sprintf(`dialog.alert title="%s" description="%s" entries=[ Grant Deny ] ~%s`, title, description.String(), handle)
+
+	msg, err := message.Request(raw, m.ID)
+	if err != nil {
+		n.bus.WitnessSpore(fmt.Sprintf("Request creation failure (%s)", err.Error()))
+		return false
+	}
+	ch := n.pending.Await(handle)
+	err = n.bus.Request(msg)
+	if err != nil {
+		n.pending.Delete(handle)
+		n.bus.WitnessSpore(fmt.Sprintf("Request sending failure (%s)", err.Error()))
+		return false
+	}
+
+	response, err := n.pending.WaitFor(handle, ch)
+	if err != nil {
+		n.bus.WitnessSpore(fmt.Sprintf("Response failure (%s)", err.Error()))
+		return false
+	}
+	if response.Flag("error") {
+		n.bus.WitnessSpore(fmt.Sprintf("Response failure (%s)", err.Error()))
+		return false
+	}
+	entry, err := response.Arg("entry")
+	if err != nil {
+		n.bus.WitnessSpore(fmt.Sprintf("Response failure (%s)", err.Error()))
+		return false
+	}
+	return entry == "Grant"
 }

@@ -293,21 +293,10 @@ api:
     usage:
       - SPORE.permission.list
       - SPORE.permission.list node=node
-      - SPORE.permission.list command=command
-      - SPORE.permission.list topic=topic
-      - SPORE.permission.list node=node command=command topic=topic
     inputs:
       - name: node
         type: string
         description: Node ID.
-        required: false
-      - name: command
-        type: string
-        description: Command shorthand.
-        required: true
-      - name: topic
-        type: string
-        description: Subscription topics.
         required: true
     outputs:
       - name: permissions
@@ -318,206 +307,72 @@ api:
     description: Request permission. Called by nodes, granted or denied by user.
     risk: standard
     usage:
-      - SPORE.permission.request command=command
-      - SPORE.permission.request topic=topic
-    inputs:
-      - name: command
-        type: string
-        description: Command shorthand.
-        required: false
-      - name: topic
-        type: string
-        description: Subscription topics.
-        required: true
-    outputs:
-      - name: granted
-        type: flag
-        description: Flag present if granted.
-      - name: denied
-        type: flag
-        description: Flag present if denied.
-  
-  - name: SPORE.permission.grant
-    description: Grant permission to a node for a capability.
-    risk: standard
-    usage:
-      - SPORE.permission.grant node=node command=command
-      - SPORE.permission.grant node=node topic=topic
+      - SPORE.permission.request node=node capability=capability
     inputs:
       - name: node
         type: string
         description: Node ID.
         required: true
-      - name: command
+      - name: capability
         type: string
-        description: Command shorthand.
+        description: Capability shorthand.
+        required: true
+      - name: reasons
+        type: array
+        description: Reasons for requesting permission.
         required: false
-      - name: topic
+    outputs:
+      - name: Always
+        type: flag
+        description: Flag present if always granted.
+      - name: Once
+        type: flag
+        description: Flag present if granted this time only.
+      - name: No
+        type: flag
+        description: Flag present if denied.
+      - name: Never
+        type: flag
+        description: Flag present if denied moving forward.
+        notes: 
+          - Not yet meaningfully implemented.
+          - Currently acts the same as No.
+  
+  - name: SPORE.permission.grant
+    description: Grant permission to a node for a capability.
+    risk: standard
+    usage:
+      - SPORE.permission.grant node=node capability=capability
+    inputs:
+      - name: node
         type: string
-        description: Subscription topics.
-        required: false
+        description: Node ID.
+        required: true
+      - name: capability
+        type: string
+        description: Capability shorthand.
+        required: true
     outputs: []
   
   - name: SPORE.permission.revoke
     description: Revoke permission from a node for a capability.
     risk: standard
     usage:
-      - SPORE.permission.revoke node=node command=command
-      - SPORE.permission.revoke node=node topic=topic
+      - SPORE.permission.revoke node=node capability=capability
     inputs:
       - name: node
         type: string
         description: Node ID.
         required: true
-      - name: command
+      - name: capability
         type: string
-        description: Command shorthand.
-        required: false
-      - name: topic
-        type: string
-        description: Subscription topics.
-        required: false
+        description: Capability shorthand.
+        required: true
     outputs: []
   
 # ==================================================================================
-# SPORE.security
+# other
 
-  - name: SPORE.security.keyring.list
-    description: List all public keys on the security keyring.
-    risk: protected
-    usage:
-      - SPORE.security.keyring.list
-    inputs: []
-    outputs: 
-      - name: keys
-        type: string
-        description: List of public keys on the keyring.
-
-  - name: SPORE.security.keyring.info
-    description: Query data of a public key on the security keyring.
-    risk: protected
-    usage:
-      - SPORE.security.keyring.info key=key
-    inputs:
-      - name: key
-        type: string
-        description: Public key.
-        required: true
-    outputs:
-      - name: keyinfo
-        type: object
-        description: Public key information.
-    
-  - name: SPORE.security.keyring.grant
-    description: Grant trust to a public key on the security keyring.
-    risk: protected
-    usage:
-      - SPORE.security.keyring.grant path=/path/to/key.gpg
-    inputs:
-      - name: path
-        type: string
-        description: Path to .gpg file.
-        required: true
-    outputs: []
-
-  - name: SPORE.security.keyring.revoke
-    description: Revoke trust of a public key from the security keyring.
-    risk: protected
-    usage:
-      - SPORE.security.keyring.revoke key=key
-    inputs:
-      - name: key
-        type: string
-        description: Public key.
-        required: true
-    outputs: []
-
-  - name: SPORE.security.signature.sign
-    description: Sign a file, producing a signature file.
-    risk: protected
-    usage:
-      - SPORE.security.signature.sign path=/path/to/file.* passphrase=passphrase
-    inputs:
-      - name: path
-        type: string
-        description: Path to file to sign.
-        required: true
-      - name: passphrase
-        type: string
-        description: Passphrase to access private key.
-        required: true
-    outputs:
-      - name: signature
-        type: string
-        description: Path to signature (*.sig) file.
-  
-  - name: SPORE.security.signature.verify
-    description: Verify a file via its signature file.
-    risk: protected
-    usage:
-      - SPORE.security.signature.verify path=/path/to/file.* signature=/path/to/file.sig key=key
-    inputs:
-      - name: path
-        type: string
-        description: Path to file to verify.
-        required: true
-      - name: signature
-        type: string
-        description: Path to signature file.
-        required: true
-      - name: key
-        type: string
-        description: Public key.
-        required: true
-    outputs:
-      - name: verified
-        type: flag
-        description: Flag present if verification successful.
-      - name: failed
-        type: flag
-        description: Flag present if verification failed.
-
-# ==================================================================================
-# topics
-
-topics:
-  - name: SPORE.node.installed
-    description: Published on node installation.
-    risk: standard
-    usage:
-      - publish SPORE.node.installed node=node
-    outputs:
-      - name: node
-        type: string
-        description: Node ID.
-        
-  - name: SPORE.node.uninstalled
-    description: Published on node uninstallation.
-    risk: standard
-    usage:
-      - publish SPORE.node.uninstalled node=node
-    outputs:
-      - name: node
-        type: string
-        description: Node ID.
-
-  - name: SPORE.node.spawned
-    description: Published on node process spawned.
-    risk: standard
-    usage:
-      - publish SPORE.node.spawned node=node
-    outputs:
-      - name: node
-        type: string
-        description: Node ID.
-
-  - name: SPORE.node.killed
-    description: Published on node process killed.
-    risk: standard
-    usage:
-      - publish SPORE.node.killed node=node
-    outputs:
-      - name: node
-        type: string
-        description: Node ID.
+topics: []
+permissions: []
           

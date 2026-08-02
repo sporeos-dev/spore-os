@@ -1,6 +1,8 @@
 package bus
 
 import (
+	"fmt"
+	"log/slog"
 	"slices"
 	"spored/internal/message"
 	"sync"
@@ -54,6 +56,7 @@ func (w *witness) unregister(n INode) {
 }
 
 func (w *witness) in(raw string, id string) {
+	slog.Info(fmt.Sprintf("[.in] %s: %s", id, raw))
 	msg := message.Witness(message.WitnessIncoming, raw, id)
 
 	w.mu.RLock()
@@ -67,6 +70,7 @@ func (w *witness) in(raw string, id string) {
 }
 
 func (w *witness) out(raw string, id string) {
+	slog.Info(fmt.Sprintf("[out] %s: %s", id, raw))
 	msg := message.Witness(message.WitnessOutgoing, raw, id)
 
 	w.mu.RLock()
@@ -80,6 +84,7 @@ func (w *witness) out(raw string, id string) {
 }
 
 func (w *witness) spore(raw string) {
+	slog.Info(fmt.Sprintf("[.sp] SPORE: %s", raw))
 	msg := message.Witness(message.WitnessSpore, raw, "dev.sporeos.SPORE")
 
 	w.mu.RLock()
@@ -93,6 +98,7 @@ func (w *witness) spore(raw string) {
 }
 
 func (w *witness) node(raw string, id string) {
+	slog.Info(fmt.Sprintf("[.nd] %s: %s", id, raw))
 	msg := message.Witness(message.WitnessNode, raw, id)
 
 	w.mu.RLock()

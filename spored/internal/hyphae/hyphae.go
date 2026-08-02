@@ -6,6 +6,7 @@ import (
 	"spored/internal/manifest"
 	"spored/internal/message"
 	"spored/internal/registry"
+	"spored/internal/utilities/await"
 	"spored/internal/utilities/error"
 	"spored/internal/utilities/out"
 	"spored/internal/utilities/status"
@@ -16,24 +17,24 @@ import (
 
 type Hyphae struct {
 	index   int
-	pending pending
+	pending *await.Pending
 	bus     ibus
 	nodes   inodes
+	permissions ipermissions
 	spore   ispore
 }
 
 func New() *Hyphae {
 	return &Hyphae{
 		index: 0,
-		pending: pending{
-			channels: make(map[string]chan message.Message),
-		},
+		pending: await.New(error.Hyphae).WithTimeout(time.Second * 2),
 	}
 }
 
-func (h *Hyphae) Set(bus ibus, nodes inodes, spore ispore) {
+func (h *Hyphae) Set(bus ibus, nodes inodes, permissions ipermissions,spore ispore) {
 	h.bus = bus
 	h.nodes = nodes
+	h.permissions = permissions
 	h.spore = spore
 
 	h.bus.Register(h)
@@ -127,15 +128,13 @@ func (h *Hyphae) manifestRead(path string) (string, *error.Error) {
 	if err != nil {
 		return "", err
 	}
-	ch := h.await(handle)
+	ch := h.pending.Await(handle)
 	err = h.bus.Request(msg)
 	if err != nil {
-		h.pending.mu.Lock()
-		delete(h.pending.channels, handle)
-		h.pending.mu.Unlock()
+		h.pending.Delete(handle)
 		return "", err
 	}
-	response, err := h.waitFor(handle, ch)
+	response, err := h.pending.WaitFor(handle, ch)
 	if err != nil {
 		return "", err
 	}
@@ -157,15 +156,13 @@ func (h *Hyphae) binaryHash(pid int) (string, *error.Error) {
 	if err != nil {
 		return "", err
 	}
-	ch := h.await(handle)
+	ch := h.pending.Await(handle)
 	err = h.bus.Request(msg)
 	if err != nil {
-		h.pending.mu.Lock()
-		delete(h.pending.channels, handle)
-		h.pending.mu.Unlock()
+		h.pending.Delete(handle)
 		return "", err
 	}
-	response, err := h.waitFor(handle, ch)
+	response, err := h.pending.WaitFor(handle, ch)
 	if err != nil {
 		return "", err
 	}
@@ -187,15 +184,13 @@ func (h *Hyphae) fileHash(path string) (string, *error.Error) {
 	if err != nil {
 		return "", err
 	}
-	ch := h.await(handle)
+	ch := h.pending.Await(handle)
 	err = h.bus.Request(msg)
 	if err != nil {
-		h.pending.mu.Lock()
-		delete(h.pending.channels, handle)
-		h.pending.mu.Unlock()
+		h.pending.Delete(handle)
 		return "", err
 	}
-	response, err := h.waitFor(handle, ch)
+	response, err := h.pending.WaitFor(handle, ch)
 	if err != nil {
 		return "", err
 	}
@@ -211,21 +206,19 @@ func (h *Hyphae) fileHash(path string) (string, *error.Error) {
 
 func (h *Hyphae) nodeSpawn(path string) *error.Error {
 	handle := h.handle()
-	raw := fmt.Sprintf("HYPHAE.node.spawn binary=%s ~%s", path, handle)
+	raw := fmt.Sprintf("HYPHAE.node.spawn binary=\"%s\" ~%s", path, handle)
 	h.bus.WitnessSpore(raw)
 	msg, err := message.Request(raw, h.Id())
 	if err != nil {
 		return err
 	}
-	ch := h.await(handle)
+	ch := h.pending.Await(handle)
 	err = h.bus.Request(msg)
 	if err != nil {
-		h.pending.mu.Lock()
-		delete(h.pending.channels, handle)
-		h.pending.mu.Unlock()
+		h.pending.Delete(handle)
 		return err
 	}
-	response, err := h.waitFor(handle, ch)
+	response, err := h.pending.WaitFor(handle, ch)
 	if err != nil {
 		return err
 	}
@@ -243,15 +236,13 @@ func (h *Hyphae) nodeKill(pid int) *error.Error {
 	if err != nil {
 		return err
 	}
-	ch := h.await(handle)
+	ch := h.pending.Await(handle)
 	err = h.bus.Request(msg)
 	if err != nil {
-		h.pending.mu.Lock()
-		delete(h.pending.channels, handle)
-		h.pending.mu.Unlock()
+		h.pending.Delete(handle)
 		return err
 	}
-	response, err := h.waitFor(handle, ch)
+	response, err := h.pending.WaitFor(handle, ch)
 	if err != nil {
 		return err
 	}
@@ -271,26 +262,6 @@ func (h *Hyphae) nodeKill(pid int) *error.Error {
 func (h *Hyphae) handle() string {
 	h.index++
 	return fmt.Sprintf("hyphae-%d", h.index)
-}
-
-func (h *Hyphae) await(handle string) chan message.Message {
-	ch := make(chan message.Message, 1)
-	h.pending.mu.Lock()
-	h.pending.channels[handle] = ch
-	h.pending.mu.Unlock()
-	return ch
-}
-
-func (h *Hyphae) waitFor(handle string, ch chan message.Message) (message.Message, *error.Error) {
-	select {
-	case msg := <-ch:
-		return msg, nil
-	case <-time.After(5 * time.Second):
-		h.pending.mu.Lock()
-		delete(h.pending.channels, handle)
-		h.pending.mu.Unlock()
-		return nil, error.New(error.Timeout, error.Hyphae, "timed out waiting for response", out.Pair("handle", handle))
-	}
 }
 
 //
@@ -315,16 +286,5 @@ func (h *Hyphae) GetManifest() *manifest.Manifest {
 }
 
 func (h *Hyphae) Receive(msg message.Message) *error.Error {
-	handle := msg.Handle()
-	h.pending.mu.Lock()
-	ch, ok := h.pending.channels[handle]
-	if ok {
-		delete(h.pending.channels, handle)
-	}
-	h.pending.mu.Unlock()
-
-	if ok {
-		ch <- msg
-	}
-	return nil
+	return h.pending.Receive(msg)
 }

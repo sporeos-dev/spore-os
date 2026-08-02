@@ -8,6 +8,7 @@ import (
 	"spored/internal/hyphae"
 	"spored/internal/nodes"
 	"spored/internal/pal"
+	"spored/internal/permissions"
 	"spored/internal/spore"
 	"spored/internal/utilities/error"
 	"spored/internal/utilities/out"
@@ -18,6 +19,7 @@ type Hub struct {
 	hyphae *hyphae.Hyphae
 	nodes *nodes.Nodes
 	spore *spore.Spore
+	permissions *permissions.Manager
 
 	listener net.Listener
 }
@@ -29,12 +31,14 @@ func New() (*Hub, *error.Error) {
 		hyphae: hyphae.New(),
 		nodes: nodes.New(),
 		spore: spore.New(),
+		permissions: permissions.New(),
 	}
 
-	h.bus.Set(h.hyphae, h.nodes, h.spore)
-	h.hyphae.Set(h.bus, h.nodes, h.spore)
-	h.nodes.Set(h.bus, h.hyphae, h.spore)
-	h.spore.Set(h.bus, h.hyphae, h.nodes)
+	h.bus.Set(h.hyphae, h.nodes, h.permissions, h.spore)
+	h.hyphae.Set(h.bus, h.nodes, h.permissions, h.spore)
+	h.nodes.Set(h.bus, h.hyphae, h.permissions, h.spore)
+	h.permissions.Set(h.bus, h.hyphae, h.nodes, h.spore)
+	h.spore.Set(h.bus, h.hyphae, h.nodes, h.permissions)
 
 	go h.listen()
 	return h, nil
@@ -44,6 +48,7 @@ func (h *Hub) Close() {
 	h.bus.Close()
 	h.hyphae.Close()
 	h.nodes.Close()
+	h.permissions.Close()
 	h.spore.Close()
 
 	if h.listener != nil {

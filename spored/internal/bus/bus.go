@@ -13,6 +13,7 @@ type Bus struct {
 	
 	hyphae ihyphae
 	nodes inodes
+	permissions ipermissions
 	spore ispore
 }
 
@@ -25,9 +26,10 @@ func New() *Bus {
 	}
 }
 
-func (b *Bus) Set(hyphae ihyphae, nodes inodes, spore ispore) {
+func (b *Bus) Set(hyphae ihyphae, nodes inodes, permissions ipermissions, spore ispore) {
 	b.hyphae = hyphae
 	b.nodes = nodes
+	b.permissions = permissions
 	b.spore = spore
 }
 

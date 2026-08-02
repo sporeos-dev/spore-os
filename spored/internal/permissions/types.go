@@ -1,9 +1,17 @@
-package hyphae
+package permissions
 
 import (
 	"spored/internal/bus"
 	"spored/internal/message"
 	"spored/internal/utilities/error"
+)
+
+type Value string
+const (
+	Always Value = "always"
+	Once Value = "once"
+	No Value = "no"
+	Never Value = "never"
 )
 
 type ibus interface {
@@ -13,8 +21,8 @@ type ibus interface {
 	Request(msg message.Message) *error.Error
 }
 
-type inodes interface {}
+type ihyphae interface {}
 
-type ipermissions interface {}
+type inodes interface {}
 
 type ispore interface {}

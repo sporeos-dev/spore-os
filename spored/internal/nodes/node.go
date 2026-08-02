@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"net"
 	"spored/internal/manifest"
 	"spored/internal/message"
@@ -17,10 +16,20 @@ import (
 	"sync"
 )
 
+type spawner interface {
+	Spawn(nodeid string) *error.Error
+}
+
+type permitter interface {
+	Can(nodeid string, capability string) bool
+}
+
 type node struct {
 	registry *registry.Element
 	manifest *manifest.Manifest
 	bus ibus
+	spawner spawner
+	permitter permitter
 
 	mu sync.RWMutex
 	conn net.Conn
@@ -51,9 +60,25 @@ func (n *node) close() {
 	n.bus.Unregister(n)
 }
 
-func (n *node) setBus(bus ibus) {
+func (n *node) set(bus ibus, spawner spawner, permitter permitter) {
+	n.spawner = spawner
 	n.bus = bus
+	n.permitter = permitter
 	n.bus.Register(n)
+}
+
+func (n *node) state() ([]out.IOut, *error.Error) {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+
+	hasConn := "true"
+	if n.conn == nil {
+		hasConn = "false"
+	}
+
+	outs := make([]out.IOut, 0)
+	outs = append(outs, out.Pair("connected", hasConn))
+	return outs, nil
 }
 
 //
@@ -151,10 +176,12 @@ func (n *node) handleConnection(conn net.Conn, reader *bufio.Reader, writer *buf
 	writer.Flush()
 
 	n.mu.Lock()
-	defer n.mu.Unlock()
 	n.conn = conn
 	n.reader = reader
 	n.writer = writer
+	n.mu.Unlock()
+
+	n.bus.WitnessSpore(fmt.Sprintf("%s connected after successful handshake (%s)", n.registry.Name, n.registry.ID))
 
 	go n.listen()
 	return nil
@@ -166,10 +193,10 @@ func (n *node) listen() {
 		raw, err := n.reader.ReadString('\n')
 		if err != nil {
 			if err == io.EOF || errors.Is(err, net.ErrClosed) {
-				slog.Info("Disconnecting", "node", n.registry.ID)
+				n.bus.WitnessSpore(fmt.Sprintf("%s disconnecting (%s)", n.registry.Name, n.registry.ID))
 				break
 			} else {
-				slog.Warn("Failure to read message", "node", n.registry.ID)
+				n.bus.WitnessSpore(fmt.Sprintf("%s failed to read (%s, err %s", n.registry.Name, n.registry.ID, err.Error()))
 				continue
 			}
 		}
@@ -219,10 +246,23 @@ func (n *node) listen() {
 				n.Error(err, "", "")
 				continue
 			}
+			
+			// if n.manifest.Trust == manifest.StandardTrust || n.manifest.Trust == manifest.Untrusted {
+			// 	command := msg.Command()
+			// 	if !n.permitter.Can(n.registry.ID, command) {
+			// 		n.Error(error.New(
+			// 			error.NotPermitted,
+			// 			error.Node,
+			// 			"permission required",
+			// 			out.Pair("node", n.registry.ID),
+			// 			out.Pair("capability", command)), "", "")
+			// 		return
+			// 	}
+			// }
+
 			if err := n.bus.Request(msg); err != nil {
 				n.Error(err, msg.Handle(), msg.Command())
 			}
-
 		}
 	}
 
@@ -264,11 +304,19 @@ func (n *node) Receive(message message.Message) *error.Error {
 	defer n.mu.RUnlock()
 
 	if n.writer == nil {
-		return error.New(
-			error.Generic,
-			error.Node,
-			"node not connected",
-			out.Pair("node", n.registry.ID))
+		if n.manifest.Start == manifest.Lazy {
+			return error.New(
+				error.Generic,
+				error.Node,
+				"lazy spawning not yet implemented",
+				out.Pair("node", n.registry.ID))
+		} else {
+			return error.New(
+				error.Generic,
+				error.Node,
+				"node not connected",
+				out.Pair("node", n.registry.ID))
+		}
 	}
 
 	n.writer.WriteString(message.Get() + "\n")
@@ -292,6 +340,7 @@ func (n *node) Error(err *error.Error, handle string, subject string) {
 		wire = err.Wire()
 	}
 
+	n.bus.WitnessOut(fmt.Sprintf("%s failed to route (%s, err %s)", n.registry.Name, n.registry.ID, err.Witness()), n.registry.ID)
 	n.writer.WriteString(wire + "\n")
 	n.writer.Flush()
 

@@ -18,10 +18,12 @@ type Manifest struct {
 	Schema      string          `yaml:"schema"`
 	Version     string          `yaml:"version"`
 	App         string          `yaml:"app"`
-	Autostart   bool            `yaml:"autostart"`
+	Start   	Start           `yaml:"start"`
+	Space		Space			`yaml:"space"`
 	Witness		bool			`yaml:"witness"`
 	Api         []Command       `yaml:"api"`
 	Topics		[]Topic			`yaml:"topics"`	
+	Permissions []Permission	`yaml:"permissions"`
 	Errors      []ManifestError `yaml:"errors"`
 
 	Status status.Status
@@ -46,6 +48,11 @@ type Topic struct {
 	Usage		[]string  `yaml:"usage"`
 	Outputs		*[]Output `yaml:"outputs"`
 	Notes		*[]string `yaml:"notes"`
+}
+
+type Permission struct {
+	Name		string		`yaml:"name"`
+	Reasons		[]string	`yaml:"reasons"`
 }
 
 type Input struct {

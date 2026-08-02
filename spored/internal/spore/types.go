@@ -4,7 +4,9 @@ import (
 	"spored/internal/bus"
 	"spored/internal/manifest"
 	"spored/internal/message"
+	"spored/internal/permissions"
 	"spored/internal/utilities/error"
+	"spored/internal/utilities/out"
 )
 
 type ibus interface {
@@ -24,5 +26,13 @@ type inodes interface {
 	Uninstall(nodeid string) *error.Error
 	Spawn(nodeid string) *error.Error
 	Kill(nodeid string) *error.Error
+	GetState(nodeid string) ([]out.IOut, *error.Error)
+}
+
+type ipermissions interface {
+	List(nodeid string) ([]string, *error.Error)
+	Grant(nodeid string, capability string) *error.Error
+	Revoke(nodeid string, capability string) *error.Error
+	Request(nodeid string, capability string, reasons []string) (permissions.Value, *error.Error)
 }
 

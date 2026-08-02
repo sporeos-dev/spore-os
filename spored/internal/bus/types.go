@@ -18,4 +18,6 @@ type ihyphae interface {}
 
 type inodes interface {}
 
+type ipermissions interface {}
+
 type ispore interface {}

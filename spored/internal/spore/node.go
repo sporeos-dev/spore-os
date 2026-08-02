@@ -59,12 +59,21 @@ func (s *Spore) nodeHelp(request message.Message) *error.Error {
 
 func (s *Spore) nodeState(request message.Message) *error.Error {
 	
+	node, err := request.Arg("node")
+	if err != nil {
+		return err
+	}
+
 	go func() {
-		err := error.New(
-			error.NotImplemented,
-			error.Spore,
-			"node state not yet implemented")
-		s.respondError(request, err)
+		state, err := s.nodes.GetState(node)
+		if err != nil {
+			s.respondError(request, err)
+			return
+		}
+
+		s.respond(
+			request,
+			state...)
 	}()
 
 	return nil

@@ -1,17 +1,17 @@
 package manifest
 
-type Start string
+type Launch string
 const (
-	Auto Start = "auto"
-	Lazy Start = "lazy"
-	Manual Start = "manual"
+	Auto Launch = "auto"
+	Lazy Launch = "lazy"
+	Manual Launch = "manual"
 )
 
-type Space string
+type Namespace string
 const (
-	Spore Space = "spore"
-	Hyphae Space = "hyphae"
-	Any Space = "any"
+	Spore Namespace = "spore"
+	Hyphae Namespace = "hyphae"
+	Any Namespace = "any"
 )
 
 type Trust string

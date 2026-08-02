@@ -54,15 +54,11 @@ api:
     risk: standard
     usage:
       - SPORE.node.list
-      - SPORE.node.list connected
-    inputs:
-      - name: connected
-        type: flag
-        description: Append the 'connected' token to each node that is currently connected.
+    inputs: []
     outputs:
       - name: nodes
         type: array
-        description: List of node IDs. Additional information controlled by flags.
+        description: List of node IDs.
 
   - name: SPORE.node.help
     description: Get help with a node.
@@ -199,10 +195,10 @@ api:
     description: Get help for an error code.
     risk: standard
     usage:
-      - SPORE.error.help errorcode=RouteNotFound
-      - SPORE.error.help errorcode=clock.err.invalid_timezone
+      - SPORE.error.help code=RouteNotFound
+      - SPORE.error.help code=clock.err.invalid_timezone
     inputs:
-      - name: errorcode
+      - name: code
         type: string
         description: Error code.
         required: true

@@ -4,6 +4,7 @@ type Code string
 const (
 	ConnectionFailure Code = "ConnectionFailure"
 	Generic Code = "Generic"
+	HandleInUse Code = "HandleInUse"
 	HandshakeDenial Code = "HandshakeDenial"
 	InitializationFailure Code = "InitializationFailure"
 	Malformed Code = "Malformed"
@@ -11,6 +12,7 @@ const (
 	NotApplicable Code = "NotApplicable"
 	NotImplemented Code = "NotImplemented"
 	NotPermitted Code = "NotPermitted"
+	ReservedLanguage Code = "ReservedLanguage"
 	Timeout Code = "Timeout"
 	UserDenial Code = "UserDenial"
 )

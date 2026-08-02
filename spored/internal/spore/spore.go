@@ -126,7 +126,7 @@ func (s *Spore) Receive(request message.Message) *error.Error {
 	case "SPORE.topic.subscribe": return s.topicSubscribe(request)
 	case "SPORE.topic.unsubscribe": return s.topicUnsubscribe(request)
 
-	case "SPORE.permissions.list": return s.permissionList(request)
+	case "SPORE.permission.list": return s.permissionList(request)
 	case "SPORE.permission.request": return s.permissionRequest(request)
 	case "SPORE.permission.grant": return s.permissionGrant(request)
 	case "SPORE.permission.revoke": return s.permissionRevoke(request)

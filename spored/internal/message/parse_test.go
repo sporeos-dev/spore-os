@@ -268,7 +268,8 @@ func TestRequest_Get(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if m.Get() != raw {
+	want := raw + " cast=com.example.caller"
+	if m.Get() != want {
 		t.Errorf("Get(): got %q", m.Get())
 	}
 }

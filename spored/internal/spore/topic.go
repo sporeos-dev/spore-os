@@ -1,6 +1,7 @@
 package spore
 
 import (
+	"fmt"
 	"spored/internal/message"
 	"spored/internal/utilities/error"
 	"spored/internal/utilities/out"
@@ -141,8 +142,48 @@ func (s *Spore) topicSubscribe(request message.Message) *error.Error {
 		return err
 	}
 	cast := request.Cast()
-	
+
 	go func() {
+		// Check the topic exists in some installed node's manifest.
+		found := false
+		for _, nodeid := range s.nodes.GetNodes() {
+			m := s.nodes.GetManifest(nodeid)
+			if m == nil {
+				continue
+			}
+			for _, t := range m.Topics {
+				if t.Name == topic {
+					found = true
+					break
+				}
+			}
+			if found {
+				break
+			}
+		}
+		if !found {
+			err := error.New(
+				error.Missing,
+				error.Spore,
+				"topic not found",
+				out.Pair("topic", topic))
+			s.respondError(request, err)
+			return
+		}
+
+		// Check the subscribing node has permission for this capability.
+		if !s.permissions.Can(cast, topic) {
+			s.bus.WitnessSpore(fmt.Sprintf("Subscription denied: %s lacks permission for topic %s", cast, topic))
+			err := error.New(
+				error.NotPermitted,
+				error.Spore,
+				"permission required to subscribe",
+				out.Pair("node", cast),
+				out.Pair("topic", topic))
+			s.respondError(request, err)
+			return
+		}
+
 		err := s.bus.Subscribe(cast, topic)
 		if err != nil {
 			s.respondError(request, err)

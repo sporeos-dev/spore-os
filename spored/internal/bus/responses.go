@@ -42,6 +42,15 @@ func (r *responses) request(msg message.Message) *error.Error {
 	handle := msg.Handle()
 	nodeid := msg.Cast()
 
+	_, ok := r.responses[handle]
+	if ok {
+		return error.New(
+			error.HandleInUse,
+			error.Bus,
+			"request handle already in use",
+			out.Pair("handle", handle))
+	}
+
 	r.responses[handle] = nodeid
 	return nil
 }

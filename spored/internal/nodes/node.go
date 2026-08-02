@@ -32,6 +32,8 @@ type node struct {
 	permitter permitter
 
 	mu sync.RWMutex
+	jsonMu sync.Mutex
+	jsonHandles map[string]bool
 	conn net.Conn
 	reader *bufio.Reader
 	writer *bufio.Writer
@@ -48,6 +50,7 @@ func newNode(registry *registry.Element, manifest *manifest.Manifest) *node {
 		registry: registry,
 		manifest: manifest,
 		bus: nil,
+		jsonHandles: make(map[string]bool),
 	}
 
 	n.manifest.Verify()
@@ -220,6 +223,25 @@ func (n *node) listen() {
 				n.Error(err, "", "")
 				continue
 			}
+			
+			topic := broadcast.Topic()
+			ok := false
+			for _, el := range n.manifest.Topics {
+				if topic == el.Name {
+					ok = true
+					break
+				}
+			}
+			if !ok {
+				n.Error(error.New(
+					error.NotPermitted,
+					error.Node,
+					"topic not announced in the manifest",
+					out.Pair("node", n.registry.ID),
+					out.Pair("topic", topic)), "", "")
+				continue
+			}
+
 			if err := n.bus.Broadcast(broadcast); err != nil {
 				n.Error(err, "", "")
 			}
@@ -262,6 +284,10 @@ func (n *node) listen() {
 
 			if err := n.bus.Request(msg); err != nil {
 				n.Error(err, msg.Handle(), msg.Command())
+			} else if msg.Flag("json") {
+				n.jsonMu.Lock()
+				n.jsonHandles[msg.Handle()] = true
+				n.jsonMu.Unlock()
 			}
 		}
 	}
@@ -304,7 +330,7 @@ func (n *node) Receive(message message.Message) *error.Error {
 	defer n.mu.RUnlock()
 
 	if n.writer == nil {
-		if n.manifest.Start == manifest.Lazy {
+		if n.manifest.Launch == manifest.Lazy {
 			return error.New(
 				error.Generic,
 				error.Node,
@@ -319,7 +345,18 @@ func (n *node) Receive(message message.Message) *error.Error {
 		}
 	}
 
-	n.writer.WriteString(message.Get() + "\n")
+	wire := message.Get()
+	if !message.IsWitness() {
+		n.jsonMu.Lock()
+		wantsJSON := n.jsonHandles[message.Handle()]
+		delete(n.jsonHandles, message.Handle())
+		n.jsonMu.Unlock()
+		if wantsJSON {
+			wire = message.ToJSON()
+		}
+	}
+
+	n.writer.WriteString(wire + "\n")
 	n.writer.Flush()
 
 	if !message.IsWitness() {

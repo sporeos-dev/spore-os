@@ -18,8 +18,8 @@ type Manifest struct {
 	Schema      string          `yaml:"schema"`
 	Version     string          `yaml:"version"`
 	App         string          `yaml:"app"`
-	Start   	Start           `yaml:"start"`
-	Space		Space			`yaml:"space"`
+	Launch 		Launch          `yaml:"launch"`
+	Namespace	Namespace		`yaml:"namespace"`
 	Witness		bool			`yaml:"witness"`
 	Api         []Command       `yaml:"api"`
 	Topics		[]Topic			`yaml:"topics"`	

@@ -79,8 +79,8 @@ func (n *Nodes) Autostart() {
 	n.mu.RLock()
 	defer n.mu.RUnlock()
 	for _, el := range n.nodes {
-		if el.manifest.Start == manifest.Auto {
-			if el.manifest.Space == manifest.Hyphae {
+		if el.manifest.Launch == manifest.Auto {
+			if el.manifest.Namespace == manifest.Hyphae {
 				n.bus.WitnessSpore(fmt.Sprintf("%s skipped autostarting because it requires hyphae spsace (%s)", el.registry.Name, el.registry.ID))
 				continue
 			}
@@ -225,7 +225,15 @@ func (n *Nodes) Install(path string) *error.Error {
 				"read failure",
 				out.Pair("path", path))
 		}
-		
+
+		if msg := manifest.ValidateReservedLanguage(); msg != "" {
+			return error.New(
+				error.ReservedLanguage,
+				error.Node,
+				msg,
+				out.Pair("node", manifest.ID))
+		}
+
 		if !n.acceptInstallationWarning(manifest) {
 			return error.New(
 				error.UserDenial,
@@ -260,7 +268,15 @@ func (n *Nodes) Install(path string) *error.Error {
 		if err != nil {
 			return err
 		}
-		
+
+		if msg := manifest.ValidateReservedLanguage(); msg != "" {
+			return error.New(
+				error.ReservedLanguage,
+				error.Node,
+				msg,
+				out.Pair("node", manifest.ID))
+		}
+
 		if !n.acceptInstallationWarning(manifest) {
 			return error.New(
 				error.UserDenial,
@@ -338,7 +354,7 @@ func (n *Nodes) Spawn(nodeid string) *error.Error {
 	}
 
 	if file.IsReadable(node.registry.Binary) {
-		if node.manifest.Space == manifest.Hyphae {
+		if node.manifest.Namespace == manifest.Hyphae {
 			err := n.hyphae.Spawn(node.registry.Binary)
 			if err != nil {
 				return error.New(
@@ -361,7 +377,7 @@ func (n *Nodes) Spawn(nodeid string) *error.Error {
 			}
 		}
 	} else {
-		if node.manifest.Space == manifest.Spore {
+		if node.manifest.Namespace == manifest.Spore {
 			return error.New(
 				error.Generic,
 				error.Node,

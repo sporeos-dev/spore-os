@@ -15,6 +15,7 @@ type ibus interface {
 	Register(node bus.INode)
 	Unregister(node bus.INode)
 	Response(msg message.Message) *error.Error
+	WitnessSpore(msg string)
 }
 
 type ihyphae interface {}
@@ -34,5 +35,6 @@ type ipermissions interface {
 	Grant(nodeid string, capability string) *error.Error
 	Revoke(nodeid string, capability string) *error.Error
 	Request(nodeid string, capability string, reasons []string) (permissions.Value, *error.Error)
+	Can(nodeid string, capability string) bool
 }
 

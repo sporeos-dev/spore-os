@@ -1,6 +1,8 @@
 package message
 
 import (
+	"encoding/json"
+	"fmt"
 	"spored/internal/utilities/error"
 	"spored/internal/utilities/out"
 )
@@ -30,7 +32,7 @@ func Broadcast(raw string, id string) (Message, *error.Error) {
 }
 
 func (b *broadcast) Get() string {
-	return b.raw
+	return fmt.Sprintf(`%s cast=%s`, b.raw, b.id)
 }
 
 func (b *broadcast) IsWitness() bool {
@@ -72,6 +74,20 @@ func (b *broadcast) Flag(flag string) bool {
 
 func (b *broadcast) Handle() string {
 	return "n/a"
+}
+
+func (b *broadcast) ToJSON() string {
+	result := map[string]interface{}{
+		"topic": b.topic,
+		"cast":  b.id,
+		"args":  b.args,
+		"flags": b.flags,
+	}
+	data, err := json.Marshal(result)
+	if err != nil {
+		return "{}"
+	}
+	return string(data)
 }
 
 func (b *broadcast) Topic() string {

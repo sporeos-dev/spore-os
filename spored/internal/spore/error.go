@@ -50,7 +50,7 @@ func (s *Spore) errorList(request message.Message) *error.Error {
 
 func (s *Spore) errorHelp(request message.Message) *error.Error {
 
-	errid, err := request.Arg("error")
+	errid, err := request.Arg("code")
 	if err != nil {
 		return err
 	}

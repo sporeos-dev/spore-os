@@ -1,6 +1,8 @@
 package message
 
 import (
+	"encoding/json"
+	"fmt"
 	"spored/internal/utilities/error"
 	"spored/internal/utilities/out"
 )
@@ -32,7 +34,7 @@ func Response(raw string, captureID string) (Message, *error.Error) {
 }
 
 func (r *response) Get() string {
-	return r.raw
+	return fmt.Sprintf(`%s ok capture=%s`, r.raw, r.id)
 }
 
 func (r *response) IsWitness() bool {
@@ -74,6 +76,21 @@ func (r *response) Flag(flag string) bool {
 
 func (r *response) Handle() string {
 	return r.handle
+}
+
+func (r *response) ToJSON() string {
+	result := map[string]interface{}{
+		"command": r.command,
+		"handle":  r.handle,
+		"capture": r.id,
+		"args":    r.args,
+		"flags":   r.flags,
+	}
+	data, err := json.Marshal(result)
+	if err != nil {
+		return "{}"
+	}
+	return string(data)
 }
 
 func (r *response) Topic() string {

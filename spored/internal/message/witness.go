@@ -72,6 +72,10 @@ func (w *witness) Handle() string {
 	return "n/a"
 }
 
+func (w *witness) ToJSON() string {
+	return w.raw
+}
+
 func (w *witness) Topic() string {
 	return "n/a"
 }

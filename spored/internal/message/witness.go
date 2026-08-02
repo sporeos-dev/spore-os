@@ -2,62 +2,44 @@ package message
 
 import (
 	"fmt"
-	"spored/internal/utilities/error"
 	"time"
-)
-
-type WitnessType string
-const (
-	WitnessIncoming WitnessType = "spore_incoming"
-	WitnessOutgoing WitnessType = "spore_outgoing"
-	WitnessSpore WitnessType = "spore_event"
-	WitnessNode WitnessType = "spore_node"
 )
 
 type witness struct {
 	raw string
+	cast string
 }
 
-func Witness(wtype WitnessType, body string, id string) Message {
-	t := time.Now().UnixMilli()
-	var raw string
-	switch wtype {
-	case WitnessNode:
-		raw = fmt.Sprintf("witness %s cast=%s %s spore_time=%d", body, id, wtype, t)
-	case WitnessIncoming:
-		raw = fmt.Sprintf("witness %s %s spore_time=%d", body, wtype, t)
-	case WitnessOutgoing:
-		raw = fmt.Sprintf("witness %s %s spore_time=%d", body, wtype, t)
-	case WitnessSpore:
-		raw = fmt.Sprintf("witness %s %s spore_time=%d", body, wtype, t)
+// from spore
+func Witness(body string) Message {
+	return &witness{
+		raw: body,
+		cast: "n/a",
 	}
+}
+
+// from node
+func Node(raw string, cast string) Message {
 	return &witness{
 		raw: raw,
+		cast: cast,
 	}
 }
 
-func (w *witness) Get() string {
-	return w.raw
-}
-
-func (w *witness) IsWitness() bool {
-	return true
-}
-
-func (w *witness) Command() string {
+func (w *witness) Capability() string {
 	return "n/a"
 }
 
 func (w *witness) Cast() string {
+	return w.cast
+}
+
+func (w *witness) Capture() string {
 	return "n/a"
 }
 
-func (w *witness) Arg(key string) (string, *error.Error) {
-	return "", error.New(
-		error.NotApplicable,
-		error.Message,
-		"witness messages do not support arguments",
-		nil)
+func (w *witness) Arg(key string) (string, bool) {
+	return "", false
 }
 
 func (w *witness) ArgIf(key string, ifnot string) string {
@@ -72,10 +54,29 @@ func (w *witness) Handle() string {
 	return "n/a"
 }
 
-func (w *witness) ToJSON() string {
-	return w.raw
+// func (w *witness) ToJSON() string {
+// 	return w.raw
+// }
+
+func (w *witness) Wire() string {
+	return "n/a"
 }
 
-func (w *witness) Topic() string {
-	return "n/a"
+// raw
+// --> Could be anything.
+// witness spore: +witness +message +spore_event +spore_time
+// --> witness body="<raw>" spore_event spore_time=time
+// witness node: +witness +body +cast +spore_node +spore_time
+// --> witness body="<raw>" cast=witnesser.id spore_node spore_time=time 
+func (w *witness) Witness() string {
+	t := time.Now().UnixMilli()
+	
+	// spore_event
+	if w.cast == "n/a" {
+		return fmt.Sprintf(`witness body="%s" spore_event spore_time=%d`, w.raw, t)	
+
+	// spore_node
+	} else {
+		return fmt.Sprintf(`witness body="%s" cast=%s spore_node spore_time=%d`, w.raw, w.cast, t)
+	}
 }

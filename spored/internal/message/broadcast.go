@@ -1,10 +1,8 @@
 package message
 
 import (
-	"encoding/json"
 	"fmt"
-	"spored/internal/utilities/error"
-	"spored/internal/utilities/out"
+	"time"
 )
 
 type broadcast struct {
@@ -14,12 +12,14 @@ type broadcast struct {
 	topic string 
 	args map[string]string
 	flags []string
+
+	incomingSent bool
 }
 
-func Broadcast(raw string, id string) (Message, *error.Error) {
-	parsed, err := parseBroadcast(raw)
-	if err != nil {
-		return nil, err
+func Broadcast(raw string, id string) (Message, bool) {
+	parsed, ok := parseBroadcast(raw)
+	if !ok {
+		return nil, false
 	}
 	b := &broadcast{
 		raw: raw,
@@ -28,19 +28,10 @@ func Broadcast(raw string, id string) (Message, *error.Error) {
 		args: parsed.args,
 		flags: parsed.flags,
 	}
-	return b, nil
+	return b, true
 }
 
-func (b *broadcast) Get() string {
-	return fmt.Sprintf(`%s cast=%s`, b.raw, b.id)
-}
-
-func (b *broadcast) IsWitness() bool {
-	return false
-}
-
-// Command returns the topic subject (the token after "publish").
-func (b *broadcast) Command() string {
+func (b *broadcast) Capability() string {
 	return b.topic
 }
 
@@ -49,11 +40,15 @@ func (b *broadcast) Cast() string {
 	return b.id
 }
 
-func (b *broadcast) Arg(key string) (string, *error.Error) {
+func (b *broadcast) Capture() string {
+	return "n/a"
+}
+
+func (b *broadcast) Arg(key string) (string, bool) {
 	if value, ok := b.args[key]; ok {
-		return value, nil
+		return value, true
 	}
-	return "", error.New(error.Missing, error.Message, "key not found", out.Pair("key", key))
+	return "", false
 }
 
 func (b *broadcast) ArgIf(key string, ifnot string) string {
@@ -76,20 +71,39 @@ func (b *broadcast) Handle() string {
 	return "n/a"
 }
 
-func (b *broadcast) ToJSON() string {
-	result := map[string]interface{}{
-		"topic": b.topic,
-		"cast":  b.id,
-		"args":  b.args,
-		"flags": b.flags,
-	}
-	data, err := json.Marshal(result)
-	if err != nil {
-		return "{}"
-	}
-	return string(data)
+// func (b *broadcast) ToJSON() string {
+// 	result := map[string]interface{}{
+// 		"topic": b.topic,
+// 		"cast":  b.id,
+// 		"args":  b.args,
+// 		"flags": b.flags,
+// 	}
+// 	data, err := json.Marshal(result)
+// 	if err != nil {
+// 		return "{}"
+// 	}
+// 	return string(data)
+// }
+
+// raw
+// --> publish topic arg=value flag
+// wire: +cast
+// --> <raw> +cast
+func (b *broadcast) Wire() string {
+	return fmt.Sprintf(`%s cast=%s`, b.raw, b.id)
 }
 
-func (b *broadcast) Topic() string {
-	return b.topic
+// witness in: +witness +spore_incoming +spore_time
+// --> witness <wire> spore_incoming spore_time=time
+// witness out: +witness +spore_outgoing +spore_time
+// --> witness <wire> spore_outgoing spore_time=time
+func (b *broadcast) Witness() string {
+	t := time.Now().UnixMilli()
+	incomingSent := b.incomingSent
+	b.incomingSent = true
+	witnessFlag := "spore_incoming"
+	if incomingSent {
+		witnessFlag = "spore_outgoing"
+	}
+	return fmt.Sprint(`witness %s %s spore_time=%d`, b.Wire(), witnessFlag, t)
 }

@@ -1,10 +1,8 @@
 package message
 
 import (
-	"encoding/json"
 	"fmt"
-	"spored/internal/utilities/error"
-	"spored/internal/utilities/out"
+	"time"
 )
 
 type request struct {
@@ -17,10 +15,10 @@ type request struct {
 	handle string
 }
 
-func Request(raw string, id string) (Message, *error.Error) {
-	parsed, err := parseRequest(raw)
-	if err != nil {
-		return nil, err
+func Request(raw string, id string) (Message, bool) {
+	parsed, ok := parseRequest(raw)
+	if !ok {
+		return nil, false
 	}
 	r := &request{
 		raw: raw,
@@ -31,18 +29,10 @@ func Request(raw string, id string) (Message, *error.Error) {
 		handle: parsed.handle,
 	}
 
-	return r, nil
+	return r, true
 }
 
-func (r *request) Get() string {
-	return fmt.Sprintf(`%s cast=%s`, r.raw, r.id)
-}
-
-func (r *request) IsWitness() bool {
-	return false
-}
-
-func (r *request) Command() string {
+func (r *request) Capability() string {
 	return r.command
 }
 
@@ -50,11 +40,15 @@ func (r *request) Cast() string {
 	return r.id
 }
 
-func (r *request) Arg(key string) (string, *error.Error) {
+func (r *request) Capture() string {
+	return "n/a"
+}
+
+func (r *request) Arg(key string) (string, bool) {
 	if value, ok := r.args[key]; ok {
-		return value, nil
+		return value, true
 	}
-	return "", error.New(error.Missing, error.Message, "key not found", out.Pair("key", key))
+	return "", false
 }
 
 func (r *request) ArgIf(key string, ifnot string) string {
@@ -77,21 +71,32 @@ func (r *request) Handle() string {
 	return r.handle
 }
 
-func (r *request) ToJSON() string {
-	result := map[string]interface{}{
-		"command": r.command,
-		"handle":  r.handle,
-		"cast":    r.id,
-		"args":    r.args,
-		"flags":   r.flags,
-	}
-	data, err := json.Marshal(result)
-	if err != nil {
-		return "{}"
-	}
-	return string(data)
+// func (r *request) ToJSON() string {
+// 	result := map[string]interface{}{
+// 		"command": r.command,
+// 		"handle":  r.handle,
+// 		"cast":    r.id,
+// 		"args":    r.args,
+// 		"flags":   r.flags,
+// 	}
+// 	data, err := json.Marshal(result)
+// 	if err != nil {
+// 		return "{}"
+// 	}
+// 	return string(data)
+// }
+
+// raw
+// --> subject arg=val flag ~handle
+// wire: +cast
+// --> <raw> cast=requester.id
+func (r *request) Wire() string {
+	return fmt.Sprintf(`%s cast=%s`, r.raw, r.id)
 }
 
-func (r *request) Topic() string {
-	return "n/a"
+// witness in: +witness +spore_incoming +spore_time 
+// --> witness <wire> spore_incoming spore_time=time
+func (r *request) Witness() string {
+	t := time.Now().UnixMilli()
+	return fmt.Sprintf(`witness %s spore_incoming spore_time=%d`, r.Wire(), t)
 }

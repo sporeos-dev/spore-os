@@ -1,18 +1,14 @@
 package message
 
-import "spored/internal/utilities/error"
-
 type Message interface{
-	IsWitness() bool
-	Get() string
-	ToJSON() string
-
-	Command() string
+	Capability() string
 	Cast() string
-	Arg(key string) (string, *error.Error)
+	Capture() string
+	Arg(key string) (string, bool)
 	ArgIf(key string, ifnot string) string
 	Flag(flag string) bool
 	Handle() string
 
-	Topic() string
+	Wire() string
+	Witness() string
 }

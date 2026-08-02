@@ -1,10 +1,8 @@
 package message
 
 import (
-	"strings"
-
-	"spored/internal/utilities/error"
 	"spored/internal/utilities/parse"
+	"strings"
 )
 
 // tokenize wraps parse.Tokenize for use within the message package.
@@ -52,29 +50,29 @@ func classifyTokens(tokens []string) (args map[string]string, flags []string, ha
 //
 // Returns Malformed if the raw string is empty or cannot be tokenized.
 // Returns Missing if no ~handle token is present (every call must include one).
-func parseRequest(raw string) (parsedMessage, *error.Error) {
+func parseRequest(raw string) (parsedMessage, bool) {
 	out := parsedMessage{args: make(map[string]string), flags: []string{}}
 
 	if strings.TrimSpace(raw) == "" {
-		return out, error.New(error.Malformed, error.Message, "empty message")
+		return out, false
 	}
 
 	tokens, errStr := tokenize(raw)
 	if errStr != "" {
-		return out, error.New(error.Malformed, error.Message, errStr)
+		return out, false
 	}
 	if len(tokens) == 0 {
-		return out, error.New(error.Malformed, error.Message, "empty message")
+		return out, false
 	}
 
 	out.command = tokens[0]
 	out.args, out.flags, out.handle = classifyTokens(tokens[1:])
 
 	if out.handle == "" {
-		return out, error.New(error.Missing, error.Message, "handle missing: every call must include a ~handle")
+		return out, false
 	}
 
-	return out, nil
+	return out, true
 }
 
 // parseResponse parses a response wire message:
@@ -86,47 +84,47 @@ func parseRequest(raw string) (parsedMessage, *error.Error) {
 //
 // Returns Malformed if the raw string is empty, cannot be tokenized, or the
 // first token is not in the required ~handle:subject form.
-func parseResponse(raw string) (parsedMessage, *error.Error) {
+func parseResponse(raw string) (parsedMessage, bool) {
 	out := parsedMessage{args: make(map[string]string), flags: []string{}}
 
 	if strings.TrimSpace(raw) == "" {
-		return out, error.New(error.Malformed, error.Message, "empty message")
+		return out, false
 	}
 
 	tokens, errStr := tokenize(raw)
 	if errStr != "" {
-		return out, error.New(error.Malformed, error.Message, errStr)
+		return out, false
 	}
 	if len(tokens) == 0 {
-		return out, error.New(error.Malformed, error.Message, "empty message")
+		return out, false
 	}
 
 	// First token must be ~handle:subject
 	first := tokens[0]
 	if !strings.HasPrefix(first, "~") {
-		return out, error.New(error.Malformed, error.Message, "response must begin with ~handle:subject")
+		return out, false
 	}
 
 	binding := first[1:] // strip leading ~
 	colon := strings.IndexByte(binding, ':')
 	if colon < 0 {
-		return out, error.New(error.Malformed, error.Message, "response first token must be in ~handle:subject form")
+		return out, false
 	}
 
 	out.handle = binding[:colon]
 	out.command = binding[colon+1:]
 
 	if out.handle == "" {
-		return out, error.New(error.Malformed, error.Message, "handle is empty in ~handle:subject")
+		return out, false
 	}
 	if out.command == "" {
-		return out, error.New(error.Malformed, error.Message, "subject is empty in ~handle:subject")
+		return out, false
 	}
 
 	// Remaining tokens are args and flags; responses never carry another ~ token.
 	out.args, out.flags, _ = classifyTokens(tokens[1:])
 
-	return out, nil
+	return out, true
 }
 
 // parseBroadcast parses a broadcast wire message:
@@ -135,27 +133,27 @@ func parseResponse(raw string) (parsedMessage, *error.Error) {
 //
 // Returns Malformed if the message does not begin with the reserved publish
 // keyword, or if no subject follows it.
-func parseBroadcast(raw string) (parsedMessage, *error.Error) {
+func parseBroadcast(raw string) (parsedMessage, bool) {
 	out := parsedMessage{args: make(map[string]string), flags: []string{}}
 
 	if strings.TrimSpace(raw) == "" {
-		return out, error.New(error.Malformed, error.Message, "empty message")
+		return out, false
 	}
 
 	tokens, errStr := tokenize(raw)
 	if errStr != "" {
-		return out, error.New(error.Malformed, error.Message, errStr)
+		return out, false
 	}
 
 	if len(tokens) == 0 || tokens[0] != "publish" {
-		return out, error.New(error.Malformed, error.Message, "broadcast must begin with the publish keyword")
+		return out, false
 	}
 	if len(tokens) < 2 {
-		return out, error.New(error.Malformed, error.Message, "broadcast missing subject after publish")
+		return out, false
 	}
 
 	out.command = tokens[1] // topic/subject
 	out.args, out.flags, _ = classifyTokens(tokens[2:])
 
-	return out, nil
+	return out, true
 }

@@ -121,6 +121,13 @@ func (m *Manifest) Verify() {
 		return
 	}
 
+	if m.Trust == Developer {
+		// TODO
+		// witness developer skip checksum
+		m.Status.Set(status.Verified)
+		return
+	}
+
 	checksum, err := file.CalculateChecksum(m.Path)
 	if err != nil {
 		m.Status.Set(status.FailedChecksum)

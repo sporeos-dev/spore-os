@@ -81,24 +81,30 @@ func (n *Nodes) Autostart() {
 	for _, el := range n.nodes {
 		if el.manifest.Launch == manifest.Auto {
 			if el.manifest.Namespace == manifest.Hyphae {
-				n.bus.WitnessSpore(fmt.Sprintf("%s skipped autostarting because it requires hyphae spsace (%s)", el.registry.Name, el.registry.ID))
+				n.bus.Witness(
+					error.New(
+						error.Generic,
+						error.Node,
+						"skipped autostart, requires hyphae",
+						out.Pair("node", el.registry.ID)))
 				continue
 			}
 
 			err := n.Spawn(el.registry.ID)
 			if err != nil {
-				el.Error(
+				n.bus.Witness(
 					error.New(
 						error.Generic,
 						error.Node,
-						"autostart failure",
-						out.Pair("node", el.registry.ID)),
-					"",
-					"")
+						"autostart failed to spawn",
+						out.Pair("node", el.registry.ID)))
 				continue
 			}
 
-			n.bus.WitnessSpore(fmt.Sprintf("%s autostarted (%s)", el.registry.Name, el.registry.ID))
+			n.bus.Witness(
+				message.Witness(
+					"node autostarted",
+					out.Pair("node", el.registry.ID)))
 		}
 	}
 }
@@ -111,46 +117,49 @@ func (n *Nodes) HandleConnection(conn net.Conn) {
 	reader := bufio.NewReader(conn)
 	writer := bufio.NewWriter(conn)
 
-	nodeid, err := reader.ReadString('\n')
-	if err != nil {
-		sperr := error.New(
+	nodeid, erro := reader.ReadString('\n')
+	if erro != nil {
+		err := error.New(
 			error.HandshakeDenial,
 			error.Node,
 			"failed initial handshake read",
-			out.Pair("error", err.Error()))
+			out.Pair("error", erro.Error()))
 		
-		n.bus.WitnessSpore(fmt.Sprintf("Unable to connect to node; failed initial read (error: %s)", sperr.Wire()))
-		writer.WriteString(sperr.Wire())
+		n.bus.Witness(err)		
+		writer.WriteString(err.Wire() + "\n")
 		writer.Flush()
 		conn.Close()
 		return
 	}
 
 	nodeid = strings.TrimSpace(nodeid)
-	n.bus.WitnessSpore(fmt.Sprintf("Node connecting: %s", nodeid))
+	n.bus.Witness(
+		message.Witness(
+			"node connecting",
+			out.Pair("node", nodeid)))
 
 	n.mu.RLock()
 	defer n.mu.RUnlock()
 	node, ok := n.nodes[nodeid]
 	if !ok {
-		sperr := error.New(
+		err := error.New(
 			error.HandshakeDenial,
 			error.Node,
 			"node not installed",
 			out.Pair("node", nodeid))
 		
-		n.bus.WitnessOut(fmt.Sprintf("Unable to connect to node; node not found (node: %s, error: %s)", nodeid, sperr.Wire()), nodeid)
-		writer.WriteString(sperr.Wire())
+		n.bus.Witness(err)
+		writer.WriteString(err.Wire() + "\n")
 		writer.Flush()
 		conn.Close()
 		return
 	}
 
 	// Handle the connection with the node
-	sp_err := node.handleConnection(conn, reader, writer, n.hyphae)
-	if sp_err != nil {
-		n.bus.WitnessOut(fmt.Sprintf("Unable to connect to node: failed to handle connection (node: %s, error: %s)", nodeid, sp_err.Wire()), nodeid)
-		writer.WriteString(sp_err.Wire())
+	err := node.handleConnection(conn, reader, writer, n.hyphae)
+	if err != nil {
+		n.bus.Witness(err)
+		writer.WriteString(err.Wire() + "\n")
 		writer.Flush()
 		conn.Close()
 		return;
@@ -204,6 +213,11 @@ func (n *Nodes) GetManifest(nodeid string) *manifest.Manifest {
 }
 
 func (n *Nodes) Install(path string) *error.Error {
+
+	n.bus.Witness(
+		message.Witness(
+			"installing node",
+			out.Pair("path", path)))
 
 	if !file.Exists(path) {
 		return error.New(
@@ -303,14 +317,22 @@ func (n *Nodes) Install(path string) *error.Error {
 		for _, el := range node.manifest.Permissions {
 			perm, err := n.permissions.Request(node.registry.ID, el.Name, el.Reasons)
 			if err != nil {
-				n.bus.WitnessSpore(fmt.Sprintf("Permission failure during install (%s)", err.Error()))
+				n.bus.Witness(err)
 				continue
 			}
 			switch perm {
 			case permissions.Always, permissions.Once:
-				n.bus.WitnessSpore(fmt.Sprintf("Permission %s granted to %s.", el.Name, node.registry.ID))	
+				n.bus.Witness(
+					message.Witness(
+						"permission granted",
+						out.Pair("node", node.registry.ID),
+						out.Pair("capability", el.Name)))
 			case permissions.No, permissions.Never:
-				n.bus.WitnessSpore(fmt.Sprintf("Permssion %s denied for %s.", el.Name, node.registry.ID))	
+				n.bus.Witness(
+					message.Witness(
+						"permission denied",
+						out.Pair("node", node.registry.ID),
+						out.Pair("capability", el.Name)))	
 			}
 		}
 	}
@@ -319,7 +341,12 @@ func (n *Nodes) Install(path string) *error.Error {
 }
 
 func (n *Nodes) Uninstall(nodeid string) *error.Error {
+
 	nodeid = n.resolveId(nodeid)
+	n.bus.Witness(
+		message.Witness(
+			"uninstalling node",
+			out.Pair("node", nodeid)))
 	
 	n.mu.Lock()
 	defer n.mu.Unlock()
@@ -340,7 +367,10 @@ func (n *Nodes) Uninstall(nodeid string) *error.Error {
 func (n *Nodes) Spawn(nodeid string) *error.Error {
 
 	nodeid = n.resolveId(nodeid)
-	n.bus.WitnessSpore(fmt.Sprintf("Spawning %s", nodeid))
+	n.bus.Witness(
+		message.Witness(
+			"spawning node",
+			out.Pair("node", nodeid)))
 
 	n.mu.RLock()
 	defer n.mu.RUnlock()
@@ -357,12 +387,7 @@ func (n *Nodes) Spawn(nodeid string) *error.Error {
 		if node.manifest.Namespace == manifest.Hyphae {
 			err := n.hyphae.Spawn(node.registry.Binary)
 			if err != nil {
-				return error.New(
-					error.Generic,
-					error.Node,
-					"failed to spawn node in the user space, hyphae required",
-					out.Pair("node", nodeid),
-					out.Pair("error", err.Error()))
+				return err
 			}
 		} else {
 			cmd := exec.Command(node.registry.Binary)
@@ -371,7 +396,7 @@ func (n *Nodes) Spawn(nodeid string) *error.Error {
 				return error.New(
 					error.Generic,
 					error.Node,
-					"failed to spawn node in the spore space",
+					"failed to spawn node",
 					out.Pair("node", nodeid),
 					out.Pair("error", err.Error()))
 			}
@@ -386,12 +411,7 @@ func (n *Nodes) Spawn(nodeid string) *error.Error {
 		} else {
 			err := n.hyphae.Spawn(node.registry.Binary)
 			if err != nil {
-				return error.New(
-					error.Generic,
-					error.Node,
-					"failed to spawn node in the user space",
-					out.Pair("node", nodeid),
-					out.Pair("error", err.Error()))
+				return err
 			}
 		}
 	}
@@ -400,7 +420,12 @@ func (n *Nodes) Spawn(nodeid string) *error.Error {
 }
 
 func (n *Nodes) Kill(nodeid string) *error.Error {
+
 	nodeid = n.resolveId(nodeid)
+	n.bus.Witness(
+		message.Witness(
+			"killing node",
+			out.Pair("node", nodeid)))
 
 	return error.New(
 		error.Generic,
@@ -455,42 +480,64 @@ func (n *Nodes) resolveId(nodeid string) string {
 }
 
 func (n *Nodes) acceptInstallationWarning(m *manifest.Manifest) bool {
+
+	n.bus.Witness(
+		message.Witness(
+			"ensuring trust",
+			out.Pair("node", m.ID),
+			out.Pair("trust", string(m.Trust))))
+
 	if m.Trust == manifest.StandardTrust || m.Trust == manifest.Untrusted {
+		n.bus.Witness(
+			message.Witness(
+				"low trust accepted",
+				out.Pair("node", m.ID),
+				out.Pair("trust", string(m.Trust))))
 		return true
 	}
-	
+
 	handle := n.handle()
 	title := "Installation Warning"
 	var description strings.Builder
 	description.WriteString(fmt.Sprintf(`Do you accept [%s] as a node with a [%s] level of trust?`, m.ID, string(m.Trust)))
 	description.WriteString(fmt.Sprintf(`\n\nThis will grant it permission to all capabilities and is unadvised unless you are absolutely sure of the source.`))
 	raw := fmt.Sprintf(`dialog.alert title="%s" description="%s" entries=[ Grant Deny ] ~%s`, title, description.String(), handle)
-
-	msg, err := message.Request(raw, m.ID)
-	if err != nil {
-		n.bus.WitnessSpore(fmt.Sprintf("Request creation failure (%s)", err.Error()))
+	msg, ok := message.Request(raw, m.ID)
+	if !ok {
+		n.bus.Witness(
+			error.New(
+				error.Malformed,
+				error.Node,
+				"failed to ensure trust",
+				out.Pair("node", m.ID)))
 		return false
 	}
+	
 	ch := n.pending.Await(handle)
-	err = n.bus.Request(msg)
+	err := n.bus.Request(msg)
 	if err != nil {
 		n.pending.Delete(handle)
-		n.bus.WitnessSpore(fmt.Sprintf("Request sending failure (%s)", err.Error()))
+		n.bus.Witness(err)
 		return false
 	}
 
 	response, err := n.pending.WaitFor(handle, ch)
 	if err != nil {
-		n.bus.WitnessSpore(fmt.Sprintf("Response failure (%s)", err.Error()))
+		n.bus.Witness(err)
 		return false
 	}
 	if response.Flag("error") {
-		n.bus.WitnessSpore(fmt.Sprintf("Response failure (%s)", err.Error()))
+		n.bus.Witness(response)
 		return false
 	}
-	entry, err := response.Arg("entry")
-	if err != nil {
-		n.bus.WitnessSpore(fmt.Sprintf("Response failure (%s)", err.Error()))
+	entry, ok := response.Arg("entry")
+	if !ok {
+		n.bus.Witness(
+			error.New(
+				error.Missing,
+				error.Node,
+				"missing in response",
+				out.Pair("argument", "entry")))
 		return false
 	}
 	return entry == "Grant"

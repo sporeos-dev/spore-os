@@ -12,6 +12,7 @@ type INode interface {
 	IsWitness() bool
 	GetManifest() *manifest.Manifest
 	Receive(message message.Message) *error.Error
+	Witness(message message.Message)
 }
 
 type ihyphae interface {}

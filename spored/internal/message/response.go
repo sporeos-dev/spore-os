@@ -13,6 +13,8 @@ type response struct {
 	args map[string]string
 	flags []string
 	handle string
+
+	isError bool
 }
 
 func Response(raw string, captureID string) (Message, bool) {
@@ -88,10 +90,10 @@ func (r *response) Handle() string {
 
 // raw
 // --> ~handle:subject arg=val flag cast=requester.id
-// wire: +ok +capture
+// wire: +capture
 // --> <raw> ok capture=responder.id
 func (r *response) Wire() string {
-	return fmt.Sprintf(`%s ok cature=%s`, r.raw, r.id)
+	return fmt.Sprintf(`%s capture=%s`, r.raw, r.id)
 }
 
 // witness out: +witness +spore_outgoing +spore_time

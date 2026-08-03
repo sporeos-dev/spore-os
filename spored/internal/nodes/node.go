@@ -3,7 +3,6 @@ package nodes
 import (
 	"bufio"
 	"errors"
-	"fmt"
 	"io"
 	"net"
 	"spored/internal/manifest"
@@ -32,8 +31,6 @@ type node struct {
 	permitter permitter
 
 	mu sync.RWMutex
-	jsonMu sync.Mutex
-	jsonHandles map[string]bool
 	conn net.Conn
 	reader *bufio.Reader
 	writer *bufio.Writer
@@ -50,7 +47,6 @@ func newNode(registry *registry.Element, manifest *manifest.Manifest) *node {
 		registry: registry,
 		manifest: manifest,
 		bus: nil,
-		jsonHandles: make(map[string]bool),
 	}
 
 	n.manifest.Verify()
@@ -174,7 +170,6 @@ func (n *node) handleConnection(conn net.Conn, reader *bufio.Reader, writer *buf
 			out.Pair("binary_status", b.status.String()))
 	}
 
-	n.bus.WitnessOut("OK", n.registry.ID)
 	writer.WriteString("OK\n")
 	writer.Flush()
 
@@ -184,7 +179,10 @@ func (n *node) handleConnection(conn net.Conn, reader *bufio.Reader, writer *buf
 	n.writer = writer
 	n.mu.Unlock()
 
-	n.bus.WitnessSpore(fmt.Sprintf("%s connected after successful handshake (%s)", n.registry.Name, n.registry.ID))
+	n.bus.Witness(
+		message.Witness(
+			"handshake successful",
+			out.Pair("node", n.registry.ID)))
 
 	go n.listen()
 	return nil
@@ -196,10 +194,18 @@ func (n *node) listen() {
 		raw, err := n.reader.ReadString('\n')
 		if err != nil {
 			if err == io.EOF || errors.Is(err, net.ErrClosed) {
-				n.bus.WitnessSpore(fmt.Sprintf("%s disconnecting (%s)", n.registry.Name, n.registry.ID))
+				n.bus.Witness(
+					message.Witness(
+						"node disconnecting",
+						out.Pair("node", n.registry.ID)))
 				break
 			} else {
-				n.bus.WitnessSpore(fmt.Sprintf("%s failed to read (%s, err %s", n.registry.Name, n.registry.ID, err.Error()))
+				n.Receive(
+					error.New(
+						error.InitializationFailure,
+						error.Node,
+						"read failure",
+						out.Pair("node", n.registry.ID)))
 				continue
 			}
 		}
@@ -211,21 +217,32 @@ func (n *node) listen() {
 		if strings.HasPrefix(raw, "witness") {
 			
 			body := strings.TrimPrefix(raw, "witness ")
-			n.bus.WitnessNode(body, n.registry.ID)
+			n.bus.Witness(message.Node(body, n.registry.ID))
 			continue
 
 		// publishing starts with publish
 		} else if strings.HasPrefix(raw, "publish") {
 
-			n.bus.WitnessIn(raw, n.registry.ID)
-			broadcast, err := message.Broadcast(raw, n.registry.ID)
-			if err != nil {
-				n.Error(err, "", "")
+			broadcast, ok := message.Broadcast(raw, n.registry.ID)
+			if !ok {
+				n.bus.Witness(
+					message.Witness(
+						"malformed broadcast",
+						out.Flag("spore_incoming"),
+						out.Pair("node", n.registry.ID),
+						out.Pair("raw", raw)))
+				n.Receive(error.New(
+					error.Malformed,
+					error.Node,
+					"failed to publish",
+					out.Pair("node", n.registry.ID),
+					out.Pair("raw", raw)))
 				continue
 			}
-			
-			topic := broadcast.Topic()
-			ok := false
+			n.bus.Witness(broadcast)
+
+			topic := broadcast.Capability()
+			ok = false
 			for _, el := range n.manifest.Topics {
 				if topic == el.Name {
 					ok = true
@@ -233,42 +250,67 @@ func (n *node) listen() {
 				}
 			}
 			if !ok {
-				n.Error(error.New(
+				n.Receive(error.New(
 					error.NotPermitted,
 					error.Node,
 					"topic not announced in the manifest",
 					out.Pair("node", n.registry.ID),
-					out.Pair("topic", topic)), "", "")
+					out.Pair("topic", topic)).
+					WithMessage(broadcast))
 				continue
 			}
 
-			if err := n.bus.Broadcast(broadcast); err != nil {
-				n.Error(err, "", "")
+			err := n.bus.Broadcast(broadcast)
+			if err != nil {
+				n.Receive(err)
 			}
 
 		// response starts with handle
 		} else if strings.HasPrefix(raw, "~") {
 
-			n.bus.WitnessIn(raw, n.registry.ID)
-			response, err := message.Response(raw, n.registry.ID)
-			if err != nil {
-				n.Error(err, "", "")
+			response, ok := message.Response(raw, n.registry.ID)
+			if !ok {
+				n.bus.Witness(
+					message.Witness(
+						"malformed response",
+						out.Flag("spore_incoming"),
+						out.Pair("node", n.registry.ID),
+						out.Pair("raw", raw)))
+				n.Receive(error.New(
+					error.Malformed,
+					error.Node,
+					"failed to respond",
+					out.Pair("node", n.registry.ID),
+					out.Pair("raw", raw)))
 				continue
 			}
-			if err := n.bus.Response(response); err != nil {
-				n.Error(err, response.Handle(), response.Command())
+			n.bus.Witness(response)
+
+			err := n.bus.Response(response)
+			if err != nil {
+				n.Receive(err)
 			}
 
 		// fallback to request
 		} else {
 
-			n.bus.WitnessIn(raw, n.registry.ID)
-			msg, err := message.Request(raw, n.registry.ID)
-			if err != nil {
-				n.Error(err, "", "")
-				continue
+			request, ok := message.Request(raw, n.registry.ID)
+			if !ok {
+				n.bus.Witness(
+					message.Witness(
+						"malformed request",
+						out.Flag("spore_incoming"),
+						out.Pair("node", n.registry.ID),
+						out.Pair("raw", raw)))
+				n.Receive(error.New(
+					error.Malformed,
+					error.Node,
+					"failed to request",
+					out.Pair("node", n.registry.ID),
+					out.Pair("raw", raw)))
 			}
-			
+			n.bus.Witness(request)
+
 			// if n.manifest.Trust == manifest.StandardTrust || n.manifest.Trust == manifest.Untrusted {
 			// 	command := msg.Command()
 			// 	if !n.permitter.Can(n.registry.ID, command) {
@@ -282,12 +324,9 @@ func (n *node) listen() {
 			// 	}
 			// }
 
-			if err := n.bus.Request(msg); err != nil {
-				n.Error(err, msg.Handle(), msg.Command())
-			} else if msg.Flag("json") {
-				n.jsonMu.Lock()
-				n.jsonHandles[msg.Handle()] = true
-				n.jsonMu.Unlock()
+			err := n.bus.Request(request)
+			if err != nil {
+				n.Receive(err)
 			}
 		}
 	}
@@ -335,53 +374,35 @@ func (n *node) Receive(message message.Message) *error.Error {
 				error.Generic,
 				error.Node,
 				"lazy spawning not yet implemented",
-				out.Pair("node", n.registry.ID))
+				out.Pair("node", n.registry.ID)).
+				WithMessage(message)
 		} else {
 			return error.New(
 				error.Generic,
 				error.Node,
 				"node not connected",
-				out.Pair("node", n.registry.ID))
+				out.Pair("node", n.registry.ID)).
+				WithMessage(message)
 		}
 	}
 
-	wire := message.Get()
-	if !message.IsWitness() {
-		n.jsonMu.Lock()
-		wantsJSON := n.jsonHandles[message.Handle()]
-		delete(n.jsonHandles, message.Handle())
-		n.jsonMu.Unlock()
-		if wantsJSON {
-			wire = message.ToJSON()
-		}
-	}
-
-	n.writer.WriteString(wire + "\n")
+	n.bus.Witness(message)
+	n.writer.WriteString(message.Wire() + "\n")
 	n.writer.Flush()
-
-	if !message.IsWitness() {
-		n.bus.WitnessOut(message.Get(), n.registry.ID)
-	}
 
 	return nil
 }
 
-func (n *node) Error(err *error.Error, handle string, subject string) {
+func (n *node) Witness(message message.Message) {
 	n.mu.RLock()
 	defer n.mu.RUnlock()
 
-	var wire string
-	if handle != "" {
-		wire = fmt.Sprintf("~%s:%s %s", handle, subject, err.Wire())
-	} else {
-		wire = err.Wire()
+	if n.writer == nil {
+		return
 	}
 
-	n.bus.WitnessOut(fmt.Sprintf("%s failed to route (%s, err %s)", n.registry.Name, n.registry.ID, err.Witness()), n.registry.ID)
-	n.writer.WriteString(wire + "\n")
+	n.writer.WriteString(message.Witness() + "\n")
 	n.writer.Flush()
-
-	n.bus.WitnessOut(wire, n.registry.ID)
 }
 
 //

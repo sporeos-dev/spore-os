@@ -57,7 +57,7 @@ func (b *broadcast) broadcast(msg message.Message) *error.Error {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 
-	topic := msg.Topic()
+	topic := msg.Capability()
 	subscribers, ok := b.subscriptions[topic]
 	if !ok {
 		return nil

@@ -9,10 +9,13 @@ import (
 )
 
 type Error struct {
-	Code Code
-	Module Module
-	What string
-	Extra []string
+	code Code
+	module Module
+	what string
+	extras []string
+
+	message message.Message
+	incomingSent bool
 }
 
 func New(code Code, module Module, what string, out ...fmt.Stringer) *Error {
@@ -22,50 +25,145 @@ func New(code Code, module Module, what string, out ...fmt.Stringer) *Error {
     }
     
     err := &Error{
-        Code:   code,
-        Module: module,
-        What:   what,
-        Extra:  extraSlice,
+        code:   code,
+        module: module,
+        what:   what,
+        extras:  extraSlice,
+		message: nil,
+		incomingSent: false,
     }
-    slog.Error(err.error())
+
+	slog.Error(err.Error())
     return err
 }
 
+func (e *Error) WithMessage(message message.Message) *Error {
+	e.message = message
+	return e
+}
+
 func (e *Error) Append(out fmt.Stringer) {
-	e.Extra = append(e.Extra, out.String())
+	e.extras = append(e.extras, out.String())
 }
 
-func (e *Error) error() string {
-	if len(e.Extra) > 0 {
-		return fmt.Sprintf("[%s::in::%s] %s (%s)", e.Code, e.Module, e.What, e.Extra)
+//
+// error
+// interface
+//
+
+func (e *Error) Error() string{
+	return fmt.Sprintf(`%s code=%s.%s %s`, e.what, e.code, e.module, e.extrasToString())
+}
+
+//
+//
+// message.Message
+// interface
+//
+
+func (e *Error) Capability() string {
+	if e.message == nil {
+		return "n/a"
+	}
+	return e.message.Capability()
+}
+
+func (e *Error) Cast() string {
+	if e.message == nil {
+		return "n/a"
+	}
+	return e.message.Cast()
+}
+
+func (e *Error) Capture() string {
+	if e.message == nil {
+		return "n/a"
+	}
+	return e.message.Capture()
+}
+
+func (e *Error) Arg(key string) (string, bool) {
+	if e.message == nil {
+		return "", false
+	}
+	return e.message.Arg(key)
+}
+
+func (e *Error) ArgIf(key string, ifnot string) string {
+	if e.message == nil {
+		return ifnot
+	}
+	return e.message.ArgIf(key, ifnot)
+}
+
+func (e *Error) Flag(flag string) bool {
+	if e.message == nil {
+		return false
+	}
+	return e.message.Flag(flag)
+}
+
+func (e *Error) Handle() string {
+	if e.message == nil {
+		return "n/a"
+	}
+	return e.message.Handle()
+}
+
+// build a response && an error
+// ~handle:subject error code=code.module what="what" <extras> cast=cast (capture=capture)
+func (e *Error) Wire() string {
+	// no message
+	// spore error
+	// no destination
+	if e.message == nil {
+		return "n/a"
+	}
+
+	// capture is n/a
+	// cast error
+	// send back
+	wire := fmt.Sprintf(`~%s:%s error code=%s.%s what="%s" %s cast=%s`, e.Handle(), e.Capability(), e.code, e.module, e.what, e.extrasToString(), e.Cast()) 
+
+	if e.Capture() == "n/a" {
+		return wire
+
+	// otherwise
+	// capture error
+	// send forward
 	} else {
-		return fmt.Sprintf("[%s::in::%s] %s", e.Code, e.Module, e.What)
+		return fmt.Sprintf(`%s capture=%s`, wire, e.message.Capture())
 	}
 }
 
-func (e *Error) Wire(handle *string, subject *string, cast *string, capture *string) string {
-	var sb strings.Builder
-	if handle != nil && subject != nil {
-		sb.WriteString(fmt.Sprintf(`~%s:%s `, *handle, *subject))
-	}
-	sb.WriteString(fmt.Sprintf(`error code=%s.%s what="%s"`, e.Code, e.Module, e.What))
-	for _, el := range e.Extra {
-		sb.WriteString(fmt.Sprintf(` %s`, el))
-	}
-	if cast != nil {
-		sb.WriteString(fmt.Sprintf(` cast=%s`, *cast))
-	}
-	if capture != nil {
-		sb.WriteString(fmt.Sprintf(` capture=%s`, *capture))
-	}
-	return sb.String()
-}
-
-func (e *Error) Witness(wtype message.WitnessType) string {
+func (e *Error) Witness() string {
 	t := time.Now().UnixMilli()
-	var sb strings.Builder
-	for _, el := range e.Extra {
-		sb.WriteString(fmt.Sprintf(` %s`, el))
+
+	// no message
+	// spore error
+	if e.message == nil {
+		return fmt.Sprintf(`witness error code=%s.%s what="%s" %s spore_event spore_time=%d`, e.code, e.module, e.what, e.extrasToString(), t) 
+
+	// otherwise
+	// outgoing
+	} else {
+		return fmt.Sprintf(`witness %s spore_outgoing spore_time=%d`, e.Wire(), t)
 	}
-	return fmt.Sprintf(`witness %s error code=%s.%s what="%s"%s spore_error spore_time=%d`, wtype, e.Code, e.Module, e.What, sb.String(), t)
+}
+
+// 
+// private
+// helpers
+//
+
+func (e *Error) extrasToString() string {
+	var ex strings.Builder
+	for i, el := range e.extras {
+		if i == 0 {
+			ex.WriteString(el)
+		} else {
+			ex.WriteString(" " + el)
+		}
+	}
+	return ex.String()
 }

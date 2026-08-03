@@ -9,40 +9,46 @@ func (s *Spore) securityKeyringList(request message.Message) *error.Error {
 	return error.New(
 		error.NotImplemented,
 		error.Spore,
-		"spore security keyring list not yet implemented")
+		"spore security keyring list not yet implemented").
+		WithMessage(request)
 }
 
 func (s *Spore) securityKeyringInfo(request message.Message) *error.Error {
 	return error.New(
 		error.NotImplemented,
 		error.Spore,
-		"spore security keyring info not yet implemented")
+		"spore security keyring info not yet implemented").
+		WithMessage(request)
 }
 
 func (s *Spore) securityKeyringGrant(request message.Message) *error.Error {
 	return error.New(
 		error.NotImplemented,
 		error.Spore,
-		"spore security keyring grant not yet implemented")
+		"spore security keyring grant not yet implemented").
+		WithMessage(request)
 }
 
 func (s *Spore) securityKeyringRevoke(request message.Message) *error.Error {
 	return error.New(
 		error.NotImplemented,
 		error.Spore,
-		"spore security keyring revoke not yet implemented")
+		"spore security keyring revoke not yet implemented").
+		WithMessage(request)
 }
 
 func (s *Spore) securitySignatureSign(request message.Message) *error.Error {
 	return error.New(
 		error.NotImplemented,
 		error.Spore,
-		"spore security signature sign not yet implemented")
+		"spore security signature sign not yet implemented").
+		WithMessage(request)
 }
 
 func (s *Spore) securitySignatureVerify(request message.Message) *error.Error {
 	return error.New(
 		error.NotImplemented,
 		error.Spore,
-		"spore security signature verify not yet implemented")
+		"spore security signature verify not yet implemented").
+		WithMessage(request)
 }

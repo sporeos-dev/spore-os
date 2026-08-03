@@ -9,20 +9,22 @@ import (
 
 func (s *Spore) permissionList(request message.Message) *error.Error {
 
-	nodeid, err := request.Arg("node")
-	if err != nil {
-		return err
+	nodeid, ok := request.Arg("node")
+	if !ok {
+		return error.MissingArg("node", error.Spore).WithMessage(request)
 	}
 
 	go func() {
 		permissions, err := s.permissions.List(nodeid)
 		if err != nil {
-			s.respondError(request, err)
+			s.bus.Response(err.WithMessage(request))
+			return
 		}
 
-		s.respond(
-			request,
-			out.Array("permissions", permissions))
+		s.bus.Response(
+			message.Spore(
+				request,
+				out.Array("permissions", permissions)))
 	}()
 
 	return nil
@@ -30,14 +32,14 @@ func (s *Spore) permissionList(request message.Message) *error.Error {
 
 func (s *Spore) permissionRequest(request message.Message) *error.Error {
 	
-	node, err := request.Arg("node")
-	if err != nil {
-		return err
+	node, ok := request.Arg("node")
+	if !ok {
+		return error.MissingArg("node", error.Spore).WithMessage(request)
 	}
 
-	cap, err := request.Arg("capability")
-	if err != nil {
-		return err
+	cap, ok := request.Arg("capability")
+	if !ok {
+		return error.MissingArg("capability", error.Spore).WithMessage(request)
 	}
 
 	reasonsStr := request.ArgIf("reasons", `["Reasons: not provided", "Suggestion: deny"]`)
@@ -46,13 +48,14 @@ func (s *Spore) permissionRequest(request message.Message) *error.Error {
 	go func() {
 		value, err := s.permissions.Request(node, cap, reasons)
 		if err != nil {
-			s.respondError(request, err)
+			s.bus.Response(err.WithMessage(request))
 			return
 		}
 
-		s.respond(
-			request,
-			out.Flag(string(value)))
+		s.bus.Response(
+			message.Spore(
+				request,
+				out.Flag(string(value))))
 	}()
 	
 	return nil
@@ -60,25 +63,24 @@ func (s *Spore) permissionRequest(request message.Message) *error.Error {
 
 func (s *Spore) permissionGrant(request message.Message) *error.Error {
 	
-	node, err := request.Arg("node")
-	if err != nil {
-		return err
+	node, ok := request.Arg("node")
+	if !ok {
+		return error.MissingArg("node", error.Spore).WithMessage(request)
 	}
 
-	cap, err := request.Arg("capability")
-	if err != nil {
-		return err
+	cap, ok := request.Arg("capability")
+	if !ok {
+		return error.MissingArg("capability", error.Spore).WithMessage(request)
 	}
 
 	go func() {
-		
 		err := s.permissions.Grant(node, cap)
 		if err != nil {
-			s.respondError(request, err)
+			s.bus.Response(err.WithMessage(request))
 			return
 		}
 
-		s.respond(request)
+		s.bus.Response(message.Spore(request))
 	}()
 
 	return nil
@@ -86,25 +88,24 @@ func (s *Spore) permissionGrant(request message.Message) *error.Error {
 
 func (s *Spore) permissionRevoke(request message.Message) *error.Error {
 
-	node, err := request.Arg("node")
-	if err != nil {
-		return err
+	node, ok := request.Arg("node")
+	if !ok {
+		return error.MissingArg("node", error.Spore).WithMessage(request)
 	}
 
-	cap, err := request.Arg("capability")
-	if err != nil {
-		return err
+	cap, ok := request.Arg("capability")
+	if !ok {
+		return error.MissingArg("capability", error.Spore).WithMessage(request)
 	}
 
 	go func() {
-		
 		err := s.permissions.Revoke(node, cap)
 		if err != nil {
-			s.respondError(request, err)
+			s.bus.Response(err.WithMessage(request))
 			return
 		}
 
-		s.respond(request)
+		s.bus.Response(message.Spore(request))
 	}()
 
 	return nil

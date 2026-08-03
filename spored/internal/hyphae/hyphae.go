@@ -122,14 +122,18 @@ func (h *Hyphae) Kill(pid int) *error.Error {
 
 func (h *Hyphae) manifestRead(path string) (string, *error.Error) {
 	handle := h.handle()
-	raw := fmt.Sprintf("HYPHAE.manifest.read path=%s ~%s", path, handle)
-	h.bus.WitnessSpore(raw)
-	msg, err := message.Request(raw, h.Id())
-	if err != nil {
-		return "", err
+	raw := fmt.Sprintf(`HYPHAE.manifest.read path="%s" ~%s`, path, handle)
+	msg, ok := message.Request(raw, h.Id())
+	if !ok {
+		return "", error.New(
+			error.Malformed,
+			error.Hyphae,
+			"failure to read manifest")
 	}
+	h.bus.Witness(msg)
+
 	ch := h.pending.Await(handle)
-	err = h.bus.Request(msg)
+	err := h.bus.Request(msg)
 	if err != nil {
 		h.pending.Delete(handle)
 		return "", err
@@ -139,25 +143,37 @@ func (h *Hyphae) manifestRead(path string) (string, *error.Error) {
 		return "", err
 	}
 	if response.Flag("error") {
-		return "", error.New(error.Generic, error.Hyphae, response.ArgIf("what", "manifest read failed"))
+		return "", error.New(
+			error.Generic, 
+			error.Hyphae, 
+			response.ArgIf("what", "manifest read failed"))
 	}
-	content, err := response.Arg("content")
-	if err != nil {
-		return "", err
+
+	content, ok := response.Arg("content")
+	if !ok {
+		return "", error.New(
+			error.Missing,
+			error.Hyphae,
+			"missing in response",
+			out.Pair("argument", "content"))
 	}
 	return content, nil
 }
 
 func (h *Hyphae) binaryHash(pid int) (string, *error.Error) {
 	handle := h.handle()
-	raw := fmt.Sprintf("HYPHAE.binary.hash pid=%d ~%s", pid, handle)
-	h.bus.WitnessSpore(raw)
-	msg, err := message.Request(raw, h.Id())
-	if err != nil {
-		return "", err
+	raw := fmt.Sprintf(`HYPHAE.binary.hash pid=%d ~%s`, pid, handle)
+	msg, ok := message.Request(raw, h.Id())
+		if !ok {
+		return "", error.New(
+			error.Malformed,
+			error.Hyphae,
+			"failure to hash binary")
 	}
+	h.bus.Witness(msg)
+
 	ch := h.pending.Await(handle)
-	err = h.bus.Request(msg)
+	err := h.bus.Request(msg)
 	if err != nil {
 		h.pending.Delete(handle)
 		return "", err
@@ -167,25 +183,37 @@ func (h *Hyphae) binaryHash(pid int) (string, *error.Error) {
 		return "", err
 	}
 	if response.Flag("error") {
-		return "", error.New(error.Generic, error.Hyphae, response.ArgIf("what", "binary hash failed"))
+		return "", error.New(
+			error.Generic, 
+			error.Hyphae, 
+			response.ArgIf("what", "binary hash failed"))
 	}
-	content, err := response.Arg("content")
-	if err != nil {
-		return "", err
+
+	content, ok := response.Arg("content")
+	if !ok {
+		return "", error.New(
+			error.Missing,
+			error.Hyphae,
+			"missing in response",
+			out.Pair("argument", "content"))
 	}
 	return content, nil
 }
 
 func (h *Hyphae) fileHash(path string) (string, *error.Error) {
 	handle := h.handle()
-	raw := fmt.Sprintf("HYPHAE.file.hash path=%s ~%s", path, handle)
-	h.bus.WitnessSpore(raw)
-	msg, err := message.Request(raw, h.Id())
-	if err != nil {
-		return "", err
+	raw := fmt.Sprintf(`HYPHAE.file.hash path=%s ~%s`, path, handle)
+	msg, ok := message.Request(raw, h.Id())
+		if !ok {
+		return "", error.New(
+			error.Malformed,
+			error.Hyphae,
+			"failure to hash file")
 	}
+	h.bus.Witness(msg)
+
 	ch := h.pending.Await(handle)
-	err = h.bus.Request(msg)
+	err := h.bus.Request(msg)
 	if err != nil {
 		h.pending.Delete(handle)
 		return "", err
@@ -195,25 +223,37 @@ func (h *Hyphae) fileHash(path string) (string, *error.Error) {
 		return "", err
 	}
 	if response.Flag("error") {
-		return "", error.New(error.Generic, error.Hyphae, response.ArgIf("what", "file hash failed"))
+		return "", error.New(
+			error.Generic, 
+			error.Hyphae, 
+			response.ArgIf("what", "file hash failed"))
 	}
-	hash, err := response.Arg("hash")
-	if err != nil {
-		return "", err
+
+	hash, ok := response.Arg("hash")
+	if !ok {
+		return "", error.New(
+			error.Missing,
+			error.Hyphae,
+			"missing in response",
+			out.Pair("argument", "hash"))
 	}
 	return hash, nil
 }
 
 func (h *Hyphae) nodeSpawn(path string) *error.Error {
 	handle := h.handle()
-	raw := fmt.Sprintf("HYPHAE.node.spawn binary=\"%s\" ~%s", path, handle)
-	h.bus.WitnessSpore(raw)
-	msg, err := message.Request(raw, h.Id())
-	if err != nil {
-		return err
+	raw := fmt.Sprintf(`HYPHAE.node.spawn binary="%s" ~%s`, path, handle)
+	msg, ok := message.Request(raw, h.Id())
+	if !ok {
+		return error.New(
+			error.Malformed,
+			error.Hyphae,
+			"failure to spawn node")
 	}
+	h.bus.Witness(msg)
+
 	ch := h.pending.Await(handle)
-	err = h.bus.Request(msg)
+	err := h.bus.Request(msg)
 	if err != nil {
 		h.pending.Delete(handle)
 		return err
@@ -223,21 +263,29 @@ func (h *Hyphae) nodeSpawn(path string) *error.Error {
 		return err
 	}
 	if response.Flag("error") {
-		return error.New(error.Generic, error.Hyphae, response.ArgIf("what", "node spawn failed"))
+		return error.New(
+			error.Generic, 
+			error.Hyphae, 
+			response.ArgIf("what", "node spawn failed"))
 	}
+
 	return nil
 }
 
 func (h *Hyphae) nodeKill(pid int) *error.Error {
 	handle := h.handle()
 	raw := fmt.Sprintf("HYPHAE.node.kill pid=%d ~%s", pid, handle)
-	h.bus.WitnessSpore(raw)
-	msg, err := message.Request(raw, h.Id())
-	if err != nil {
-		return err
+	msg, ok := message.Request(raw, h.Id())
+		if !ok {
+		return error.New(
+			error.Malformed,
+			error.Hyphae,
+			"failure to kill node")
 	}
+	h.bus.Witness(msg)
+
 	ch := h.pending.Await(handle)
-	err = h.bus.Request(msg)
+	err := h.bus.Request(msg)
 	if err != nil {
 		h.pending.Delete(handle)
 		return err
@@ -247,8 +295,12 @@ func (h *Hyphae) nodeKill(pid int) *error.Error {
 		return err
 	}
 	if response.Flag("error") {
-		return error.New(error.Generic, error.Hyphae, response.ArgIf("what", "node kill failed"))
+		return error.New(
+			error.Generic, 
+			error.Hyphae, 
+			response.ArgIf("what", "node kill failed"))
 	}
+
 	return nil
 }
 
@@ -288,3 +340,5 @@ func (h *Hyphae) GetManifest() *manifest.Manifest {
 func (h *Hyphae) Receive(msg message.Message) *error.Error {
 	return h.pending.Receive(msg)
 }
+
+func (h *Hyphae) Witness(msg message.Message) {}

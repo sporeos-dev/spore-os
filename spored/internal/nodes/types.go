@@ -12,13 +12,10 @@ import (
 type ibus interface {
 	Register(node bus.INode)
 	Unregister(node bus.INode)
-	WitnessIn(msg string, id string)
-	WitnessOut(msg string, id string)
-	WitnessNode(msg string, id string)
-	WitnessSpore(msg string)
 	Request(msg message.Message) *error.Error
 	Response(msg message.Message) *error.Error
 	Broadcast(msg message.Message) *error.Error
+	Witness(msg message.Message)
 }
 
 type ihyphae interface {

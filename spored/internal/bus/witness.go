@@ -1,7 +1,6 @@
 package bus
 
 import (
-	"fmt"
 	"log/slog"
 	"slices"
 	"spored/internal/message"
@@ -55,58 +54,15 @@ func (w *witness) unregister(n INode) {
 	}
 }
 
-func (w *witness) in(raw string, id string) {
-	slog.Info(fmt.Sprintf("[.in] %s: %s", id, raw))
-	msg := message.Witness(message.WitnessIncoming, raw, id)
-
+func (w *witness) witness(msg message.Message) {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
+
+	slog.Info(msg.Witness())
 	for _, el := range w.witnesses {
 		if !el.IsConnected() {
 			continue
 		}
-		el.Receive(msg)
-	}
-}
-
-func (w *witness) out(raw string, id string) {
-	slog.Info(fmt.Sprintf("[out] %s: %s", id, raw))
-	msg := message.Witness(message.WitnessOutgoing, raw, id)
-
-	w.mu.RLock()
-	defer w.mu.RUnlock()
-	for _, el := range w.witnesses {
-		if !el.IsConnected() {
-			continue
-		}
-		el.Receive(msg)
-	}
-}
-
-func (w *witness) spore(raw string) {
-	slog.Info(fmt.Sprintf("[.sp] SPORE: %s", raw))
-	msg := message.Witness(message.WitnessSpore, raw, "dev.sporeos.SPORE")
-
-	w.mu.RLock()
-	defer w.mu.RUnlock()
-	for _, el := range w.witnesses {
-		if !el.IsConnected() {
-			continue
-		}
-		el.Receive(msg)
-	}
-}
-
-func (w *witness) node(raw string, id string) {
-	slog.Info(fmt.Sprintf("[.nd] %s: %s", id, raw))
-	msg := message.Witness(message.WitnessNode, raw, id)
-
-	w.mu.RLock()
-	defer w.mu.RUnlock()
-	for _, el := range w.witnesses {
-		if !el.IsConnected() {
-			continue
-		}
-		el.Receive(msg)
+		el.Witness(msg)
 	}
 }

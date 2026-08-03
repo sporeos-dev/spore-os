@@ -48,7 +48,8 @@ func (r *responses) request(msg message.Message) *error.Error {
 			error.HandleInUse,
 			error.Bus,
 			"request handle already in use",
-			out.Pair("handle", handle))
+			out.Pair("handle", handle)).
+			WithMessage(msg)
 	}
 
 	r.responses[handle] = nodeid
@@ -60,14 +61,17 @@ func (r *responses) response(msg message.Message) *error.Error {
 	defer r.mu.Unlock()
 
 	handle := msg.Handle()
+	if handle == "n/a" {
+		
+	}
 	nodeid, ok := r.responses[handle]
 	if !ok {
 		return error.New(
 			error.Missing,
 			error.Bus,
 			"handle not mapped",
-			out.Pair("handle", handle),
-			out.Pair("message", msg.Get()))
+			out.Pair("handle", handle)).
+			WithMessage(msg)
 	}
 	delete(r.responses, handle)
 	
@@ -78,8 +82,8 @@ func (r *responses) response(msg message.Message) *error.Error {
 			error.Bus,
 			"node not found",
 			out.Pair("handle", handle),
-			out.Pair("nodeid", nodeid),
-			out.Pair("message", msg.Get()))
+			out.Pair("nodeid", nodeid)).
+			WithMessage(msg)
 	}
 
 	node.Receive(msg)

@@ -105,5 +105,5 @@ func (b *broadcast) Witness() string {
 	if incomingSent {
 		witnessFlag = "spore_outgoing"
 	}
-	return fmt.Sprint(`witness %s %s spore_time=%d`, b.Wire(), witnessFlag, t)
+	return fmt.Sprintf(`witness %s %s spore_time=%d`, b.Wire(), witnessFlag, t)
 }

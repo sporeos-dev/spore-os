@@ -15,7 +15,7 @@ type ibus interface {
 	Register(node bus.INode)
 	Unregister(node bus.INode)
 	Response(msg message.Message) *error.Error
-	WitnessSpore(msg string)
+	Witness(msg message.Message)
 }
 
 type ihyphae interface {}

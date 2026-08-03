@@ -9,7 +9,7 @@ import (
 type ibus interface {
 	Register(node bus.INode)
 	Unregister(node bus.INode)
-	WitnessSpore(msg string)
+	Witness(msg message.Message)
 	Request(msg message.Message) *error.Error
 }
 

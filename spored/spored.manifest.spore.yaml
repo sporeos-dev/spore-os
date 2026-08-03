@@ -195,10 +195,10 @@ api:
     description: Get help for an error code.
     risk: standard
     usage:
-      - SPORE.error.help code=RouteNotFound
-      - SPORE.error.help code=clock.err.invalid_timezone
+      - SPORE.error.help errorcode=RouteNotFound
+      - SPORE.error.help errorcode=clock.err.invalid_timezone
     inputs:
-      - name: code
+      - name: errorcode
         type: string
         description: Error code.
         required: true

@@ -54,9 +54,27 @@ func (b *Bus) Unregister(n INode) {
 	b.witness.unregister(n)
 }
 
+//
+// broadcast
+// routing
+//
+
 func (b *Bus) Broadcast(msg message.Message) *error.Error {
 	return b.broadcast.broadcast(msg)
 }
+
+func (b *Bus) Subscribe(cast string, topic string) *error.Error {
+	return b.broadcast.subscribe(cast, topic)
+}
+
+func (b *Bus) Unsubscribe(cast string, topic string) *error.Error {
+	return b.broadcast.unsubscribe(cast, topic)
+}
+
+// 
+// request
+// response
+//
 
 func (b *Bus) Request(msg message.Message) *error.Error {
 	err := b.responses.request(msg)
@@ -70,26 +88,10 @@ func (b *Bus) Response(msg message.Message) *error.Error {
 	return b.responses.response(msg)
 }
 
-func (b *Bus) WitnessIn(message string, id string) {
-	b.witness.in(message, id)
-}
+//
+// witness
+//
 
-func (b *Bus) WitnessOut(message string, id string) {
-	b.witness.out(message, id)
-}
-
-func (b *Bus) WitnessSpore(message string) {
-	b.witness.spore(message)
-}
-
-func (b *Bus) WitnessNode(message string, id string) {
-	b.witness.node(message, id)
-}
-
-func (b *Bus) Subscribe(cast string, topic string) *error.Error {
-	return b.broadcast.subscribe(cast, topic)
-}
-
-func (b *Bus) Unsubscribe(cast string, topic string) *error.Error {
-	return b.broadcast.unsubscribe(cast, topic)
+func (b *Bus) Witness(msg message.Message) {
+	b.witness.witness(msg)
 }

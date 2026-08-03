@@ -30,19 +30,19 @@ func (s *Spore) errorList(request message.Message) *error.Error {
 
 			manifest := s.nodes.GetManifest(node)
 			if manifest == nil {
-				err := error.New(
-					error.Missing,
-					error.Spore,
-					"spore manifest not loaded",
-					out.Pair("node", node))
-				s.respondError(request, err)
+				s.bus.Response(
+					error.New(
+						error.Missing,
+						error.Spore,
+						"spore manifest not loaded").
+						WithMessage(request))
 				return
 			}
 			errors = manifest.ErrorIds()
 
 		}
 
-		s.respond(request, out.Array("errors", errors))
+		s.bus.Response(message.Spore(request, out.Array("errors", errors)))
 	}()
 
 	return nil
@@ -50,9 +50,9 @@ func (s *Spore) errorList(request message.Message) *error.Error {
 
 func (s *Spore) errorHelp(request message.Message) *error.Error {
 
-	errid, err := request.Arg("code")
-	if err != nil {
-		return err
+	errid, ok := request.Arg("code")
+	if !ok {
+		return error.MissingArg("code", error.Spore).WithMessage(request)
 	}
 
 	go func() {
@@ -61,12 +61,13 @@ func (s *Spore) errorHelp(request message.Message) *error.Error {
 			if errid != err.Name {
 				continue
 			}
-			s.respond(
-				request,
-				out.Array(err.Name,
-					[]string{
-						"Description: " + err.Description,
-					}))
+			s.bus.Response(
+				message.Spore(
+					request,
+					out.Array(err.Name,
+						[]string{
+							"Description: " + err.Description,
+						})))
 			return
 		}
 
@@ -78,22 +79,24 @@ func (s *Spore) errorHelp(request message.Message) *error.Error {
 					continue
 				}
 				
-				s.respond(
-					request,
-					out.Array(err.Name,
-						[]string{
-							"Description: " + err.Description,
-						}))
+				s.bus.Response(
+					message.Spore(
+						request,
+						out.Array(err.Name,
+							[]string{
+								"Description: " + err.Description,
+							})))
 				return
 			}
 		}
 		
-		err := error.New(
-			error.Missing,
-			error.Spore,
-			"error not found",
-			out.Pair("error", errid))
-		s.respondError(request, err)
+		s.bus.Response(
+			error.New(
+				error.Missing,
+				error.Spore,
+				"error not found",
+				out.Pair("error", errid)).
+				WithMessage(request))
 	}()
 
 	return nil

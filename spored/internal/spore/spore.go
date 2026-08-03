@@ -1,7 +1,6 @@
 package spore
 
 import (
-	"fmt"
 	"log/slog"
 	"spored/internal/manifest"
 	"spored/internal/message"
@@ -9,7 +8,6 @@ import (
 	"spored/internal/utilities/error"
 	"spored/internal/utilities/out"
 	"spored/internal/utilities/status"
-	"strings"
 )
 
 type Spore struct {
@@ -49,36 +47,6 @@ func (s *Spore) Close() {
 	s.bus.Unregister(s)
 }
 
-func (s *Spore) ReceiveCapture(response message.Message, args... any) *error.Error { return nil }
-
-func (s *Spore) respond(request message.Message, args ...out.IOut) {
-	parts := []string{fmt.Sprintf("~%s:%s", request.Handle(), request.Command())}
-	for _, arg := range args {
-		parts = append(parts, arg.String())
-	}
-	parts = append(parts, "ok")
-	parts = append(parts, fmt.Sprintf("capture=%s", s.manifest.ID))
-	wire := strings.Join(parts, " ")
-	msg, err := message.Response(wire, s.manifest.ID)
-	if err != nil {
-		return
-	}
-	s.bus.Response(msg)
-}
-
-func (s *Spore) respondError(request message.Message, err *error.Error) {
-	wire := fmt.Sprintf("~%s:%s %s capture=%s",
-		request.Handle(),
-		request.Command(),
-		err.Wire(),
-		s.manifest.ID)
-	msg, parseErr := message.Response(wire, s.manifest.ID)
-	if parseErr != nil {
-		return
-	}
-	s.bus.Response(msg)
-}
-
 //
 //
 // INode
@@ -101,7 +69,7 @@ func (s *Spore) GetManifest() *manifest.Manifest {
 }
 
 func (s *Spore) Receive(request message.Message) *error.Error {
-	switch request.Command() {
+	switch request.Capability() {
 	case "SPORE.help": return s.help(request)
 	case "SPORE.info": return s.info(request)
 	case "SPORE.state": return s.state(request)
@@ -143,5 +111,8 @@ func (s *Spore) Receive(request message.Message) *error.Error {
 		error.Missing,
 		error.Spore,
 		"spore command unhandled",
-		out.Pair("command", request.Command()))
+		out.Pair("command", request.Capability())).
+		WithMessage(request)
 }
+
+func (s *Spore) Witness(message message.Message) {}

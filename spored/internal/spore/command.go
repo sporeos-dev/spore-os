@@ -30,19 +30,19 @@ func (s *Spore) commandList(request message.Message) *error.Error {
 
 			manifest := s.nodes.GetManifest(node)
 			if manifest == nil {
-				err := error.New(
-					error.Missing,
-					error.Spore,
-					"spore manifest not loaded",
-					out.Pair("command", "SPORE.command.list"))
-				s.respondError(request, err)
+				s.bus.Response(
+					error.New(
+						error.Missing,
+						error.Spore,
+						"spore manifest not loaded").
+						WithMessage(request))
 				return
 			}
 			commands = manifest.CommandIds()
 
 		}
 
-		s.respond(request, out.Array("commands", commands))
+		s.bus.Response(message.Spore(request, out.Array("commands", commands)))
 
 	}()
 
@@ -51,9 +51,9 @@ func (s *Spore) commandList(request message.Message) *error.Error {
 
 func (s *Spore) commandHelp(request message.Message) *error.Error {
 
-	commandid, err := request.Arg("command")
-	if err != nil {
-		return err
+	commandid, ok := request.Arg("command")
+	if !ok {
+		return error.MissingArg("command", error.Spore).WithMessage(request)
 	}
 
 	go func() {
@@ -81,16 +81,17 @@ func (s *Spore) commandHelp(request message.Message) *error.Error {
 				}
 			}
 
-			s.respond(
-				request,
-				out.Array(command.Name,
-					[]string{
-						command.Description,
-						s.manifest.ID,
-					}),
-				out.Array("Usage", command.Usage),
-				out.Array("Inputs", inputs),
-				out.Array("Outputs", outputs))
+			s.bus.Response(
+				message.Spore(
+					request,
+					out.Array(command.Name,
+						[]string{
+							command.Description,
+							s.manifest.ID,
+						}),
+					out.Array("Usage", command.Usage),
+					out.Array("Inputs", inputs),
+					out.Array("Outputs", outputs)))
 			return
 		}
 
@@ -120,26 +121,28 @@ func (s *Spore) commandHelp(request message.Message) *error.Error {
 					}
 				}
 
-				s.respond(
-					request,
-					out.Array(command.Name,
-						[]string{
-							command.Description,
-							nodeid,
-						}),
-					out.Array("Usage", command.Usage),
-					out.Array("Inputs", inputs),
-					out.Array("Outputs", outputs))
+				s.bus.Response(
+					message.Spore(
+						request,
+						out.Array(command.Name,
+							[]string{
+								command.Description,
+								nodeid,
+							}),
+						out.Array("Usage", command.Usage),
+						out.Array("Inputs", inputs),
+						out.Array("Outputs", outputs)))
 				return
 			}
 		}
 
-		err := error.New(
-			error.Missing,
-			error.Spore,
-			"command not found",
-			out.Pair("command", "SPORE.command.help"))
-		s.respondError(request, err)
+		s.bus.Response(
+			error.New(
+				error.Missing,
+				error.Spore,
+				"command not found",
+				out.Pair("command", commandid)).
+				WithMessage(request))
 	}()
 
 	return nil

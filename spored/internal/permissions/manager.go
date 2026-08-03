@@ -95,12 +95,15 @@ func (m *Manager) Request(nodeid string, capability string, reason []string, ) (
 	}
 	raw := fmt.Sprintf(`dialog.alert title="%s" description="%s" entries=[Always Once No] ~%s`, title, description.String(), handle)
 	
-	msg, err := message.Request(raw, m.Id())
-	if err != nil {
-		return No, err
+	msg, ok := message.Request(raw, m.Id())
+	if !ok {
+		return No, error.New(
+			error.Malformed,
+			error.Permission,
+			"failure to request permission")
 	}
 	ch := m.pending.Await(handle)
-	err = m.bus.Request(msg)
+	err := m.bus.Request(msg)
 	if err != nil {
 		m.pending.Delete(handle)
 		return No, err
@@ -112,9 +115,13 @@ func (m *Manager) Request(nodeid string, capability string, reason []string, ) (
 	if response.Flag("error") {
 		return No, error.New(error.Generic, error.Permission, response.ArgIf("what", "permission request failed"))
 	}
-	entry, err := response.Arg("entry")
-	if err != nil {
-		return No, err
+	entry, ok := response.Arg("entry")
+	if ok {
+		return No, error.New(
+			error.Missing,
+			error.Permission,
+			"missing in response",
+			out.Pair("argument", "entry"))
 	}
 	return Value(entry), nil
 }
@@ -162,3 +169,4 @@ func (m *Manager) Receive(msg message.Message) *error.Error {
 	return m.pending.Receive(msg)
 }
 
+func (m *Manager) Witness(msg message.Message) {}

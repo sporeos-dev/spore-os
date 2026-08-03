@@ -52,7 +52,7 @@ func (a *api) request(msg message.Message) *error.Error {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 
-	if nodeid, ok := a.commands[msg.Command()]; ok {
+	if nodeid, ok := a.commands[msg.Capability()]; ok {
 		if node, ok := a.nodes[nodeid]; ok {
 			return node.Receive(msg)
 		} else {
@@ -60,7 +60,8 @@ func (a *api) request(msg message.Message) *error.Error {
 				error.Missing,
 				error.Bus,
 				"node not found",
-				out.Pair("command", msg.Command()))
+				out.Pair("command", msg.Capability())).
+				WithMessage(msg)
 		}
 	}
 
@@ -68,5 +69,6 @@ func (a *api) request(msg message.Message) *error.Error {
 		error.Missing,
 		error.Bus,
 		"command not found",
-		out.Pair("command", msg.Command()))
+		out.Pair("command", msg.Capability())).
+		WithMessage(msg)
 }

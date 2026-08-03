@@ -1,7 +1,6 @@
 package spore
 
 import (
-	"fmt"
 	"spored/internal/message"
 	"spored/internal/utilities/error"
 	"spored/internal/utilities/out"
@@ -31,18 +30,22 @@ func (s *Spore) topicList(request message.Message) *error.Error {
 
 			manifest := s.nodes.GetManifest(node)
 			if manifest == nil {
-				err := error.New(
-					error.Missing,
-					error.Spore,
-					"spore manifest not loaded")
-				s.respondError(request, err)
+				s.bus.Response(
+					error.New(
+						error.Missing,
+						error.Spore,
+						"spore manifest not loaded").
+						WithMessage(request))
 				return
 			}
 			topics = manifest.TopicIds()
 
 		}
 
-		s.respond(request, out.Array("topics", topics))
+		s.bus.Response(
+			message.Spore(
+				request,
+				out.Array("topics", topics)))
 	}()
 
 	return nil
@@ -50,9 +53,9 @@ func (s *Spore) topicList(request message.Message) *error.Error {
 
 func (s *Spore) topicHelp(request message.Message) *error.Error {
 
-	topicid, err := request.Arg("topic")
-	if err != nil {
-		return err
+	topicid, ok := request.Arg("topic")
+	if !ok {
+		return error.MissingArg("topic", error.Spore).WithMessage(request)
 	}
 
 	go func() {
@@ -69,14 +72,15 @@ func (s *Spore) topicHelp(request message.Message) *error.Error {
 				}
 			}
 
-			s.respond(
-				request,
-				out.Array(topic.Name,
-					[]string{
-						topic.Description,
-						s.manifest.ID,
-					}),
-				out.Array("Outputs", outputs))
+			s.bus.Response(
+				message.Spore(
+					request,
+					out.Array(topic.Name,
+						[]string{
+							topic.Description,
+							s.manifest.ID,
+						}),
+					out.Array("Outputs", outputs)))
 			return
 		}
 
@@ -95,24 +99,26 @@ func (s *Spore) topicHelp(request message.Message) *error.Error {
 					}
 				}
 
-				s.respond(
-					request,
-					out.Array(topic.Name,
-						[]string{
-							topic.Description,
-							nodeid,
-						}),
-					out.Array("Outputs", outputs))
+				s.bus.Response(
+					message.Spore(
+						request,
+						out.Array(topic.Name,
+							[]string{
+								topic.Description,
+								nodeid,
+							}),
+						out.Array("Outputs", outputs)))
 				return
 			}
 		}
 
-		err := error.New(
-			error.Missing,
-			error.Spore,
-			"topic not found",
-			out.Pair("topic", topicid))
-		s.respondError(request, err)
+		s.bus.Response(
+			error.New(
+				error.Missing,
+				error.Spore,
+				"topic not found",
+				out.Pair("topic", topicid)).
+				WithMessage(request))
 	}()
 
 	return nil
@@ -120,26 +126,28 @@ func (s *Spore) topicHelp(request message.Message) *error.Error {
 
 func (s *Spore) topicState(request message.Message) *error.Error {
 
-	_, err := request.Arg("topic")
-	if err != nil {
-		return err
+	_, ok := request.Arg("topic")
+	if !ok {
+		return error.MissingArg("topic", error.Spore).WithMessage(request)
 	}
 
 	go func() {
-		err := error.New(
-			error.NotImplemented,
-			error.Spore,
-			"spore topic state not yet implemented")
-		s.respondError(request, err)
+		s.bus.Response(
+			error.New(
+				error.NotImplemented,
+				error.Spore,
+				"spore topic state not yet implemented").
+				WithMessage(request))
 	}()
+	
 	return nil
 }
 
 func (s *Spore) topicSubscribe(request message.Message) *error.Error {
 
-	topic, err := request.Arg("topic")
-	if err != nil {
-		return err
+	topic, ok := request.Arg("topic")
+	if !ok {
+		return error.MissingArg("topic", error.Spore).WithMessage(request)
 	}
 	cast := request.Cast()
 
@@ -166,30 +174,32 @@ func (s *Spore) topicSubscribe(request message.Message) *error.Error {
 				error.Missing,
 				error.Spore,
 				"topic not found",
-				out.Pair("topic", topic))
-			s.respondError(request, err)
+				out.Pair("topic", topic)).
+				WithMessage(request)
+			s.bus.Response(err)
 			return
 		}
 
 		// Check the subscribing node has permission for this capability.
 		if !s.permissions.Can(cast, topic) {
-			s.bus.WitnessSpore(fmt.Sprintf("Subscription denied: %s lacks permission for topic %s", cast, topic))
 			err := error.New(
 				error.NotPermitted,
 				error.Spore,
 				"permission required to subscribe",
 				out.Pair("node", cast),
-				out.Pair("topic", topic))
-			s.respondError(request, err)
+				out.Pair("topic", topic)).
+				WithMessage(request)
+			s.bus.Response(err)
 			return
 		}
 
 		err := s.bus.Subscribe(cast, topic)
 		if err != nil {
-			s.respondError(request, err)
+			s.bus.Response(err.WithMessage(request))
 			return
 		}
-		s.respond(request)
+
+		s.bus.Response(message.Spore(request))
 	}()
 
 	return nil
@@ -197,19 +207,19 @@ func (s *Spore) topicSubscribe(request message.Message) *error.Error {
 
 func (s *Spore) topicUnsubscribe(request message.Message) *error.Error {
 	
-	topic, err := request.Arg("topic")
-	if err != nil {
-		return err
+	topic, ok := request.Arg("topic")
+	if !ok {
+		return error.MissingArg("topic", error.Spore).WithMessage(request)
 	}
 	cast := request.Cast()
 
 	go func() {
 		err := s.bus.Unsubscribe(cast, topic)
 		if err != nil {
-			s.respondError(request, err)
+			s.bus.Response(err.WithMessage(request))
 			return
 		}
-		s.respond(request)
+		s.bus.Response(message.Spore(request))
 	}()
 
 	return nil

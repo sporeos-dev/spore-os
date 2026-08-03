@@ -56,7 +56,7 @@ func (s *spore) Handle() string {
 // wire: +handle +subject +responses +ok +cast +capture
 // --> ~handle:subject <responses> cast=requester.id capture=spore.id
 func (s *spore) Wire() string {
-	return fmt.Sprintf(`~%s:%s %s cast=%s capture=%s`, s.Handle(), s.Capability(), s.responsesToString(), s.Cast(), s.Capture())
+	return fmt.Sprintf(`~%s:%s %s ok cast=%s capture=%s`, s.Handle(), s.Capability(), s.responsesToString(), s.Cast(), s.Capture())
 }
 
 // witness out: +witness +spore_outgoing +spore_time

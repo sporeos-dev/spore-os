@@ -25,6 +25,7 @@ const (
 	Manifest Module = "Manifest"
 	Message Module = "Message"
 	Node Module = "Node"
+	Parser Module = "Parser"
 	Permission Module = "Permission"
 	Policy Module = "Policy"
 	Registry Module = "Registry"

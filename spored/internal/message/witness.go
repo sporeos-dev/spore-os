@@ -23,7 +23,7 @@ func Witness(body string, outs ...out.IOut) Message {
 			witnessFlag = el.String()
 			continue
 		}
-		builder.WriteString(el.String())
+		builder.WriteString(fmt.Sprintf(` %s`, el.String()))
 	}
 	return &witness{
 		raw: builder.String(),

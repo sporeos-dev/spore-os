@@ -4,10 +4,10 @@ import (
 	"strings"
 )
 
-// Tokenize splits a raw string into tokens respecting quoted strings, arrays,
+// tokenize splits a raw string into tokens respecting quoted strings, arrays,
 // objects, and inline call expressions. Returns a non-empty error string if
-// any delimiter is unclosed. See message/parse.go for full delimiter rules.
-func Tokenize(raw string) ([]string, string) {
+// any delimiter is unclosed.
+func tokenize(raw string) ([]string, string) {
 	tokens := make([]string, 0, 8)
 	buf := make([]byte, 0, 64)
 	i := 0
@@ -114,9 +114,9 @@ func Tokenize(raw string) ([]string, string) {
 	return tokens, ""
 }
 
-// UnquoteValue strips surrounding quote delimiters and decodes escape
+// unquoteValue strips surrounding quote delimiters and decodes escape
 // sequences for double-quoted strings. Arrays and objects are returned as-is.
-func UnquoteValue(s string) string {
+func unquoteValue(s string) string {
 	if len(s) >= 2 {
 		if s[0] == '"' && s[len(s)-1] == '"' {
 			return unescapeDoubleQuoted(s[1 : len(s)-1])
@@ -175,11 +175,11 @@ func ArrayToStrings(s string) []string {
 	// inside `"hello, world"` would be corrupted. Acceptable for the current
 	// use-case (identifiers and short reason strings without internal commas).
 	s = strings.ReplaceAll(s, ",", " ")
-	tokens, _ := Tokenize(s)
+	tokens, _ := tokenize(s)
 	result := make([]string, 0, len(tokens))
 	for _, tok := range tokens {
 		if tok != "" {
-			result = append(result, UnquoteValue(tok))
+			result = append(result, unquoteValue(tok))
 		}
 	}
 	return result

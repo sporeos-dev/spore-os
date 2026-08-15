@@ -2,6 +2,17 @@
 
 # Development
 
+## Dependencies
+
+`spored` uses CGo to link against the shared parser library from
+[spore-client-libs](https://github.com/sporeos-dev/spore-client-libs).
+The pre-built static library must be present at `../spore-client-libs/dist/`
+(i.e. the two repositories are expected to be siblings under the same parent
+directory, e.g. `$DEV/spore-os` and `$DEV/spore-client-libs`).
+
+On macOS the library ships as a universal fat binary covering both arm64 and
+x86_64. A C compiler (Xcode Command Line Tools) is required to build.
+
 ## Building
 
 ```bash

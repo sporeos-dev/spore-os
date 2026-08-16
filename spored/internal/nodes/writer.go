@@ -23,11 +23,6 @@ func (w *writer) WriteString(s string, nid string, bus ibus) {
 		s += "\n"
 	}
 
-	hasbus := "has bus" 
-	if bus == nil {
-		hasbus = "has no bus"
-	}
-	println(".  writer", hasbus, nid, s)
 	w.writer.WriteString(s)
 	w.writer.Flush()
 	if bus != nil {

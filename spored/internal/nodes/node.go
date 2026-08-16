@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"spored/internal/cparser"
 	"spored/internal/manifest"
 	"spored/internal/message"
 	"spored/internal/registry"
@@ -216,7 +217,13 @@ func (n *node) listen() {
 		// witnessing starts with witness
 		if strings.HasPrefix(raw, "witness") {
 			
-			body := strings.TrimPrefix(raw, "witness ")
+			pm, ok := cparser.Parse(raw)
+			var body string
+			if ok {
+				body = pm.Args["body"]
+			} else {
+				body = strings.TrimPrefix(raw, "witness ")
+			}
 			n.bus.Witness(message.Node(body, n.registry.ID))
 			continue
 
@@ -234,7 +241,6 @@ func (n *node) listen() {
 					out.Pair("raw", raw)))
 				continue
 			}
-			n.bus.Witness(broadcast)
 
 			topic := broadcast.Capability()
 			ok = false
@@ -293,6 +299,7 @@ func (n *node) listen() {
 					"failed to request",
 					out.Pair("node", n.registry.ID),
 					out.Pair("raw", raw)))
+				continue
 			}
 
 			// if n.manifest.Trust == manifest.StandardTrust || n.manifest.Trust == manifest.Untrusted {

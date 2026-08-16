@@ -41,6 +41,24 @@ func Node(raw string, cast string) Message {
 	}
 }
 
+// incoming
+func Incoming(raw string, cast string) Message {
+	return &witness {
+		raw: raw,
+		cast: cast,
+		witnessFlag: "spore_incoming",
+	}
+}
+
+// outgoing
+func Outgoing(raw string, cast string) Message {
+	return &witness {
+		raw: raw,
+		cast: cast,
+		witnessFlag: "spore_outgoing",
+	}
+}
+
 func (w *witness) Capability() string {
 	return "n/a"
 }

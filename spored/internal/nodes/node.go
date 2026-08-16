@@ -33,7 +33,7 @@ type node struct {
 	mu sync.RWMutex
 	conn net.Conn
 	reader *bufio.Reader
-	writer *bufio.Writer
+	writer *writer
 }
 
 //
@@ -176,7 +176,7 @@ func (n *node) handleConnection(conn net.Conn, reader *bufio.Reader, writer *buf
 	n.mu.Lock()
 	n.conn = conn
 	n.reader = reader
-	n.writer = writer
+	n.writer = newWriter(writer)
 	n.mu.Unlock()
 
 	n.bus.Witness(
@@ -223,14 +223,9 @@ func (n *node) listen() {
 		// publishing starts with publish
 		} else if strings.HasPrefix(raw, "publish") {
 
+			n.bus.Witness(message.Incoming(raw, n.registry.ID))
 			broadcast, ok := message.Broadcast(raw, n.registry.ID)
 			if !ok {
-				n.bus.Witness(
-					message.Witness(
-						"malformed broadcast",
-						out.Flag("spore_incoming"),
-						out.Pair("node", n.registry.ID),
-						out.Pair("raw", raw)))
 				n.Receive(error.New(
 					error.Malformed,
 					error.Node,
@@ -268,14 +263,9 @@ func (n *node) listen() {
 		// response starts with handle
 		} else if strings.HasPrefix(raw, "~") {
 
+			n.bus.Witness(message.Incoming(raw, n.registry.ID))
 			response, ok := message.Response(raw, n.registry.ID)
 			if !ok {
-				n.bus.Witness(
-					message.Witness(
-						"malformed response",
-						out.Flag("spore_incoming"),
-						out.Pair("node", n.registry.ID),
-						out.Pair("raw", raw)))
 				n.Receive(error.New(
 					error.Malformed,
 					error.Node,
@@ -294,14 +284,9 @@ func (n *node) listen() {
 		// fallback to request
 		} else {
 
+			n.bus.Witness(message.Incoming(raw, n.registry.ID))
 			request, ok := message.Request(raw, n.registry.ID)
 			if !ok {
-				n.bus.Witness(
-					message.Witness(
-						"malformed request",
-						out.Flag("spore_incoming"),
-						out.Pair("node", n.registry.ID),
-						out.Pair("raw", raw)))
 				n.Receive(error.New(
 					error.Malformed,
 					error.Node,
@@ -309,7 +294,6 @@ func (n *node) listen() {
 					out.Pair("node", n.registry.ID),
 					out.Pair("raw", raw)))
 			}
-			n.bus.Witness(request)
 
 			// if n.manifest.Trust == manifest.StandardTrust || n.manifest.Trust == manifest.Untrusted {
 			// 	command := msg.Command()
@@ -386,10 +370,7 @@ func (n *node) Receive(message message.Message) *error.Error {
 		}
 	}
 
-	n.bus.Witness(message)
-	n.writer.WriteString(message.Wire() + "\n")
-	n.writer.Flush()
-
+	n.writer.WriteString(message.Wire(), n.registry.ID, n.bus)
 	return nil
 }
 
@@ -401,8 +382,7 @@ func (n *node) Witness(message message.Message) {
 		return
 	}
 
-	n.writer.WriteString(message.Witness() + "\n")
-	n.writer.Flush()
+	n.writer.WriteString(message.Witness(), n.registry.ID, nil)
 }
 
 //

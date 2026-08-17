@@ -2,7 +2,7 @@ package permissions
 
 import (
 	"spored/internal/bus"
-	"spored/internal/message"
+	"spored/internal/iface"
 	"spored/internal/utilities/error"
 )
 
@@ -17,8 +17,7 @@ const (
 type ibus interface {
 	Register(node bus.INode)
 	Unregister(node bus.INode)
-	Request(msg message.Message) *error.Error
-	Witness(msg message.Message)
+	Request(msg iface.Message) *error.Error
 }
 
 type ihyphae interface {}

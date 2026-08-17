@@ -2,8 +2,8 @@ package spore
 
 import (
 	"log/slog"
+	"spored/internal/iface"
 	"spored/internal/manifest"
-	"spored/internal/message"
 	"spored/internal/pal"
 	"spored/internal/utilities/error"
 	"spored/internal/utilities/out"
@@ -68,7 +68,7 @@ func (s *Spore) GetManifest() *manifest.Manifest {
 	return s.manifest
 }
 
-func (s *Spore) Receive(request message.Message) *error.Error {
+func (s *Spore) Receive(request iface.Message) *error.Error {
 	switch request.Capability() {
 	case "SPORE.help": return s.help(request)
 	case "SPORE.info": return s.info(request)
@@ -107,6 +107,8 @@ func (s *Spore) Receive(request message.Message) *error.Error {
 	case "SPORE.security.signature.verify": return s.securitySignatureVerify(request)
 	}
 
+
+
 	return error.New(
 		error.Missing,
 		error.Spore,
@@ -115,4 +117,4 @@ func (s *Spore) Receive(request message.Message) *error.Error {
 		WithMessage(request)
 }
 
-func (s *Spore) Witness(message message.Message) {}
+func (s *Spore) Witness(message iface.Message) {}

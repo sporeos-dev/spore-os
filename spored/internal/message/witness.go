@@ -2,6 +2,7 @@ package message
 
 import (
 	"fmt"
+	"spored/internal/iface"
 	"spored/internal/utilities/out"
 	"strings"
 	"time"
@@ -14,7 +15,7 @@ type witness struct {
 }
 
 // from spore
-func Witness(body string, outs ...out.IOut) Message {
+func Witness(body string, outs ...out.IOut) iface.Message {
 	witnessFlag := "spore_event"
 	var builder strings.Builder
 	builder.WriteString(body)
@@ -33,7 +34,7 @@ func Witness(body string, outs ...out.IOut) Message {
 }
 
 // from node
-func Node(raw string, cast string) Message {
+func Node(raw string, cast string) iface.Message {
 	return &witness{
 		raw: raw,
 		cast: cast,
@@ -42,7 +43,7 @@ func Node(raw string, cast string) Message {
 }
 
 // incoming
-func Incoming(raw string, cast string) Message {
+func Incoming(raw string, cast string) iface.Message {
 	return &witness {
 		raw: raw,
 		cast: cast,
@@ -51,7 +52,7 @@ func Incoming(raw string, cast string) Message {
 }
 
 // outgoing
-func Outgoing(raw string, cast string) Message {
+func Outgoing(raw string, cast string) iface.Message {
 	raw = strings.ReplaceAll(raw, "\n", "\\n")
 	raw = strings.ReplaceAll(raw, "\"", "\\\"")
 	return &witness {
@@ -108,10 +109,10 @@ func (w *witness) Witness() string {
 	
 	// spore_event
 	if w.cast == "n/a" {
-		return fmt.Sprintf(`witness body='%s' %s spore_time=%d`, w.raw, w.witnessFlag, t)	
+		return fmt.Sprintf("witness body='%s' %s spore_time=%d", w.raw, w.witnessFlag, t)	
 
 	// spore_node
 	} else {
-		return fmt.Sprintf(`witness body='%s' cast=%s %s spore_time=%d`, w.raw, w.cast, w.witnessFlag, t)
+		return fmt.Sprintf("witness body='%s' cast=%s %s spore_time=%d", w.raw, w.cast, w.witnessFlag, t)
 	}
 }

@@ -1,6 +1,6 @@
-package message
+package iface
 
-type Message interface{
+type Message interface {
 	Capability() string
 	Cast() string
 	Capture() string

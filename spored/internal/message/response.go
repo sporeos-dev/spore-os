@@ -2,6 +2,7 @@ package message
 
 import (
 	"fmt"
+	"spored/internal/iface"
 	"time"
 )
 
@@ -17,7 +18,7 @@ type response struct {
 	isError bool
 }
 
-func Response(raw string, captureID string) (Message, bool) {
+func Response(raw string, captureID string) (iface.Message, bool) {
 	parsed, ok := parseResponse(raw)
 	if !ok {
 		return nil, false
@@ -93,12 +94,12 @@ func (r *response) Handle() string {
 // wire: +capture
 // --> <raw> ok capture=responder.id
 func (r *response) Wire() string {
-	return fmt.Sprintf(`%s capture=%s`, r.raw, r.id)
+	return fmt.Sprintf("%s capture=%s", r.raw, r.id)
 }
 
 // witness out: +witness +spore_outgoing +spore_time
 // --> witness <wire> spore_outgoing spore_time=time
 func (r *response) Witness() string {
 	t := time.Now().UnixMilli()
-	return fmt.Sprintf(`witness %s spore_outgoing spore_time=%d`, r.Wire(), t)
+	return fmt.Sprintf("witness body='%s' spore_outgoing spore_time=%d", r.Wire(), t)
 }

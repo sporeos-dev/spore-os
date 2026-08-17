@@ -2,8 +2,8 @@ package nodes
 
 import (
 	"bufio"
-	"spored/internal/message"
-	"strings"
+	"spored/internal/iface"
+	"spored/internal/witness"
 )
 
 type writer struct {
@@ -16,16 +16,21 @@ func newWriter(w *bufio.Writer) *writer {
 	}
 }
 
-// pass nil ibus for witness messages
-// to avoid infinite recursion of witnessing
-func (w *writer) WriteString(s string, nid string, bus ibus) {
-	if !strings.HasSuffix(s, "\n") {
-		s += "\n"
-	}
-
+func (w *writer) WriteRaw(s string) {
 	w.writer.WriteString(s)
+	w.writer.WriteString("\n")
 	w.writer.Flush()
-	if bus != nil {
-		bus.Witness(message.Outgoing(s, nid))
-	}
+}
+
+func (w *writer) WriteMessage(msg iface.Message) {
+	w.writer.WriteString(msg.Wire())
+	w.writer.WriteString("\n")
+	w.writer.Flush()
+	witness.Send(msg)
+}
+
+func (w *writer) WriteWitness(msg iface.Message) {
+	w.writer.WriteString(msg.Witness())
+	w.writer.WriteString("\n")
+	w.writer.Flush()
 }

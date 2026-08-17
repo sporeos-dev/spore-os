@@ -1,13 +1,14 @@
 package spore
 
 import (
+	"spored/internal/iface"
 	"spored/internal/manifest"
 	"spored/internal/message"
 	"spored/internal/utilities/error"
 	"spored/internal/utilities/out"
 )
 
-func (s *Spore) nodeList(request message.Message) *error.Error {
+func (s *Spore) nodeList(request iface.Message) *error.Error {
 
 	go func() {
 		nodeids := append([]string{s.manifest.ID}, s.nodes.GetNodes()...)
@@ -17,7 +18,7 @@ func (s *Spore) nodeList(request message.Message) *error.Error {
 	return nil
 }
 
-func (s *Spore) nodeHelp(request message.Message) *error.Error {
+func (s *Spore) nodeHelp(request iface.Message) *error.Error {
 	
 	node, ok := request.Arg("node")
 	if !ok {
@@ -59,7 +60,7 @@ func (s *Spore) nodeHelp(request message.Message) *error.Error {
 	return nil
 }
 
-func (s *Spore) nodeState(request message.Message) *error.Error {
+func (s *Spore) nodeState(request iface.Message) *error.Error {
 	
 	node, ok := request.Arg("node")
 	if !ok {
@@ -79,7 +80,7 @@ func (s *Spore) nodeState(request message.Message) *error.Error {
 	return nil
 }
 
-func (s *Spore) nodeInstall(request message.Message) *error.Error {
+func (s *Spore) nodeInstall(request iface.Message) *error.Error {
 	
 	path, ok := request.Arg("path")
 	if !ok {
@@ -98,7 +99,7 @@ func (s *Spore) nodeInstall(request message.Message) *error.Error {
 	return nil
 }
 
-func (s *Spore) nodeUninstall(request message.Message) *error.Error {
+func (s *Spore) nodeUninstall(request iface.Message) *error.Error {
 	
 	node, ok := request.Arg("node")
 	if !ok {
@@ -117,7 +118,7 @@ func (s *Spore) nodeUninstall(request message.Message) *error.Error {
 	return nil
 }
 
-func (s *Spore) nodeSpawn(request message.Message) *error.Error {
+func (s *Spore) nodeSpawn(request iface.Message) *error.Error {
 
 	node, ok := request.Arg("node")
 	if !ok {
@@ -136,7 +137,7 @@ func (s *Spore) nodeSpawn(request message.Message) *error.Error {
 	return nil
 }
 
-func (s *Spore) nodeKill(request message.Message) *error.Error {
+func (s *Spore) nodeKill(request iface.Message) *error.Error {
 
 	node, ok := request.Arg("node")
 	if !ok {

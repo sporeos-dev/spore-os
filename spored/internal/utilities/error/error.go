@@ -3,7 +3,7 @@ package error
 import (
 	"fmt"
 	"log/slog"
-	"spored/internal/message"
+	"spored/internal/iface"
 	"strings"
 	"time"
 )
@@ -14,7 +14,7 @@ type Error struct {
 	what string
 	extras []string
 
-	message message.Message
+	message iface.Message
 	incomingSent bool
 }
 
@@ -37,7 +37,7 @@ func New(code Code, module Module, what string, out ...fmt.Stringer) *Error {
     return err
 }
 
-func (e *Error) WithMessage(message message.Message) *Error {
+func (e *Error) WithMessage(message iface.Message) *Error {
 	e.message = message
 	return e
 }
@@ -57,7 +57,7 @@ func (e *Error) Error() string{
 
 //
 //
-// message.Message
+// iface.Message
 // interface
 //
 
@@ -132,7 +132,7 @@ func (e *Error) Wire() string {
 	// capture error
 	// send forward
 	} else {
-		return fmt.Sprintf(`%s capture=%s`, wire, e.message.Capture())
+		return fmt.Sprintf("%s capture=%s", wire, e.message.Capture())
 	}
 }
 
@@ -142,12 +142,12 @@ func (e *Error) Witness() string {
 	// no message
 	// spore error
 	if e.message == nil {
-		return fmt.Sprintf(`witness error code=%s.%s what="%s" %s spore_event spore_time=%d`, e.code, e.module, e.what, e.extrasToString(), t) 
+		return fmt.Sprintf("witness body='error code=%s.%s what=\"%s\"' %s spore_event spore_time=%d", e.code, e.module, e.what, e.extrasToString(), t)
 
 	// otherwise
 	// outgoing
 	} else {
-		return fmt.Sprintf(`witness %s spore_outgoing spore_time=%d`, e.Wire(), t)
+		return fmt.Sprintf("witness body='%s' spore_outgoing spore_time=%d", e.Wire(), t)
 	}
 }
 

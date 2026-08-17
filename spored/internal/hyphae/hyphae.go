@@ -3,6 +3,7 @@ package hyphae
 import (
 	"fmt"
 	"path/filepath"
+	"spored/internal/iface"
 	"spored/internal/manifest"
 	"spored/internal/message"
 	"spored/internal/registry"
@@ -10,6 +11,7 @@ import (
 	"spored/internal/utilities/error"
 	"spored/internal/utilities/out"
 	"spored/internal/utilities/status"
+	"spored/internal/witness"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -130,7 +132,7 @@ func (h *Hyphae) manifestRead(path string) (string, *error.Error) {
 			error.Hyphae,
 			"failure to read manifest")
 	}
-	h.bus.Witness(msg)
+	witness.Send(msg)
 
 	ch := h.pending.Await(handle)
 	err := h.bus.Request(msg)
@@ -170,7 +172,7 @@ func (h *Hyphae) binaryHash(pid int) (string, *error.Error) {
 			error.Hyphae,
 			"failure to hash binary")
 	}
-	h.bus.Witness(msg)
+	witness.Send(msg)
 
 	ch := h.pending.Await(handle)
 	err := h.bus.Request(msg)
@@ -210,7 +212,7 @@ func (h *Hyphae) fileHash(path string) (string, *error.Error) {
 			error.Hyphae,
 			"failure to hash file")
 	}
-	h.bus.Witness(msg)
+	witness.Send(msg)
 
 	ch := h.pending.Await(handle)
 	err := h.bus.Request(msg)
@@ -250,7 +252,7 @@ func (h *Hyphae) nodeSpawn(path string) *error.Error {
 			error.Hyphae,
 			"failure to spawn node")
 	}
-	h.bus.Witness(msg)
+	witness.Send(msg)
 
 	ch := h.pending.Await(handle)
 	err := h.bus.Request(msg)
@@ -282,7 +284,7 @@ func (h *Hyphae) nodeKill(pid int) *error.Error {
 			error.Hyphae,
 			"failure to kill node")
 	}
-	h.bus.Witness(msg)
+	witness.Send(msg)
 
 	ch := h.pending.Await(handle)
 	err := h.bus.Request(msg)
@@ -337,8 +339,8 @@ func (h *Hyphae) GetManifest() *manifest.Manifest {
 	return nil
 }
 
-func (h *Hyphae) Receive(msg message.Message) *error.Error {
+func (h *Hyphae) Receive(msg iface.Message) *error.Error {
 	return h.pending.Receive(msg)
 }
 
-func (h *Hyphae) Witness(msg message.Message) {}
+func (h *Hyphae) Witness(msg iface.Message) {}

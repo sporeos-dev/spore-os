@@ -2,6 +2,7 @@ package message
 
 import (
 	"fmt"
+	"spored/internal/iface"
 	"time"
 )
 
@@ -16,7 +17,7 @@ type broadcast struct {
 	incomingSent bool
 }
 
-func Broadcast(raw string, id string) (Message, bool) {
+func Broadcast(raw string, id string) (iface.Message, bool) {
 	parsed, ok := parseBroadcast(raw)
 	if !ok {
 		return nil, false
@@ -90,7 +91,7 @@ func (b *broadcast) Handle() string {
 // wire: +cast
 // --> <raw> +cast
 func (b *broadcast) Wire() string {
-	return fmt.Sprintf(`%s cast=%s`, b.raw, b.id)
+	return fmt.Sprintf("%s cast=%s", b.raw, b.id)
 }
 
 // witness in: +witness +spore_incoming +spore_time
@@ -105,5 +106,5 @@ func (b *broadcast) Witness() string {
 	if incomingSent {
 		witnessFlag = "spore_outgoing"
 	}
-	return fmt.Sprintf(`witness %s %s spore_time=%d`, b.Wire(), witnessFlag, t)
+	return fmt.Sprintf("witness body='%s' %s spore_time=%d", b.Wire(), witnessFlag, t)
 }

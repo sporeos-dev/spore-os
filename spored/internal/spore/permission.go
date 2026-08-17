@@ -1,13 +1,14 @@
 package spore
 
 import (
+	"spored/internal/iface"
 	"spored/internal/message"
 	"spored/internal/utilities/error"
 	"spored/internal/utilities/out"
 	"spored/internal/utilities/parse"
 )
 
-func (s *Spore) permissionList(request message.Message) *error.Error {
+func (s *Spore) permissionList(request iface.Message) *error.Error {
 
 	nodeid, ok := request.Arg("node")
 	if !ok {
@@ -30,7 +31,7 @@ func (s *Spore) permissionList(request message.Message) *error.Error {
 	return nil
 }
 
-func (s *Spore) permissionRequest(request message.Message) *error.Error {
+func (s *Spore) permissionRequest(request iface.Message) *error.Error {
 	
 	node, ok := request.Arg("node")
 	if !ok {
@@ -61,7 +62,7 @@ func (s *Spore) permissionRequest(request message.Message) *error.Error {
 	return nil
 }
 
-func (s *Spore) permissionGrant(request message.Message) *error.Error {
+func (s *Spore) permissionGrant(request iface.Message) *error.Error {
 	
 	node, ok := request.Arg("node")
 	if !ok {
@@ -86,7 +87,7 @@ func (s *Spore) permissionGrant(request message.Message) *error.Error {
 	return nil
 }
 
-func (s *Spore) permissionRevoke(request message.Message) *error.Error {
+func (s *Spore) permissionRevoke(request iface.Message) *error.Error {
 
 	node, ok := request.Arg("node")
 	if !ok {

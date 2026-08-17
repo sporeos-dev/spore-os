@@ -1,7 +1,7 @@
 package bus
 
 import (
-	"spored/internal/message"
+	"spored/internal/iface"
 	"spored/internal/utilities/error"
 )
 
@@ -59,7 +59,7 @@ func (b *Bus) Unregister(n INode) {
 // routing
 //
 
-func (b *Bus) Broadcast(msg message.Message) *error.Error {
+func (b *Bus) Broadcast(msg iface.Message) *error.Error {
 	return b.broadcast.broadcast(msg)
 }
 
@@ -76,7 +76,7 @@ func (b *Bus) Unsubscribe(cast string, topic string) *error.Error {
 // response
 //
 
-func (b *Bus) Request(msg message.Message) *error.Error {
+func (b *Bus) Request(msg iface.Message) *error.Error {
 	err := b.responses.request(msg)
 	if err != nil {
 		return err
@@ -84,7 +84,7 @@ func (b *Bus) Request(msg message.Message) *error.Error {
 	return b.api.request(msg)
 }
 
-func (b *Bus) Response(msg message.Message) *error.Error {
+func (b *Bus) Response(msg iface.Message) *error.Error {
 	return b.responses.response(msg)
 }
 
@@ -92,6 +92,6 @@ func (b *Bus) Response(msg message.Message) *error.Error {
 // witness
 //
 
-func (b *Bus) Witness(msg message.Message) {
+func (b *Bus) Witness(msg iface.Message) {
 	b.witness.witness(msg)
 }

@@ -12,6 +12,15 @@ import (
 	"sync"
 )
 
+type Color string
+const (
+	Reset Color = "\033[0m"
+	Red Color = "\033[31m"
+	Green Color = "\033[32m"
+	Yellow Color = "\033[33m"
+	Blue Color = "\033[34m"
+)
+
 type PlainHandler struct {
 	level slog.Leveler
 	attrs []slog.Attr
@@ -39,13 +48,13 @@ func (h *PlainHandler) Handle(_ context.Context, r slog.Record) error {
 	levelStr := r.Level.String()
 	switch levelStr {
 	case "DEBUG":
-		levelStr = "  [DEBUG]  "
+		levelStr = string(Blue) + "  [DEBUG]  " + string(Reset)
 	case "INFO":
-		levelStr = " -[.INFO]- "
+		levelStr = string(Green) + " -[.INFO]- " + string(Reset)
 	case "WARN":
-		levelStr = "!-[.WARN]-!"
+		levelStr = string(Yellow) + "!-[.WARN]-!" + string(Reset)
 	case "ERROR":
-		levelStr = "X=[ERROR]=X"
+		levelStr = string(Red) + "X=[ERROR]=X" + string(Reset)
 	}
 
 	msg := fmt.Sprintf("%s %s %s", timeStr, levelStr, r.Message)

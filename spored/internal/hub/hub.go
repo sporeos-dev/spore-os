@@ -12,6 +12,7 @@ import (
 	"spored/internal/spore"
 	"spored/internal/utilities/error"
 	"spored/internal/utilities/out"
+	"spored/internal/witness"
 )
 
 type Hub struct {
@@ -39,6 +40,8 @@ func New() (*Hub, *error.Error) {
 	h.nodes.Set(h.bus, h.hyphae, h.permissions, h.spore)
 	h.permissions.Set(h.bus, h.hyphae, h.nodes, h.spore)
 	h.spore.Set(h.bus, h.hyphae, h.nodes, h.permissions)
+
+	witness.Init(h.bus)
 
 	go h.listen()
 	return h, nil

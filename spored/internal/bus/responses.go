@@ -1,7 +1,7 @@
 package bus
 
 import (
-	"spored/internal/message"
+	"spored/internal/iface"
 	"spored/internal/utilities/error"
 	"spored/internal/utilities/out"
 	"sync"
@@ -35,7 +35,7 @@ func (r *responses) unregister(n INode) {
 	delete(r.nodes, n.Id())
 }
 
-func (r *responses) request(msg message.Message) *error.Error {
+func (r *responses) request(msg iface.Message) *error.Error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -56,7 +56,7 @@ func (r *responses) request(msg message.Message) *error.Error {
 	return nil
 }
 
-func (r *responses) response(msg message.Message) *error.Error {
+func (r *responses) response(msg iface.Message) *error.Error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 

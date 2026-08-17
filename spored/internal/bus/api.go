@@ -1,7 +1,7 @@
 package bus
 
 import (
-	"spored/internal/message"
+	"spored/internal/iface"
 	"spored/internal/utilities/error"
 	"spored/internal/utilities/out"
 	"sync"
@@ -48,7 +48,7 @@ func (a *api) unregister(n INode) {
 	}
 }
 
-func (a *api) request(msg message.Message) *error.Error {
+func (a *api) request(msg iface.Message) *error.Error {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 

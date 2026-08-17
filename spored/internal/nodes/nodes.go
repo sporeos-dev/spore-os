@@ -13,6 +13,7 @@ import (
 	"spored/internal/utilities/file"
 	"spored/internal/utilities/out"
 	"spored/internal/utilities/status"
+	"spored/internal/witness"
 	"strings"
 	"sync"
 	"time"
@@ -81,7 +82,7 @@ func (n *Nodes) Autostart() {
 	for _, el := range n.nodes {
 		if el.manifest.Launch == manifest.Auto {
 			if el.manifest.Namespace == manifest.Hyphae {
-				n.bus.Witness(
+				witness.Send(
 					error.New(
 						error.Generic,
 						error.Node,
@@ -92,7 +93,7 @@ func (n *Nodes) Autostart() {
 
 			err := n.Spawn(el.registry.ID)
 			if err != nil {
-				n.bus.Witness(
+				witness.Send(
 					error.New(
 						error.Generic,
 						error.Node,
@@ -101,7 +102,7 @@ func (n *Nodes) Autostart() {
 				continue
 			}
 
-			n.bus.Witness(
+			witness.Send(
 				message.Witness(
 					"node autostarted",
 					out.Pair("node", el.registry.ID)))
@@ -122,18 +123,17 @@ func (n *Nodes) HandleConnection(conn net.Conn) {
 		err := error.New(
 			error.HandshakeDenial,
 			error.Node,
-			"failed initial handshake read",
+			"failed handshake at step 1: initial read",
 			out.Pair("error", erro.Error()))
 		
-		n.bus.Witness(err)		
-		writer.WriteString(err.Wire() + "\n")
+		witness.Send(err)
 		writer.Flush()
 		conn.Close()
 		return
 	}
 
 	nodeid = strings.TrimSpace(nodeid)
-	n.bus.Witness(
+	witness.Send(
 		message.Witness(
 			"node connecting",
 			out.Pair("node", nodeid)))
@@ -148,7 +148,7 @@ func (n *Nodes) HandleConnection(conn net.Conn) {
 			"node not installed",
 			out.Pair("node", nodeid))
 		
-		n.bus.Witness(err)
+		witness.Send(err)
 		writer.WriteString(err.Wire() + "\n")
 		writer.Flush()
 		conn.Close()
@@ -158,7 +158,7 @@ func (n *Nodes) HandleConnection(conn net.Conn) {
 	// Handle the connection with the node
 	err := node.handleConnection(conn, reader, writer, n.hyphae)
 	if err != nil {
-		n.bus.Witness(err)
+		witness.Send(err)
 		writer.WriteString(err.Wire() + "\n")
 		writer.Flush()
 		conn.Close()
@@ -214,7 +214,7 @@ func (n *Nodes) GetManifest(nodeid string) *manifest.Manifest {
 
 func (n *Nodes) Install(path string) *error.Error {
 
-	n.bus.Witness(
+	witness.Send(
 		message.Witness(
 			"installing node",
 			out.Pair("path", path)))
@@ -317,18 +317,18 @@ func (n *Nodes) Install(path string) *error.Error {
 		for _, el := range node.manifest.Permissions {
 			perm, err := n.permissions.Request(node.registry.ID, el.Name, el.Reasons)
 			if err != nil {
-				n.bus.Witness(err)
+				witness.Send(err)
 				continue
 			}
 			switch perm {
 			case permissions.Always, permissions.Once:
-				n.bus.Witness(
+				witness.Send(
 					message.Witness(
 						"permission granted",
 						out.Pair("node", node.registry.ID),
 						out.Pair("capability", el.Name)))
 			case permissions.No, permissions.Never:
-				n.bus.Witness(
+				witness.Send(
 					message.Witness(
 						"permission denied",
 						out.Pair("node", node.registry.ID),
@@ -343,7 +343,7 @@ func (n *Nodes) Install(path string) *error.Error {
 func (n *Nodes) Uninstall(nodeid string) *error.Error {
 
 	nodeid = n.resolveId(nodeid)
-	n.bus.Witness(
+	witness.Send(
 		message.Witness(
 			"uninstalling node",
 			out.Pair("node", nodeid)))
@@ -367,7 +367,7 @@ func (n *Nodes) Uninstall(nodeid string) *error.Error {
 func (n *Nodes) Spawn(nodeid string) *error.Error {
 
 	nodeid = n.resolveId(nodeid)
-	n.bus.Witness(
+	witness.Send(
 		message.Witness(
 			"spawning node",
 			out.Pair("node", nodeid)))
@@ -422,7 +422,7 @@ func (n *Nodes) Spawn(nodeid string) *error.Error {
 func (n *Nodes) Kill(nodeid string) *error.Error {
 
 	nodeid = n.resolveId(nodeid)
-	n.bus.Witness(
+	witness.Send(
 		message.Witness(
 			"killing node",
 			out.Pair("node", nodeid)))
@@ -481,14 +481,14 @@ func (n *Nodes) resolveId(nodeid string) string {
 
 func (n *Nodes) acceptInstallationWarning(m *manifest.Manifest) bool {
 
-	n.bus.Witness(
+	witness.Send(
 		message.Witness(
 			"ensuring trust",
 			out.Pair("node", m.ID),
 			out.Pair("trust", string(m.Trust))))
 
 	if m.Trust == manifest.StandardTrust || m.Trust == manifest.Untrusted {
-		n.bus.Witness(
+		witness.Send(
 			message.Witness(
 				"low trust accepted",
 				out.Pair("node", m.ID),
@@ -504,7 +504,7 @@ func (n *Nodes) acceptInstallationWarning(m *manifest.Manifest) bool {
 	raw := fmt.Sprintf(`dialog.alert title="%s" description="%s" entries=[ Grant Deny ] ~%s`, title, description.String(), handle)
 	msg, ok := message.Request(raw, m.ID)
 	if !ok {
-		n.bus.Witness(
+		witness.Send(
 			error.New(
 				error.Malformed,
 				error.Node,
@@ -517,22 +517,22 @@ func (n *Nodes) acceptInstallationWarning(m *manifest.Manifest) bool {
 	err := n.bus.Request(msg)
 	if err != nil {
 		n.pending.Delete(handle)
-		n.bus.Witness(err)
+		witness.Send(err)
 		return false
 	}
 
 	response, err := n.pending.WaitFor(handle, ch)
 	if err != nil {
-		n.bus.Witness(err)
+		witness.Send(err)
 		return false
 	}
 	if response.Flag("error") {
-		n.bus.Witness(response)
+		witness.Send(response)
 		return false
 	}
 	entry, ok := response.Arg("entry")
 	if !ok {
-		n.bus.Witness(
+		witness.Send(
 			error.New(
 				error.Missing,
 				error.Node,

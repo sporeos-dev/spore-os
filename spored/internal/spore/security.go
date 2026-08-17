@@ -1,11 +1,11 @@
 package spore
 
 import (
-	"spored/internal/message"
+	"spored/internal/iface"
 	"spored/internal/utilities/error"
 )
 
-func (s *Spore) securityKeyringList(request message.Message) *error.Error {
+func (s *Spore) securityKeyringList(request iface.Message) *error.Error {
 	return error.New(
 		error.NotImplemented,
 		error.Spore,
@@ -13,7 +13,7 @@ func (s *Spore) securityKeyringList(request message.Message) *error.Error {
 		WithMessage(request)
 }
 
-func (s *Spore) securityKeyringInfo(request message.Message) *error.Error {
+func (s *Spore) securityKeyringInfo(request iface.Message) *error.Error {
 	return error.New(
 		error.NotImplemented,
 		error.Spore,
@@ -21,7 +21,7 @@ func (s *Spore) securityKeyringInfo(request message.Message) *error.Error {
 		WithMessage(request)
 }
 
-func (s *Spore) securityKeyringGrant(request message.Message) *error.Error {
+func (s *Spore) securityKeyringGrant(request iface.Message) *error.Error {
 	return error.New(
 		error.NotImplemented,
 		error.Spore,
@@ -29,7 +29,7 @@ func (s *Spore) securityKeyringGrant(request message.Message) *error.Error {
 		WithMessage(request)
 }
 
-func (s *Spore) securityKeyringRevoke(request message.Message) *error.Error {
+func (s *Spore) securityKeyringRevoke(request iface.Message) *error.Error {
 	return error.New(
 		error.NotImplemented,
 		error.Spore,
@@ -37,7 +37,7 @@ func (s *Spore) securityKeyringRevoke(request message.Message) *error.Error {
 		WithMessage(request)
 }
 
-func (s *Spore) securitySignatureSign(request message.Message) *error.Error {
+func (s *Spore) securitySignatureSign(request iface.Message) *error.Error {
 	return error.New(
 		error.NotImplemented,
 		error.Spore,
@@ -45,7 +45,7 @@ func (s *Spore) securitySignatureSign(request message.Message) *error.Error {
 		WithMessage(request)
 }
 
-func (s *Spore) securitySignatureVerify(request message.Message) *error.Error {
+func (s *Spore) securitySignatureVerify(request iface.Message) *error.Error {
 	return error.New(
 		error.NotImplemented,
 		error.Spore,

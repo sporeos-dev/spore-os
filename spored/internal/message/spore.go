@@ -2,17 +2,18 @@ package message
 
 import (
 	"fmt"
+	"spored/internal/iface"
 	"spored/internal/utilities/out"
 	"strings"
 	"time"
 )
 
 type spore struct {
-	request Message
+	request iface.Message
 	responses []string
 }
 
-func Spore(request Message, responses ...out.IOut) Message {
+func Spore(request iface.Message, responses ...out.IOut) iface.Message {
 	s := &spore {
 		request: request,
 		responses: make([]string, 0),
@@ -56,14 +57,14 @@ func (s *spore) Handle() string {
 // wire: +handle +subject +responses +ok +cast +capture
 // --> ~handle:subject <responses> cast=requester.id capture=spore.id
 func (s *spore) Wire() string {
-	return fmt.Sprintf(`~%s:%s %s ok cast=%s capture=%s`, s.Handle(), s.Capability(), s.responsesToString(), s.Cast(), s.Capture())
+	return fmt.Sprintf("~%s:%s %s ok cast=%s capture=%s", s.Handle(), s.Capability(), s.responsesToString(), s.Cast(), s.Capture())
 }
 
 // witness out: +witness +spore_outgoing +spore_time
 // --> witness <wire> spore_outgoing spore_time=time
 func (s *spore) Witness() string {
 	t := time.Now().UnixMilli()
-	return fmt.Sprintf(`witness %s spore_outgoing spore_time=%d`, s.Wire(), t)
+	return fmt.Sprintf("witness body='%s' spore_outgoing spore_time=%d", s.Wire(), t)
 }
 
 // 

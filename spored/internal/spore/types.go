@@ -2,20 +2,19 @@ package spore
 
 import (
 	"spored/internal/bus"
+	"spored/internal/iface"
 	"spored/internal/manifest"
-	"spored/internal/message"
 	"spored/internal/permissions"
 	"spored/internal/utilities/error"
 	"spored/internal/utilities/out"
 )
 
 type ibus interface {
-	Subscribe(cast string, topic string) *error.Error
-	Unsubscribe(cast string, topic string) *error.Error
 	Register(node bus.INode)
 	Unregister(node bus.INode)
-	Response(msg message.Message) *error.Error
-	Witness(msg message.Message)
+	Subscribe(cast string, topic string) *error.Error
+	Unsubscribe(cast string, topic string) *error.Error
+	Response(msg iface.Message) *error.Error
 }
 
 type ihyphae interface {}

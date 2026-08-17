@@ -3,6 +3,7 @@ package permissions
 import (
 	"fmt"
 	"slices"
+	"spored/internal/iface"
 	"spored/internal/manifest"
 	"spored/internal/message"
 	"spored/internal/utilities/await"
@@ -165,8 +166,8 @@ func (m *Manager) GetManifest() *manifest.Manifest {
 	return nil
 }
 
-func (m *Manager) Receive(msg message.Message) *error.Error {
+func (m *Manager) Receive(msg iface.Message) *error.Error {
 	return m.pending.Receive(msg)
 }
 
-func (m *Manager) Witness(msg message.Message) {}
+func (m *Manager) Witness(msg iface.Message) {}

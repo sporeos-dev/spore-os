@@ -1,8 +1,8 @@
 package bus
 
 import (
+	"spored/internal/iface"
 	"spored/internal/manifest"
-	"spored/internal/message"
 	"spored/internal/utilities/error"
 )
 
@@ -11,8 +11,8 @@ type INode interface {
 	IsConnected() bool
 	IsWitness() bool
 	GetManifest() *manifest.Manifest
-	Receive(message message.Message) *error.Error
-	Witness(message message.Message)
+	Receive(message iface.Message) *error.Error
+	Witness(message iface.Message)
 }
 
 type ihyphae interface {}

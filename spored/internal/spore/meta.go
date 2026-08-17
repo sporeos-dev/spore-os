@@ -1,12 +1,13 @@
 package spore
 
 import (
+	"spored/internal/iface"
 	"spored/internal/message"
 	"spored/internal/utilities/error"
 	"spored/internal/utilities/out"
 )
 
-func (s *Spore) help(request message.Message) *error.Error {
+func (s *Spore) help(request iface.Message) *error.Error {
 
 	go func() {
 		s.bus.Response(
@@ -33,7 +34,7 @@ func (s *Spore) help(request message.Message) *error.Error {
 	return nil
 }
 
-func (s *Spore) info(request message.Message) *error.Error {
+func (s *Spore) info(request iface.Message) *error.Error {
 
 	go func() {
 		s.bus.Response(
@@ -56,7 +57,7 @@ func (s *Spore) info(request message.Message) *error.Error {
 	return nil
 }
 
-func (s *Spore) state(request message.Message) *error.Error {
+func (s *Spore) state(request iface.Message) *error.Error {
 
 	go func() {
 		s.bus.Response(

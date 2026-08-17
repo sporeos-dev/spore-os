@@ -1,7 +1,7 @@
 package bus
 
 import (
-	"spored/internal/message"
+	"spored/internal/iface"
 	"spored/internal/utilities/error"
 	"sync"
 )
@@ -53,7 +53,7 @@ func (b *broadcast) unsubscribe(cast string, topic string) *error.Error {
 	return nil
 }
 
-func (b *broadcast) broadcast(msg message.Message) *error.Error {
+func (b *broadcast) broadcast(msg iface.Message) *error.Error {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 

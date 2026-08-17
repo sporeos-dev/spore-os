@@ -133,7 +133,7 @@ func main() {
 	//
 	// start program
 	//
-	slog.Info("Starting spored daemon", "interactive", service.Interactive(), "os", runtime.GOOS, "arch", runtime.GOARCH)
+	slog.Debug("Starting spored daemon", "interactive", service.Interactive(), "os", runtime.GOOS, "arch", runtime.GOARCH)
 
 	prg := &program{}
 
@@ -149,7 +149,7 @@ func main() {
 		<-sigChan
 		prg.stop()
 
-		slog.Info("Spored daemon stopped", "interactive", service.Interactive(), "os", runtime.GOOS, "arch", runtime.GOARCH)
+		slog.Debug("Spored daemon stopped", "interactive", service.Interactive(), "os", runtime.GOOS, "arch", runtime.GOARCH)
 
 	// otherwise
 	// run as a service (kardianos/service)

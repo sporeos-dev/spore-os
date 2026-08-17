@@ -3,7 +3,7 @@ package bus
 import (
 	"log/slog"
 	"slices"
-	"spored/internal/message"
+	"spored/internal/iface"
 	"sync"
 )
 
@@ -54,7 +54,7 @@ func (w *witness) unregister(n INode) {
 	}
 }
 
-func (w *witness) witness(msg message.Message) {
+func (w *witness) witness(msg iface.Message) {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
 

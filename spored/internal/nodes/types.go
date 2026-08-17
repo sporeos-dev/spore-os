@@ -2,8 +2,8 @@ package nodes
 
 import (
 	"spored/internal/bus"
+	"spored/internal/iface"
 	"spored/internal/manifest"
-	"spored/internal/message"
 	"spored/internal/permissions"
 	"spored/internal/registry"
 	"spored/internal/utilities/error"
@@ -12,10 +12,9 @@ import (
 type ibus interface {
 	Register(node bus.INode)
 	Unregister(node bus.INode)
-	Request(msg message.Message) *error.Error
-	Response(msg message.Message) *error.Error
-	Broadcast(msg message.Message) *error.Error
-	Witness(msg message.Message)
+	Request(msg iface.Message) *error.Error
+	Response(msg iface.Message) *error.Error
+	Broadcast(msg iface.Message) *error.Error
 }
 
 type ihyphae interface {

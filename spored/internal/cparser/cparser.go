@@ -11,6 +11,8 @@ package cparser
 */
 import "C"
 import (
+	"spored/internal/utilities/error"
+	"spored/internal/witness"
 	"strings"
 	"unsafe"
 )
@@ -63,6 +65,13 @@ func Parse(raw string) (ParsedMessage, bool) {
 	C.spore_parse(parser, cRaw, C.size_t(len(raw)), msg)
 
 	if bool(C.spore_parser_has_error(parser)) {
+		code := C.GoString(C.spore_parser_get_error_code(parser))
+		what := C.GoString(C.spore_parser_get_error_what(parser))
+		witness.Send(
+			error.New(
+				error.Code(code),
+				error.Parser,
+				what))
 		return out, false
 	}
 

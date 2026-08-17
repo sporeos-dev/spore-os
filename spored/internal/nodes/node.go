@@ -6,12 +6,14 @@ import (
 	"io"
 	"net"
 	"spored/internal/cparser"
+	"spored/internal/iface"
 	"spored/internal/manifest"
 	"spored/internal/message"
 	"spored/internal/registry"
 	"spored/internal/utilities/error"
 	"spored/internal/utilities/out"
 	"spored/internal/utilities/status"
+	"spored/internal/witness"
 	"strings"
 	"sync"
 )
@@ -86,7 +88,9 @@ func (n *node) state() ([]out.IOut, *error.Error) {
 // inode
 //
 
-func (n *node) handleConnection(conn net.Conn, reader *bufio.Reader, writer *bufio.Writer, hyphae ihyphae) *error.Error {
+func (n *node) handleConnection(conn net.Conn, reader *bufio.Reader, wr *bufio.Writer, hyphae ihyphae) *error.Error {
+
+	writer := newWriter(wr)
 
 	err := n.checkManifestForFailure()
 	if err != nil {
@@ -171,16 +175,15 @@ func (n *node) handleConnection(conn net.Conn, reader *bufio.Reader, writer *buf
 			out.Pair("binary_status", b.status.String()))
 	}
 
-	writer.WriteString("OK\n")
-	writer.Flush()
+	writer.WriteRaw("OK")
 
 	n.mu.Lock()
 	n.conn = conn
 	n.reader = reader
-	n.writer = newWriter(writer)
+	n.writer = writer
 	n.mu.Unlock()
 
-	n.bus.Witness(
+	witness.Send(
 		message.Witness(
 			"handshake successful",
 			out.Pair("node", n.registry.ID)))
@@ -195,7 +198,7 @@ func (n *node) listen() {
 		raw, err := n.reader.ReadString('\n')
 		if err != nil {
 			if err == io.EOF || errors.Is(err, net.ErrClosed) {
-				n.bus.Witness(
+				witness.Send(
 					message.Witness(
 						"node disconnecting",
 						out.Pair("node", n.registry.ID)))
@@ -224,13 +227,13 @@ func (n *node) listen() {
 			} else {
 				body = strings.TrimPrefix(raw, "witness ")
 			}
-			n.bus.Witness(message.Node(body, n.registry.ID))
+			witness.Send(message.Node(body, n.registry.ID))
 			continue
 
 		// publishing starts with publish
 		} else if strings.HasPrefix(raw, "publish") {
 
-			n.bus.Witness(message.Incoming(raw, n.registry.ID))
+			witness.Send(message.Incoming(raw, n.registry.ID))
 			broadcast, ok := message.Broadcast(raw, n.registry.ID)
 			if !ok {
 				n.Receive(error.New(
@@ -269,7 +272,7 @@ func (n *node) listen() {
 		// response starts with handle
 		} else if strings.HasPrefix(raw, "~") {
 
-			n.bus.Witness(message.Incoming(raw, n.registry.ID))
+			witness.Send(message.Incoming(raw, n.registry.ID))
 			response, ok := message.Response(raw, n.registry.ID)
 			if !ok {
 				n.Receive(error.New(
@@ -280,7 +283,7 @@ func (n *node) listen() {
 					out.Pair("raw", raw)))
 				continue
 			}
-			n.bus.Witness(response)
+			witness.Send(response)
 
 			err := n.bus.Response(response)
 			if err != nil {
@@ -290,7 +293,7 @@ func (n *node) listen() {
 		// fallback to request
 		} else {
 
-			n.bus.Witness(message.Incoming(raw, n.registry.ID))
+			witness.Send(message.Incoming(raw, n.registry.ID))
 			request, ok := message.Request(raw, n.registry.ID)
 			if !ok {
 				n.Receive(error.New(
@@ -355,7 +358,7 @@ func (n *node) GetManifest() *manifest.Manifest {
 	return n.manifest
 }
 
-func (n *node) Receive(message message.Message) *error.Error {
+func (n *node) Receive(message iface.Message) *error.Error {
 	n.mu.RLock()
 	defer n.mu.RUnlock()
 
@@ -377,11 +380,11 @@ func (n *node) Receive(message message.Message) *error.Error {
 		}
 	}
 
-	n.writer.WriteString(message.Wire(), n.registry.ID, n.bus)
+	n.writer.WriteMessage(message)
 	return nil
 }
 
-func (n *node) Witness(message message.Message) {
+func (n *node) Witness(message iface.Message) {
 	n.mu.RLock()
 	defer n.mu.RUnlock()
 
@@ -389,7 +392,7 @@ func (n *node) Witness(message message.Message) {
 		return
 	}
 
-	n.writer.WriteString(message.Witness(), n.registry.ID, nil)
+	n.writer.WriteWitness(message)
 }
 
 //

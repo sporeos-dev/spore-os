@@ -27,7 +27,7 @@ func (s *Spore) nodeHelp(request iface.Message) *error.Error {
 
 	go func() {
 		var m *manifest.Manifest
-		if node == s.manifest.ID {
+		if node == s.manifest.ID || node == "SPORE"{
 			m = s.manifest
 		} else {
 			m = s.nodes.GetManifest(node)

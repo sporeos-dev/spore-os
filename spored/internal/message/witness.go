@@ -109,10 +109,10 @@ func (w *witness) Witness() string {
 	
 	// spore_event
 	if w.cast == "n/a" {
-		return fmt.Sprintf("witness body='%s' %s spore_time=%d", w.raw, w.witnessFlag, t)	
+		return fmt.Sprintf(`witness body='%s' %s spore_time=%d`, w.raw, w.witnessFlag, t)	
 
 	// spore_node
 	} else {
-		return fmt.Sprintf("witness body='%s' cast=%s %s spore_time=%d", w.raw, w.cast, w.witnessFlag, t)
+		return fmt.Sprintf(`witness body='%s' cast=%s %s spore_time=%d`, w.raw, w.cast, w.witnessFlag, t)
 	}
 }

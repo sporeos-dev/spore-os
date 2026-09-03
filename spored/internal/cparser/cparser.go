@@ -47,7 +47,9 @@ func Parse(raw string) (ParsedMessage, bool) {
 		return out, false
 	}
 
-	parser := C.spore_parser_create()
+	// trace boolean init false
+	t := C.bool(false)
+	parser := C.spore_parser_create(t)
 	if parser == nil {
 		return out, false
 	}

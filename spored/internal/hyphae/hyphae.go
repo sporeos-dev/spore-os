@@ -278,7 +278,7 @@ func (h *Hyphae) nodeKill(pid int) *error.Error {
 	handle := h.handle()
 	raw := fmt.Sprintf("HYPHAE.node.kill pid=%d ~%s", pid, handle)
 	msg, ok := message.Request(raw, h.Id())
-		if !ok {
+	if !ok {
 		return error.New(
 			error.Malformed,
 			error.Hyphae,

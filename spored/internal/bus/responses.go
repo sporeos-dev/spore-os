@@ -11,7 +11,6 @@ type responses struct {
 	mu sync.RWMutex
 	responses map[string]string
 	nodes map[string]INode
-
 }
 
 func newResponses() *responses {

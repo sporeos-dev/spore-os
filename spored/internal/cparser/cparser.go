@@ -35,6 +35,108 @@ type ParsedMessage struct {
 	Flags   []string
 }
 
+func (p *ParsedMessage) Stringify() string {
+	var b strings.Builder
+	
+	switch p.Type {
+		case TypeRequest: 
+			b.WriteString(p.Command)
+			
+			for key, value := range p.Args {
+				b.WriteString(" ")
+				b.WriteString(key)
+				b.WriteString("=")
+				if strings.Contains(value, " ") {
+					b.WriteByte('"')
+					b.WriteString(value)
+					b.WriteByte('"')
+				} else {
+					b.WriteString(value)
+				}
+			}
+
+			for _, flag := range p.Flags {
+				b.WriteString(" ")
+				b.WriteString(flag)
+			}
+
+			b.WriteString("~")
+			b.WriteString(p.Handle)
+
+		case TypeResponse: 
+			b.WriteString("~")
+			b.WriteString(p.Handle)
+			b.WriteString(":")
+			b.WriteString(p.Command)
+
+			for key, value := range p.Args {
+				b.WriteString(" ")
+				b.WriteString(key)
+				b.WriteString("=")
+				if strings.Contains(value, " ") {
+					b.WriteByte('"')
+					b.WriteString(value)
+					b.WriteByte('"')
+				} else {
+					b.WriteString(value)
+				}
+			}
+
+			for _, flag := range p.Flags {
+				b.WriteString(" ")
+				b.WriteString(flag)
+			}
+
+		case TypeWitness:
+			b.WriteString("witness")
+
+			for key, value := range p.Args {
+				b.WriteString(" ")
+				b.WriteString(key)
+				b.WriteString("=")
+				if strings.Contains(value, " ") {
+					b.WriteByte('"')
+					b.WriteString(value)
+					b.WriteByte('"')
+				} else {
+					b.WriteString(value)
+				}
+			}
+
+			for _, flag := range p.Flags {
+				b.WriteString(" ")
+				b.WriteString(flag)
+			}
+
+		case TypePublish:
+			b.WriteString("publish")
+			b.WriteString(" ")
+			b.WriteString(p.Command)
+
+			for key, value := range p.Args {
+				b.WriteString(" ")
+				b.WriteString(key)
+				b.WriteString("=")
+				if strings.Contains(value, " ") {
+					b.WriteByte('"')
+					b.WriteString(value)
+					b.WriteByte('"')
+				} else {
+					b.WriteString(value)
+				}
+			}
+
+			for _, flag := range p.Flags {
+				b.WriteString(" ")
+				b.WriteString(flag)
+			}
+
+		default:
+			b.WriteString("unknown")
+	}
+	return b.String()
+}
+
 // Parse invokes the shared C parser library on raw and returns the structured
 // message. Returns (zero value, false) when the parser reports an error.
 func Parse(raw string) (ParsedMessage, bool) {

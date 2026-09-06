@@ -103,3 +103,17 @@ func (r *response) Witness() string {
 	t := time.Now().UnixMilli()
 	return fmt.Sprintf("witness body='%s' spore_outgoing spore_time=%d", r.Wire(), t)
 }
+
+//
+//
+// special
+// for piping
+//
+
+func (r *response) Args() map[string]string {
+	return r.args
+}
+
+func (r *response) Flags() []string {
+	return r.flags
+}

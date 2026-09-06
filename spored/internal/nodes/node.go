@@ -217,8 +217,25 @@ func (n *node) listen() {
 		// i := index
 		// index++
 		
+		// pipe message
+		if message.IsPipe(raw) {
+
+			witness.Send(message.Incoming(raw, n.registry.ID))
+			pipeMsg, ok := message.Pipe(raw, n.registry.ID)
+			if !ok {
+				n.Receive(error.New(
+					error.Malformed,
+					error.Node,
+					"failed to parse pipe",
+					out.Pair("node", n.registry.ID),
+					out.Pair("raw", raw)))
+				continue
+			}
+
+			go n.bus.Pipe(pipeMsg, n)
+		
 		// witnessing starts with witness
-		if strings.HasPrefix(raw, "witness") {
+		} else if strings.HasPrefix(raw, "witness") {
 			
 			pm, ok := cparser.Parse(raw)
 			var body string
@@ -228,7 +245,6 @@ func (n *node) listen() {
 				body = strings.TrimPrefix(raw, "witness ")
 			}
 			witness.Send(message.Node(body, n.registry.ID))
-			continue
 
 		// publishing starts with publish
 		} else if strings.HasPrefix(raw, "publish") {

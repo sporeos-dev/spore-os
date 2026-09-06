@@ -3,6 +3,7 @@ package error
 type Code string
 const (
 	ConnectionFailure Code = "ConnectionFailure"
+	Empty Code = "Empty"
 	Generic Code = "Generic"
 	HandleInUse Code = "HandleInUse"
 	HandshakeDenial Code = "HandshakeDenial"
@@ -27,6 +28,7 @@ const (
 	Node Module = "Node"
 	Parser Module = "Parser"
 	Permission Module = "Permission"
+	Pipe Module = "Pipe"
 	Policy Module = "Policy"
 	Registry Module = "Registry"
 	Spore Module = "Spore"

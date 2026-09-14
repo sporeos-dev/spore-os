@@ -4,19 +4,22 @@ import (
 	"spored/internal/iface"
 	"spored/internal/utilities/error"
 	"spored/internal/utilities/out"
+	"strings"
 	"sync"
 )
 
 type api struct {
 	mu sync.RWMutex
-	commands map[string]string
 	nodes map[string]INode
+	commands map[string]string // fqname -> node id
+	abbrevs *abbreviationIndex
 }
 
 func newApi() *api {
 	return &api {
-		commands: make(map[string]string),
 		nodes: make(map[string]INode),
+		commands: make(map[string]string),
+		abbrevs: newAbbreviationIndex(),
 	}
 }
 
@@ -30,7 +33,9 @@ func (a *api) register(n INode) {
 	manifest := n.GetManifest()
 	if manifest != nil {
 		for _, command := range manifest.Api {
-			a.commands[command.Name] = n.Id()
+			fqname := n.Id() + "." + command.Name
+			a.commands[fqname] = n.Id()
+			a.abbrevs.add(fqname)
 		}
 	}
 }
@@ -43,32 +48,72 @@ func (a *api) unregister(n INode) {
 	manifest := n.GetManifest()
 	if manifest != nil {
 		for _, command := range manifest.Api {
-			delete(a.commands, command.Name)
+			fqname := n.Id() + "." + command.Name
+			delete(a.commands, fqname)
+			a.abbrevs.remove(fqname)
 		}
 	}
 }
 
-func (a *api) request(msg iface.Message) *error.Error {
+// fullyQualifiedRequest resolves a (possibly abbreviated) command to its
+// canonical fqname, returning it unchanged if it can't be resolved.
+func (a *api) fullyQualifiedRequest(command string) string {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 
-	if nodeid, ok := a.commands[msg.Capability()]; ok {
-		if node, ok := a.nodes[nodeid]; ok {
-			return node.Receive(msg)
-		} else {
+	if fqname, _, ok := a.abbrevs.resolve(command); ok {
+		return fqname
+	}
+	return command
+}
+
+func (a *api) request(msg iface.Message) *error.Error {
+	a.mu.RLock()
+
+	key := msg.Capability()
+
+	fqname, candidates, ok := a.abbrevs.resolve(key)
+	if !ok {
+		a.mu.RUnlock()
+		if len(candidates) > 0 {
 			return error.New(
-				error.Missing,
+				error.Collision,
 				error.Bus,
-				"node not found",
-				out.Pair("command", msg.Capability())).
+				"ambiguous command, use a more qualified name",
+				out.Pair("command", key),
+				out.Pair("candidates", strings.Join(candidates, ", "))).
 				WithMessage(msg)
 		}
+		return error.New(
+			error.Missing,
+			error.Bus,
+			"command not found",
+			out.Pair("command", key)).
+			WithMessage(msg)
 	}
 
-	return error.New(
-		error.Missing,
-		error.Bus,
-		"command not found",
-		out.Pair("command", msg.Capability())).
-		WithMessage(msg)
+	nodeid, ok := a.commands[fqname]
+	if !ok {
+		a.mu.RUnlock()
+		return error.New(
+			error.Missing,
+			error.Bus,
+			"command not found",
+			out.Pair("command", key)).
+			WithMessage(msg)
+	}
+
+	node, ok := a.nodes[nodeid]
+	if !ok {
+		a.mu.RUnlock()
+		return error.New(
+			error.Missing,
+			error.Bus,
+			"node not found",
+			out.Pair("command", key)).
+			WithMessage(msg)
+	}
+
+	a.mu.RUnlock()
+	return node.Receive(msg)
 }

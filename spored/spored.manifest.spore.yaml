@@ -12,89 +12,155 @@ schema: SPORE/v0d2
 version: 0.2.0
 app: n/a
 
+launch: auto
+namespace: spore
+
 api:
-  - name: SPORE.help
-    description: Get generic help for Spore OS.
+  - name: help
+    description: Get help.
     risk: benign
     usage:
-      - SPORE.help
-    inputs: []
+      - help
+    inputs:
+      - name: body
+        type: string
+        description: Help request body.
+        required: true
     outputs:
-      - name: help
-        type: object
-        description: Generic help information.
+      - name: body
+        type: string
+        description: The original body.
+    # if called on node
+      - name: id
+        type: string 
+        description: Node ID.
+      - name: name
+        type: string
+        description: Node name.
+      - name: description
+        type: string
+        description: Node description.
+      - name: trust
+        type: string
+        description: Node trust level.
+      - name: schema
+        type: string
+        description: Schema.
+      - name: version
+        type: string
+        description: Spore OS target version.
+      - name: app
+        type: string
+        description: Relative path to node from manifest file.
+      - name: launch
+        type: string
+        description: Launch mode of the node (Auto, Lazy, Manual).
+      - name: namespace
+        type: string
+        description: Runtime namespace (Hyphae, Spore, Any).
+      - name: witness
+        type: bool
+        description: Whether the node is a witness.
 
-  - name: SPORE.info
-    description: Get application information.
+  - name: state
+    description: Get runtime state.
     risk: standard
     usage:
-      - SPORE.info
+      - state
     inputs: []
     outputs:
-      - name: info
-        type: object
-        description: Spore OS information.
+      - name: body
+        type: string
+        description: The original body.
+    # if called on node
+      - name: manifest
+        type: string
+        description: "Absolute path to manifest file."
+      - name: binary
+        type: string
+        description: "Absolute path to binary file."
+      - name: connected
+        type: bool
+        description: Whether the node is connected.
 
-  - name: SPORE.state
-    description: Get application state.
+  - name: list
+    description: List children.
     risk: standard
     usage:
-      - SPORE.state
-    inputs: []
+      - list 
+    inputs: 
+      - name: body
+        type: string
+        description: .
+        required: true
     outputs:
-      - name: state
-        type: object
-        description: Spore OS state.
+      - name: body
+        type: string
+        description: The original body.
+    # if called on node
+      - name: api
+        type: array
+        description: List of request calls.
+      - name: topics
+        type: array
+        description: List of topics.
+      - name: errors
+        type: array
+        description: List of defined error codes.
+      - name: permissions
+        type: array
+        description: List of permissions listed in the manifest.
+
+  - name: complete
+    description: Get command completions.
+    risk: standard
+    usage:
+      - complete body=""
+    inputs:
+      - name: body
+        type: string
+        description: Partial command input.
+        required: true
+    outputs:
+      - name: body
+        type: string
+        description: The original body.
+      - name: completions
+        type: array
+        description: List of possible completions.
+
+  - name: hint
+    description: Get hints for using Spore OS.
+    risk: standard
+    usage:
+      - hint body=""
+      - hint body="SPORE.no"
+      - hint body="SPORE.node.spawn"
+    inputs: 
+      - name: body
+        type: string
+        description: Hint body.
+        required: true
+      - name: cursor
+        type: integer
+        description: Cursor position within the body.
+        required: true
+    outputs: 
+      - name: body
+        type: string
+        description: The original body.
+      - name: open
+        type: any
+        description: Some combination of commands 'help', 'state', 'list', and 'complete'.
 
 # ==================================================================================
 # SPORE.node
 
-  - name: SPORE.node.list
-    description: Get a list of installed nodes by ID.
-    risk: standard
-    usage:
-      - SPORE.node.list
-    inputs: []
-    outputs:
-      - name: nodes
-        type: array
-        description: List of node IDs.
-
-  - name: SPORE.node.help
-    description: Get help with a node.
-    risk: standard
-    usage:
-      - SPORE.node.help node=node
-    inputs:
-      - name: node
-        type: string
-        description: Node ID.
-        required: true
-    outputs:
-      - name: nodehelp
-        type: object
-        description: Node help information.
-
-  - name: SPORE.node.state
-    description: Get node state.
-    risk: standard
-    usage:
-      - SPORE.node.state node=node
-    inputs:
-      - name: node
-        type: string
-        description: Node ID.
-        required: true
-    outputs:
-      - name: nodestate
-        type: object
-        description: Node state.
-
-  - name: SPORE.node.install
+  - name: node.install
     description: Install a node.
     risk: protected
     usage:
-      - SPORE.node.install path=/path/to/manifest/node.manifest.spore.yaml
+      - node.install path=/path/to/manifest/node.manifest.spore.yaml
     inputs:
       - name: path
         type: string
@@ -102,11 +168,11 @@ api:
         required: true
     outputs: []
 
-  - name: SPORE.node.uninstall
+  - name: node.uninstall
     description: Uninstall a node.
     risk: protected
     usage:
-      - SPORE.node.uninstall node=node
+      - node.uninstall node=node
     inputs:
       - name: node
         type: string
@@ -114,11 +180,11 @@ api:
         required: false
     outputs: []
 
-  - name: SPORE.node.spawn
+  - name: node.spawn
     description: Start a node.
     risk: standard
     usage:
-      - SPORE.node.spawn node=node
+      - node.spawn node=node
     inputs:
       - name: node
         type: string
@@ -126,141 +192,26 @@ api:
         required: true
     outputs: []
 
-  - name: SPORE.node.kill
+  - name: node.kill
     description: Stop a node.
     risk: standard
     usage:
-      - SPORE.node.kill node=node
+      - node.kill node=node
     inputs:
       - name: node
         type: string
         description: Node ID.
         required: true
     outputs: []
-
-# ==================================================================================
-# SPORE.command
-
-  - name: SPORE.command.list
-    description: Get list of commands.
-    risk: standard
-    usage:
-      - SPORE.command.list
-        SPORE.command.list node=node
-    inputs:
-      - name: node
-        type: string
-        description: Node ID.
-        required: false
-    outputs:
-      - name: commands
-        type: array
-        description: List of commands.
-
-  - name: SPORE.command.help
-    description: Get help with a command.
-    risk: standard
-    usage:
-      - SPORE.command.help command=command
-    inputs:
-      - name: command
-        type: string
-        description: Command shorthand.
-        required: true
-    outputs:
-      - name: commandhelp
-        type: object
-        description: Command help information.
-
-# ==================================================================================
-# SPORE.error
-
-  - name: SPORE.error.list
-    description: Get a list of error codes.
-    risk: standard
-    usage:
-      - SPORE.error.list
-      - SPORE.error.list node=node
-    inputs:
-      - name: node
-        type: string
-        description: Node ID. Omit for standard error codes.
-        required: false
-    outputs:
-      - name: errors
-        type: array
-        description: List of error code names.
-
-  - name: SPORE.error.help
-    description: Get help for an error code.
-    risk: standard
-    usage:
-      - SPORE.error.help errorcode=RouteNotFound
-      - SPORE.error.help errorcode=clock.err.invalid_timezone
-    inputs:
-      - name: errorcode
-        type: string
-        description: Error code.
-        required: true
-    outputs:
-      - name: errorhelp
-        type: object
-        description: Error help information.
 
 # ==================================================================================
 # SPORE.topic
 
-  - name: SPORE.topic.list
-    description: Get list of topics.
-    risk: standard
-    usage:
-      - SPORE.topic.list
-      - SPORE.topic.list node=node
-    inputs:
-      - name: node
-        type: string
-        description: Node ID. Omit for all.
-        required: false
-    outputs:
-      - name: topics
-        type: array
-        description: List of topics.
-
-  - name: SPORE.topic.help
-    description: Get help for a topic.
-    risk: standard
-    usage:
-      - SPORE.topic.help topic=topic
-    inputs:
-      - name: topic
-        type: string
-        description: Subscription topic.
-        required: true
-    outputs:
-      - name: topichelp
-        type: object
-        description: Topic help information.
-
-  - name: SPORE.topic.state
-    description: State of a topic.
-    risk: standard
-    usage:
-      - SPORE.topic.state topic=topic
-    inputs:
-      - name: topic
-        type: string
-        description: Subscription topic.
-        required: true
-    outputs:
-      - name: topicstate
-        type: object
-        description: Topic state.
-
-  - name: SPORE.topic.subscribe
+  - name: topic.subscribe
     description: Subscribe to a topic.
     risk: standard
     usage:
-      - SPORE.topic.subscribe topic=topic
+      - topic.subscribe topic=topic
     inputs:
       - name: topic
         type: string
@@ -268,11 +219,11 @@ api:
         required: true
     outputs: []
 
-  - name: SPORE.topic.unsubscribe
+  - name: topic.unsubscribe
     description: Unsubscribe to a topic.
     risk: standard
     usage:
-      - SPORE.topic.unsubscribe topic=topic
+      - topic.unsubscribe topic=topic
     inputs:
       - name: topic
         type: string
@@ -283,27 +234,11 @@ api:
 # ==================================================================================
 # SPORE.permission
 
-  - name: SPORE.permission.list
-    description: Get list of permissions.
-    risk: standard
-    usage:
-      - SPORE.permission.list
-      - SPORE.permission.list node=node
-    inputs:
-      - name: node
-        type: string
-        description: Node ID.
-        required: true
-    outputs:
-      - name: permissions
-        type: array
-        description: List of permission-relationships.
-      
-  - name: SPORE.permission.request
+  - name: permission.request
     description: Request permission. Called by nodes, granted or denied by user.
     risk: standard
     usage:
-      - SPORE.permission.request node=node capability=capability
+      - permission.request node=node capability=capability
     inputs:
       - name: node
         type: string
@@ -334,11 +269,11 @@ api:
           - Not yet meaningfully implemented.
           - Currently acts the same as No.
   
-  - name: SPORE.permission.grant
+  - name: permission.grant
     description: Grant permission to a node for a capability.
     risk: standard
     usage:
-      - SPORE.permission.grant node=node capability=capability
+      - permission.grant node=node capability=capability
     inputs:
       - name: node
         type: string
@@ -350,11 +285,11 @@ api:
         required: true
     outputs: []
   
-  - name: SPORE.permission.revoke
+  - name: permission.revoke
     description: Revoke permission from a node for a capability.
     risk: standard
     usage:
-      - SPORE.permission.revoke node=node capability=capability
+      - permission.revoke node=node capability=capability
     inputs:
       - name: node
         type: string
@@ -371,4 +306,5 @@ api:
 
 topics: []
 permissions: []
+errors: []
           

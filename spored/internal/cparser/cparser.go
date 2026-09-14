@@ -138,8 +138,19 @@ func (p *ParsedMessage) Stringify() string {
 }
 
 // Parse invokes the shared C parser library on raw and returns the structured
-// message. Returns (zero value, false) when the parser reports an error.
+// message without applying protocol validation. This is used for pipe segments,
+// which become valid only after inherited arguments and handles are applied.
 func Parse(raw string) (ParsedMessage, bool) {
+	return parse(raw, false)
+}
+
+// Validate parses raw and verifies that it satisfies the complete Spore
+// protocol grammar. Returns (zero value, false) when either phase fails.
+func Validate(raw string) (ParsedMessage, bool) {
+	return parse(raw, true)
+}
+
+func parse(raw string, validate bool) (ParsedMessage, bool) {
 	out := ParsedMessage{
 		Args:  make(map[string]string),
 		Flags: []string{},
@@ -167,6 +178,9 @@ func Parse(raw string) (ParsedMessage, bool) {
 	defer C.free(unsafe.Pointer(cRaw))
 
 	C.spore_parse(parser, cRaw, C.size_t(len(raw)), msg)
+	if validate {
+		C.spore_validate(parser, msg)
+	}
 
 	if bool(C.spore_parser_has_error(parser)) {
 		code := C.GoString(C.spore_parser_get_error_code(parser))

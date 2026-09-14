@@ -2,6 +2,8 @@ package error
 
 type Code string
 const (
+	OK Code = "OK"
+	Collision Code = "Collision"
 	ConnectionFailure Code = "ConnectionFailure"
 	Empty Code = "Empty"
 	Generic Code = "Generic"
@@ -10,6 +12,7 @@ const (
 	InitializationFailure Code = "InitializationFailure"
 	Malformed Code = "Malformed"
 	Missing Code = "Missing"
+	NoMatches Code = "NoMatches"
 	NotApplicable Code = "NotApplicable"
 	NotImplemented Code = "NotImplemented"
 	NotPermitted Code = "NotPermitted"

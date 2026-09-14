@@ -57,7 +57,6 @@ func (r *responses) request(msg iface.Message) *error.Error {
 
 func (r *responses) response(msg iface.Message) *error.Error {
 	r.mu.Lock()
-	defer r.mu.Unlock()
 
 	handle := msg.Handle()
 	if handle == "n/a" {
@@ -65,6 +64,7 @@ func (r *responses) response(msg iface.Message) *error.Error {
 	}
 	nodeid, ok := r.responses[handle]
 	if !ok {
+		r.mu.Unlock()
 		return error.New(
 			error.Missing,
 			error.Bus,
@@ -76,6 +76,7 @@ func (r *responses) response(msg iface.Message) *error.Error {
 	
 	node, ok := r.nodes[nodeid]
 	if !ok {
+		r.mu.Unlock()
 		return error.New(
 			error.Missing,
 			error.Bus,
@@ -85,6 +86,7 @@ func (r *responses) response(msg iface.Message) *error.Error {
 			WithMessage(msg)
 	}
 
+	r.mu.Unlock()
 	node.Receive(msg)
 	return nil
 }

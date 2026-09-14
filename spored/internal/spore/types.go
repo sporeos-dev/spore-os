@@ -4,9 +4,9 @@ import (
 	"spored/internal/bus"
 	"spored/internal/iface"
 	"spored/internal/manifest"
+	"spored/internal/nodes"
 	"spored/internal/permissions"
 	"spored/internal/utilities/error"
-	"spored/internal/utilities/out"
 )
 
 type ibus interface {
@@ -15,6 +15,8 @@ type ibus interface {
 	Subscribe(cast string, topic string) *error.Error
 	Unsubscribe(cast string, topic string) *error.Error
 	Response(msg iface.Message) *error.Error
+	FullyQualifiedRequest(command string) string
+	Witness(msg iface.Message)
 }
 
 type ihyphae interface {}
@@ -26,7 +28,7 @@ type inodes interface {
 	Uninstall(nodeid string) *error.Error
 	Spawn(nodeid string) *error.Error
 	Kill(nodeid string) *error.Error
-	GetState(nodeid string) ([]out.IOut, *error.Error)
+	GetState(nodeid string) (*nodes.State, *error.Error)
 }
 
 type ipermissions interface {

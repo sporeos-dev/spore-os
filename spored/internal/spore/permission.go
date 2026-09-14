@@ -8,29 +8,6 @@ import (
 	"spored/internal/utilities/parse"
 )
 
-func (s *Spore) permissionList(request iface.Message) *error.Error {
-
-	nodeid, ok := request.Arg("node")
-	if !ok {
-		return error.MissingArg("node", error.Spore).WithMessage(request)
-	}
-
-	go func() {
-		permissions, err := s.permissions.List(nodeid)
-		if err != nil {
-			s.bus.Response(err.WithMessage(request))
-			return
-		}
-
-		s.bus.Response(
-			message.Spore(
-				request,
-				out.Array("permissions", permissions)))
-	}()
-
-	return nil
-}
-
 func (s *Spore) permissionRequest(request iface.Message) *error.Error {
 	
 	node, ok := request.Arg("node")

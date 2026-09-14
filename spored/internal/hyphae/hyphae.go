@@ -12,13 +12,14 @@ import (
 	"spored/internal/utilities/out"
 	"spored/internal/utilities/status"
 	"spored/internal/witness"
+	"sync/atomic"
 	"time"
 
 	"gopkg.in/yaml.v3"
 )
 
 type Hyphae struct {
-	index   int
+	index   atomic.Int64
 	pending *await.Pending
 	bus     ibus
 	nodes   inodes
@@ -28,7 +29,6 @@ type Hyphae struct {
 
 func New() *Hyphae {
 	return &Hyphae{
-		index: 0,
 		pending: await.New(error.Hyphae).WithTimeout(time.Second * 2),
 	}
 }
@@ -124,7 +124,7 @@ func (h *Hyphae) Kill(pid int) *error.Error {
 
 func (h *Hyphae) manifestRead(path string) (string, *error.Error) {
 	handle := h.handle()
-	raw := fmt.Sprintf(`HYPHAE.manifest.read path="%s" ~%s`, path, handle)
+	raw := fmt.Sprintf(`dev.sporeos.HYPHAE.manifest.read path="%s" ~%s`, path, handle)
 	msg, ok := message.Request(raw, h.Id())
 	if !ok {
 		return "", error.New(
@@ -164,7 +164,7 @@ func (h *Hyphae) manifestRead(path string) (string, *error.Error) {
 
 func (h *Hyphae) binaryHash(pid int) (string, *error.Error) {
 	handle := h.handle()
-	raw := fmt.Sprintf(`HYPHAE.binary.hash pid=%d ~%s`, pid, handle)
+	raw := fmt.Sprintf(`dev.sporeos.HYPHAE.binary.hash pid=%d ~%s`, pid, handle)
 	msg, ok := message.Request(raw, h.Id())
 		if !ok {
 		return "", error.New(
@@ -204,7 +204,7 @@ func (h *Hyphae) binaryHash(pid int) (string, *error.Error) {
 
 func (h *Hyphae) fileHash(path string) (string, *error.Error) {
 	handle := h.handle()
-	raw := fmt.Sprintf(`HYPHAE.file.hash path=%s ~%s`, path, handle)
+	raw := fmt.Sprintf(`dev.sporeos.HYPHAE.file.hash path=%s ~%s`, path, handle)
 	msg, ok := message.Request(raw, h.Id())
 		if !ok {
 		return "", error.New(
@@ -244,7 +244,7 @@ func (h *Hyphae) fileHash(path string) (string, *error.Error) {
 
 func (h *Hyphae) nodeSpawn(path string) *error.Error {
 	handle := h.handle()
-	raw := fmt.Sprintf(`HYPHAE.node.spawn binary="%s" ~%s`, path, handle)
+	raw := fmt.Sprintf(`dev.sporeos.HYPHAE.node.spawn binary="%s" ~%s`, path, handle)
 	msg, ok := message.Request(raw, h.Id())
 	if !ok {
 		return error.New(
@@ -276,7 +276,7 @@ func (h *Hyphae) nodeSpawn(path string) *error.Error {
 
 func (h *Hyphae) nodeKill(pid int) *error.Error {
 	handle := h.handle()
-	raw := fmt.Sprintf("HYPHAE.node.kill pid=%d ~%s", pid, handle)
+	raw := fmt.Sprintf("dev.sporeos.HYPHAE.node.kill pid=%d ~%s", pid, handle)
 	msg, ok := message.Request(raw, h.Id())
 	if !ok {
 		return error.New(
@@ -314,8 +314,7 @@ func (h *Hyphae) nodeKill(pid int) *error.Error {
 //
 
 func (h *Hyphae) handle() string {
-	h.index++
-	return fmt.Sprintf("hyphae-%d", h.index)
+	return fmt.Sprintf("hyphae-%d", h.index.Add(1))
 }
 
 //

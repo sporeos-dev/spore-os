@@ -70,6 +70,7 @@ func (b *Bus) Pipe(msg iface.Message, node INode) {
 	b.pipe.pipe(msg, node)
 }
 
+//
 // broadcast
 // routing
 //
@@ -101,6 +102,10 @@ func (b *Bus) Request(msg iface.Message) *error.Error {
 
 func (b *Bus) Response(msg iface.Message) *error.Error {
 	return b.responses.response(msg)
+}
+
+func (b *Bus) FullyQualifiedRequest(command string) string {
+	return b.api.fullyQualifiedRequest(command)
 }
 
 //

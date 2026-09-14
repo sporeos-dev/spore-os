@@ -2,6 +2,7 @@ package await
 
 import (
 	"spored/internal/iface"
+	"spored/internal/message"
 	"spored/internal/utilities/error"
 	"spored/internal/utilities/out"
 	"sync"
@@ -52,6 +53,7 @@ func (p *Pending) WaitFor(handle string, ch chan iface.Message) (iface.Message, 
 	case <-time.After(p.timeout):
 		p.mu.Lock()
 		defer p.mu.Unlock()
+		delete(p.channels, handle)
 		return nil, error.New(
 			error.Timeout,
 			p.module,
@@ -76,4 +78,27 @@ func (p *Pending) Receive(msg iface.Message) *error.Error {
 	}
 
 	return nil
+}
+
+func (p *Pending) Resolve(handle string) *error.Error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	ch, ok := p.channels[handle]
+	if ok {
+		delete(p.channels, handle)
+	}
+
+	if ok {
+		signal := message.Signal(handle)
+		ch <- signal
+	}
+
+	return nil
+}
+
+func (p *Pending) Has(handle string) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	_, ok := p.channels[handle]
+	return ok
 }

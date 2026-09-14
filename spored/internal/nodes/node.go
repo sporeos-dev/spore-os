@@ -9,13 +9,16 @@ import (
 	"spored/internal/iface"
 	"spored/internal/manifest"
 	"spored/internal/message"
+	"spored/internal/pal"
 	"spored/internal/registry"
+	"spored/internal/utilities/await"
 	"spored/internal/utilities/error"
 	"spored/internal/utilities/out"
 	"spored/internal/utilities/status"
 	"spored/internal/witness"
 	"strings"
 	"sync"
+	"time"
 )
 
 type spawner interface {
@@ -27,16 +30,23 @@ type permitter interface {
 }
 
 type node struct {
-	registry *registry.Element
-	manifest *manifest.Manifest
-	bus ibus
-	spawner spawner
+	registry  *registry.Element
+	manifest  *manifest.Manifest
+	bus       ibus
+	spawner   spawner
 	permitter permitter
 
-	mu sync.RWMutex
-	conn net.Conn
+	mu     sync.RWMutex
+	conn   net.Conn
 	reader *bufio.Reader
 	writer *writer
+
+	pending *await.Pending
+}
+
+type State struct {
+	Connected bool
+	Pid int
 }
 
 //
@@ -49,7 +59,8 @@ func newNode(registry *registry.Element, manifest *manifest.Manifest) *node {
 	n := &node{
 		registry: registry,
 		manifest: manifest,
-		bus: nil,
+		bus:      nil,
+		pending: await.New(error.Node).WithTimeout(time.Second * 5),
 	}
 
 	n.manifest.Verify()
@@ -69,18 +80,24 @@ func (n *node) set(bus ibus, spawner spawner, permitter permitter) {
 	n.bus.Register(n)
 }
 
-func (n *node) state() ([]out.IOut, *error.Error) {
+func (n *node) state() *State {
 	n.mu.RLock()
 	defer n.mu.RUnlock()
 
-	hasConn := "true"
-	if n.conn == nil {
-		hasConn = "false"
+	pid := -1
+	if n.conn != nil {
+		pid, err := pal.ProcessID(n.conn)
+		if err == nil {
+			return &State{
+				Connected: true,
+				Pid:       pid,
+			}
+		}
 	}
-
-	outs := make([]out.IOut, 0)
-	outs = append(outs, out.Pair("connected", hasConn))
-	return outs, nil
+	return &State{
+		Connected: n.conn != nil,
+		Pid:       pid,
+	}
 }
 
 //
@@ -189,6 +206,8 @@ func (n *node) handleConnection(conn net.Conn, reader *bufio.Reader, wr *bufio.W
 			out.Pair("node", n.registry.ID)))
 
 	go n.listen()
+	n.pending.Resolve("lazy")
+
 	return nil
 }
 
@@ -216,7 +235,7 @@ func (n *node) listen() {
 		raw = strings.TrimSpace(raw)
 		// i := index
 		// index++
-		
+
 		// pipe message
 		if message.IsPipe(raw) {
 
@@ -233,11 +252,11 @@ func (n *node) listen() {
 			}
 
 			go n.bus.Pipe(pipeMsg, n)
-		
-		// witnessing starts with witness
+
+			// witnessing starts with witness
 		} else if strings.HasPrefix(raw, "witness") {
-			
-			pm, ok := cparser.Parse(raw)
+
+			pm, ok := cparser.Validate(raw)
 			var body string
 			if ok {
 				body = pm.Args["body"]
@@ -246,7 +265,7 @@ func (n *node) listen() {
 			}
 			witness.Send(message.Node(body, n.registry.ID))
 
-		// publishing starts with publish
+			// publishing starts with publish
 		} else if strings.HasPrefix(raw, "publish") {
 
 			witness.Send(message.Incoming(raw, n.registry.ID))
@@ -285,7 +304,7 @@ func (n *node) listen() {
 				n.Receive(err)
 			}
 
-		// response starts with handle
+			// response starts with handle
 		} else if strings.HasPrefix(raw, "~") {
 
 			witness.Send(message.Incoming(raw, n.registry.ID))
@@ -306,7 +325,7 @@ func (n *node) listen() {
 				n.Receive(err)
 			}
 
-		// fallback to request
+			// fallback to request
 		} else {
 
 			witness.Send(message.Incoming(raw, n.registry.ID))
@@ -348,6 +367,14 @@ func (n *node) listen() {
 	n.conn.Close()
 }
 
+func (n *node) ProcessID() (int, bool) {
+	pid, err := pal.ProcessID(n.conn)
+	if err != nil {
+		return 0, false
+	}
+	return pid, true
+}
+
 //
 //
 // inode
@@ -375,18 +402,14 @@ func (n *node) GetManifest() *manifest.Manifest {
 }
 
 func (n *node) Receive(message iface.Message) *error.Error {
+	
 	n.mu.RLock()
-	defer n.mu.RUnlock()
+	writer := n.writer
+	n.mu.RUnlock()
 
-	if n.writer == nil {
-		if n.manifest.Launch == manifest.Lazy {
-			return error.New(
-				error.Generic,
-				error.Node,
-				"lazy spawning not yet implemented",
-				out.Pair("node", n.registry.ID)).
-				WithMessage(message)
-		} else {
+	if writer == nil {
+
+		if n.manifest.Launch != manifest.Lazy {
 			return error.New(
 				error.Generic,
 				error.Node,
@@ -394,7 +417,37 @@ func (n *node) Receive(message iface.Message) *error.Error {
 				out.Pair("node", n.registry.ID)).
 				WithMessage(message)
 		}
+
+		if n.pending.Has("lazy") {
+			return error.New(
+				error.Generic,
+				error.Node,
+				"lazy instantiation already in progress",
+				out.Pair("node", n.registry.ID)).
+				WithMessage(message)
+		}
+		ch := n.pending.Await("lazy")
+
+		err := n.spawner.Spawn(n.registry.ID)
+		if err != nil {
+			n.pending.Delete("lazy")
+			return err
+		}
+
+		response, err := n.pending.WaitFor("lazy", ch)
+		if err != nil {
+			return err
+		}
+		if response.Flag("error") {
+			return error.New(
+				error.Generic,
+				error.Node,
+				response.ArgIf("what", "lazy instantiation failed"))
+		}
 	}
+	
+	n.mu.RLock()
+	defer n.mu.RUnlock()
 
 	n.writer.WriteMessage(message)
 	return nil

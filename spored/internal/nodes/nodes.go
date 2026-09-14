@@ -16,6 +16,7 @@ import (
 	"spored/internal/witness"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"spored/internal/utilities/error"
@@ -24,7 +25,7 @@ import (
 const handshakeTimeout = 5 * time.Second
 
 type Nodes struct {
-	index int
+	index atomic.Int64
 	pending *await.Pending
 
 	registry *registry.Registry
@@ -40,7 +41,6 @@ type Nodes struct {
 
 func New() *Nodes {
 	nodes := &Nodes{
-		index : 0,
 		pending: await.New(error.Node),
 		registry: registry.New(),
 		nodes:   make(map[string]*node),
@@ -427,14 +427,32 @@ func (n *Nodes) Kill(nodeid string) *error.Error {
 			"killing node",
 			out.Pair("node", nodeid)))
 
-	return error.New(
-		error.Generic,
-		error.Node,
-		"kill not yet implemented",
-		out.Pair("node", nodeid))
+	node, ok := n.nodes[nodeid]
+	if !ok {
+		return error.New(
+			error.Missing,
+			error.Node,
+			"cannot kill; node not active",
+			out.Pair("node", nodeid))
+	}
+
+	pid, ok := node.ProcessID()
+	if !ok {
+		return error.New(
+			error.Generic,
+			error.Node,
+			"failed to retrieve process ID for node",
+			out.Pair("node", nodeid))
+	}
+
+	err := n.hyphae.Kill(pid)
+	if (err != nil) {
+		return err
+	}
+	return nil
 }
 
-func (n *Nodes) GetState(nodeid string) ([]out.IOut, *error.Error) {
+func (n *Nodes) GetState(nodeid string) (*State, *error.Error) {
 	nodeid = n.resolveId(nodeid)
 	
 	node, ok := n.nodes[nodeid]
@@ -445,7 +463,7 @@ func (n *Nodes) GetState(nodeid string) ([]out.IOut, *error.Error) {
 			"cannot retrieve state; node not installed")
 	}
 
-	return node.state()
+	return node.state(), nil
 }
 
 //
@@ -456,8 +474,7 @@ func (n *Nodes) GetState(nodeid string) ([]out.IOut, *error.Error) {
 //
 
 func (n *Nodes) handle() string {
-	n.index++
-	return fmt.Sprintf("nodes-%d", n.index)
+	return fmt.Sprintf("nodes-%d", n.index.Add(1))
 }
 
 func (n *Nodes) resolveId(nodeid string) string {
@@ -501,7 +518,7 @@ func (n *Nodes) acceptInstallationWarning(m *manifest.Manifest) bool {
 	var description strings.Builder
 	description.WriteString(fmt.Sprintf(`Do you accept [%s] as a node with a [%s] level of trust?`, m.ID, string(m.Trust)))
 	description.WriteString(fmt.Sprintf(`\n\nThis will grant it permission to all capabilities and is unadvised unless you are absolutely sure of the source.`))
-	raw := fmt.Sprintf(`dialog.alert title="%s" description="%s" entries=[ Grant Deny ] ~%s`, title, description.String(), handle)
+	raw := fmt.Sprintf(`dev.sporeos.dialog.alert title="%s" description="%s" entries=[ Grant Deny ] ~%s`, title, description.String(), handle)
 	msg, ok := message.Request(raw, m.ID)
 	if !ok {
 		witness.Send(

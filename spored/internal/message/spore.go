@@ -78,7 +78,8 @@ func (s *spore) responsesToString() string {
 		if i == 0 {
 			res.WriteString(el)
 		} else {
-			res.WriteString(" " + el)
+			res.WriteString(" ")
+			res.WriteString(el)
 		}
 	}
 	return res.String()

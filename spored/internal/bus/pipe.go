@@ -12,6 +12,7 @@ import (
 	"spored/internal/utilities/out"
 	witnesslog "spored/internal/witness"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -48,7 +49,7 @@ func (p *pipe) pipe(msg iface.Message, node INode) {
 
 	index := 0
 	for {
-		raw, ok := msg.Arg(string(index))
+		raw, ok := msg.Arg(fmt.Sprint(index))
 		if !ok {
 			// unexpected failures
 			switch raw {
@@ -282,9 +283,8 @@ func (p *pipe) Witness(msg iface.Message) {}
 // private internal
 //
 
-var pipeHandleIndex int = 0
+var pipeHandleIndex atomic.Int64
 
 func pipeHandle() string {
-	pipeHandleIndex++
-	return fmt.Sprintf("spore_pipe_%d", pipeHandleIndex)
+	return fmt.Sprintf("spore_pipe_%d", pipeHandleIndex.Add(1))
 }

@@ -14,7 +14,7 @@ type parsedMessage struct {
 //
 //	subject [key=value ...] [flag ...] ~handle
 func parseRequest(raw string) (parsedMessage, bool) {
-	pm, ok := cparser.Parse(raw)
+	pm, ok := cparser.Validate(raw)
 	if !ok || pm.Type != cparser.TypeRequest {
 		return parsedMessage{}, false
 	}
@@ -33,7 +33,7 @@ func parseRequest(raw string) (parsedMessage, bool) {
 // The C parser enforces that exactly one of ok or error is present, and that
 // error responses carry code= and what= args.
 func parseResponse(raw string) (parsedMessage, bool) {
-	pm, ok := cparser.Parse(raw)
+	pm, ok := cparser.Validate(raw)
 	if !ok || pm.Type != cparser.TypeResponse {
 		return parsedMessage{}, false
 	}
@@ -49,7 +49,7 @@ func parseResponse(raw string) (parsedMessage, bool) {
 //
 //	publish subject [key=value ...] [flags]
 func parseBroadcast(raw string) (parsedMessage, bool) {
-	pm, ok := cparser.Parse(raw)
+	pm, ok := cparser.Validate(raw)
 	if !ok || pm.Type != cparser.TypePublish {
 		return parsedMessage{}, false
 	}

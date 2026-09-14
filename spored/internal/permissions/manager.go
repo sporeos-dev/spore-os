@@ -11,10 +11,11 @@ import (
 	"spored/internal/utilities/out"
 	"strings"
 	"sync"
+	"sync/atomic"
 )
 
 type Manager struct {
-	index   int
+	index   atomic.Int64
 	pending *await.Pending
 
 	mu sync.RWMutex
@@ -28,7 +29,6 @@ type Manager struct {
 
 func New() *Manager {
 	return &Manager{
-		index: 0,
 		pending: await.New(error.Permission),
 		allowances: make(map[string][]string),
 	}
@@ -92,9 +92,10 @@ func (m *Manager) Request(nodeid string, capability string, reason []string, ) (
 	description.WriteString(`\n\nNote: only grant permissions you believe will be respected; there is no current enforcement policy.`)
 	description.WriteString(`\n\nStated Reasons`)
 	for _, el := range reason {
-		description .WriteString(`\n - ` + el)
+		description.WriteString(`\n - `)
+		description.WriteString(el)
 	}
-	raw := fmt.Sprintf(`dialog.alert title="%s" description="%s" entries=[Always Once No] ~%s`, title, description.String(), handle)
+	raw := fmt.Sprintf(`dev.sporeos.dialog.alert title="%s" description="%s" entries=[Always Once No] ~%s`, title, description.String(), handle)
 	
 	msg, ok := message.Request(raw, m.Id())
 	if !ok {
@@ -141,8 +142,7 @@ func (m *Manager) Can(nodeid string, capability string) bool {
 //
 
 func (h *Manager) handle() string {
-	h.index++
-	return fmt.Sprintf("permission-%d", h.index)
+	return fmt.Sprintf("permission-%d", h.index.Add(1))
 }
 
 //

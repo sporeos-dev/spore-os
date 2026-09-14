@@ -5,22 +5,6 @@ import (
 	"spored/internal/utilities/error"
 )
 
-func (s *Spore) securityKeyringList(request iface.Message) *error.Error {
-	return error.New(
-		error.NotImplemented,
-		error.Spore,
-		"spore security keyring list not yet implemented").
-		WithMessage(request)
-}
-
-func (s *Spore) securityKeyringInfo(request iface.Message) *error.Error {
-	return error.New(
-		error.NotImplemented,
-		error.Spore,
-		"spore security keyring info not yet implemented").
-		WithMessage(request)
-}
-
 func (s *Spore) securityKeyringGrant(request iface.Message) *error.Error {
 	return error.New(
 		error.NotImplemented,

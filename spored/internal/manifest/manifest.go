@@ -103,6 +103,7 @@ func ManifestFromPath(path string) *Manifest {
 	if err != nil {
 		return nil
 	}
+	m.applyDefaults()
 
 	checksum, sp_err := file.CalculateChecksum(path)
 	if sp_err != nil {
@@ -111,6 +112,16 @@ func ManifestFromPath(path string) *Manifest {
 
 	m.ExpectedChecksum = checksum
 	return m
+}
+
+// applyDefaults fills fields left blank in the YAML with their default values.
+func (m *Manifest) applyDefaults() {
+	if m.Namespace == "" {
+		m.Namespace = Hyphae
+	}
+	if m.Launch == "" {
+		m.Launch = Auto
+	}
 }
 
 func (m *Manifest) Close() {}
@@ -155,10 +166,12 @@ func (m *Manifest) Load() {
 	if err != nil {
 		return
 	}
+	m.applyDefaults()
 }
 
 func (m *Manifest) LoadContent(content string) {
 	yaml.Unmarshal([]byte(content), m)
+	m.applyDefaults()
 }
 
 // 

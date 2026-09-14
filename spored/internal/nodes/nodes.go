@@ -544,7 +544,6 @@ func (n *Nodes) acceptInstallationWarning(m *manifest.Manifest) bool {
 		return false
 	}
 	if response.Flag("error") {
-		witness.Send(response)
 		return false
 	}
 	entry, ok := response.Arg("entry")

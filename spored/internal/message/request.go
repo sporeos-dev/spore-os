@@ -95,9 +95,9 @@ func (r *request) Wire() string {
 	return fmt.Sprintf("%s cast=%s", r.raw, r.id)
 }
 
-// witness in: +witness +spore_incoming +spore_time 
-// --> witness <wire> spore_incoming spore_time=time
+// witness out: +witness +spore_outgoing +spore_time
+// --> witness <wire> spore_outgoing spore_time=time
 func (r *request) Witness() string {
 	t := time.Now().UnixMilli()
-	return fmt.Sprintf("witness body='%s' spore_incoming spore_time=%d", r.Wire(), t)
+	return fmt.Sprintf("witness body='%s' spore_outgoing spore_time=%d", r.Wire(), t)
 }

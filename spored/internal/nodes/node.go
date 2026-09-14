@@ -233,6 +233,9 @@ func (n *node) listen() {
 			}
 		}
 		raw = strings.TrimSpace(raw)
+		if raw == "" {
+			continue
+		}
 		// i := index
 		// index++
 
@@ -318,8 +321,6 @@ func (n *node) listen() {
 					out.Pair("raw", raw)))
 				continue
 			}
-			witness.Send(response)
-
 			err := n.bus.Response(response)
 			if err != nil {
 				n.Receive(err)

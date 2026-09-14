@@ -159,10 +159,11 @@ func (s *Spore) complete(request iface.Message) *error.Error {
 					out.Flag("empty")).
 					WithMessage(request))
 
+
 		} else {
 			outs := s.getComplete(body, len(body))
-			outs = append(outs, out.Pair("body", body))
 			if len(outs) > 0 {
+				outs = append(outs, out.Pair("body", body))
 				s.bus.Response(
 					message.Spore(
 						request,
@@ -425,9 +426,43 @@ func (s *Spore) getList(body string, cursor int) []out.IOut {
 
 func (s *Spore) getComplete(body string, cursor int) []out.IOut {
 	outs := make([]out.IOut, 0)
-	parts, current := parseBody(body, cursor)
-	println(strings.Join(parts, ", "))
-	println(current)
+	parts, _ := parseBody(body, cursor)
+
+	nodes := s.nodes.GetNodes()
+	nodes = append(nodes, "dev.sporeos.SPORE")
+	for _, node := range nodes {
+		var m *manifest.Manifest
+		if node == "dev.sporeos.SPORE" {
+			m = s.manifest
+		} else {
+			m = s.nodes.GetManifest(node)
+		}
+
+		if m == nil {
+			if strings.Contains(node, parts[0]) {
+				outs = append(outs, out.Pair(node, "unknown node"))
+			}
+			continue
+		}
+
+		if strings.Contains(node, parts[0]) {
+			outs = append(outs, out.Pair(node, m.Name))
+		}
+
+		for _, command := range m.Api {
+			fqName := m.ID + "." + command.Name
+			if strings.Contains(fqName, parts[0]) {
+				outs = append(outs, out.Pair(command.Name, m.ID))
+			}
+		}
+
+		for _, topic := range m.Topics {
+			fqName := m.ID + "." + topic.Name
+			if strings.Contains(fqName, parts[0]) {
+				outs = append(outs, out.Pair(topic.Name, m.ID))
+			}
+		}
+	}
 
 	return outs
 }

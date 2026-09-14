@@ -11,7 +11,6 @@ import (
 	"spored/internal/utilities/error"
 	"spored/internal/utilities/out"
 	"spored/internal/utilities/status"
-	"spored/internal/witness"
 	"sync/atomic"
 	"time"
 
@@ -132,7 +131,6 @@ func (h *Hyphae) manifestRead(path string) (string, *error.Error) {
 			error.Hyphae,
 			"failure to read manifest")
 	}
-	witness.Send(msg)
 
 	ch := h.pending.Await(handle)
 	err := h.bus.Request(msg)
@@ -172,7 +170,6 @@ func (h *Hyphae) binaryHash(pid int) (string, *error.Error) {
 			error.Hyphae,
 			"failure to hash binary")
 	}
-	witness.Send(msg)
 
 	ch := h.pending.Await(handle)
 	err := h.bus.Request(msg)
@@ -212,7 +209,6 @@ func (h *Hyphae) fileHash(path string) (string, *error.Error) {
 			error.Hyphae,
 			"failure to hash file")
 	}
-	witness.Send(msg)
 
 	ch := h.pending.Await(handle)
 	err := h.bus.Request(msg)
@@ -252,7 +248,6 @@ func (h *Hyphae) nodeSpawn(path string) *error.Error {
 			error.Hyphae,
 			"failure to spawn node")
 	}
-	witness.Send(msg)
 
 	ch := h.pending.Await(handle)
 	err := h.bus.Request(msg)
@@ -284,7 +279,6 @@ func (h *Hyphae) nodeKill(pid int) *error.Error {
 			error.Hyphae,
 			"failure to kill node")
 	}
-	witness.Send(msg)
 
 	ch := h.pending.Await(handle)
 	err := h.bus.Request(msg)

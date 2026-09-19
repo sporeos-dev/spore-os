@@ -1,11 +1,10 @@
-// Copyright 2026 Matt Harrison
-// SPDX-License-Identifier: AGPL-3.0-only
-
 package manifest
 
 import (
-	"fmt"
-	"os"
+	"path/filepath"
+	"spored/internal/registry"
+	"spored/internal/utilities/file"
+	"spored/internal/utilities/status"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -15,24 +14,45 @@ type Manifest struct {
 	ID          string          `yaml:"id"`
 	Name        string          `yaml:"name"`
 	Description string          `yaml:"description"`
+	Trust		Trust			`yaml:"trust"`
 	Schema      string          `yaml:"schema"`
 	Version     string          `yaml:"version"`
 	App         string          `yaml:"app"`
-	Autostart   bool            `yaml:"autostart"`
+	Launch 		Launch          `yaml:"launch"`
+	Namespace	Namespace		`yaml:"namespace"`
 	Witness		bool			`yaml:"witness"`
 	Api         []Command       `yaml:"api"`
+	Topics		[]Topic			`yaml:"topics"`	
+	Permissions []Permission	`yaml:"permissions"`
 	Errors      []ManifestError `yaml:"errors"`
 
-	Path 		string `yaml:"-"`
+	Status status.Status
+	Path string
+	ExpectedChecksum string
 }
 
 type Command struct {
 	Name        string    `yaml:"name"`
 	Description string    `yaml:"description"`
+	Risk		Risk	  `yaml:"risk"`
 	Usage       []string  `yaml:"usage"`
 	Inputs      *[]Input  `yaml:"inputs"`
 	Outputs     *[]Output `yaml:"outputs"`
 	Notes       *[]string `yaml:"notes"`
+}
+
+type Topic struct {
+	Name		string	  `yaml:"name"`
+	Description string	  `yaml:"description"`
+	Risk		Risk	  `yaml:"risk"`
+	Usage		[]string  `yaml:"usage"`
+	Outputs		*[]Output `yaml:"outputs"`
+	Notes		*[]string `yaml:"notes"`
+}
+
+type Permission struct {
+	Name		string		`yaml:"name"`
+	Reasons		[]string	`yaml:"reasons"`
 }
 
 type Input struct {
@@ -54,76 +74,136 @@ type ManifestError struct {
 	Examples    []string `yaml:"examples,omitempty"`
 }
 
-// reservedInputNames are keywords that may not be used as input argument names.
-// These are hub-injected routing fields and caller-behavior flags whose presence
-// on an inbound call has protocol meaning.
-// Note: all names with the spore_ prefix are also reserved (checked separately).
-var reservedInputNames = map[string]bool{
-	"cast": true, "capture": true,
-	"code": true, "what": true, "ok": true, "json": true,
-}
-
-// reservedOutputNames are keywords that may not be used as output field names.
-// Includes all input-reserved names plus the response status flags (error,
-// custom_error, cancelled) which would be indistinguishable from protocol
-// response markers if a node emitted them as data fields.
-// Note: all names with the spore_ prefix are also reserved (checked separately).
-var reservedOutputNames = map[string]bool{
-	"cast": true, "capture": true,
-	"code": true, "what": true, "ok": true, "json": true,
-	"error": true, "custom_error": true, "cancelled": true,
-}
-
-func validateManifest(m *Manifest) error {
-	// SPEC §2.4: No third-party node may register an id beginning with SPORE.
-	if strings.HasPrefix(m.ID, "SPORE.") {
-		return fmt.Errorf("manifest id %q uses the reserved SPORE. namespace", m.ID)
+func New(registry *registry.Element) *Manifest {
+	m := &Manifest{
+		Status: status.New(), 
+		Path: registry.Manifest,
+		ExpectedChecksum: registry.Checksum,
 	}
 
-	for _, cmd := range m.Api {
-		// SPEC §6.6: 'witness' is a reserved line-prefix token on the wire.
-		// No subject may be named 'witness'.
-		if cmd.Name == "witness" || strings.HasPrefix(cmd.Name, "witness.") {
-			return fmt.Errorf("command %q uses the reserved 'witness' name", cmd.Name)
-		}
-
-		if cmd.Inputs != nil {
-			for _, input := range *cmd.Inputs {
-				// SPEC §6.6: all spore_-prefixed names are reserved.
-				if reservedInputNames[input.Name] || strings.HasPrefix(input.Name, "spore_") {
-					return fmt.Errorf("command %s: input %q is a reserved argument name", cmd.Name, input.Name)
-				}
-			}
-		}
-		if cmd.Outputs != nil {
-			for _, output := range *cmd.Outputs {
-				// SPEC §6.6: all spore_-prefixed names are reserved.
-				if reservedOutputNames[output.Name] || strings.HasPrefix(output.Name, "spore_") {
-					return fmt.Errorf("command %s: output %q is a reserved argument name", cmd.Name, output.Name)
-				}
-			}
-		}
+	if file.Exists(m.Path) == false {
+		m.Status.Set(status.Missing)
 	}
-	return nil
+
+	return m
 }
 
-func LoadManifest(path string) (*Manifest, error) {
-	data, err := os.ReadFile(path)
+func ManifestFromPath(path string) *Manifest {
+	m := &Manifest{
+		Status: status.New(),
+		Path: path,
+	}
+
+	contents, err := file.Read(path)
 	if err != nil {
-		return nil, err
+		return nil
 	}
 
-	var manifest Manifest
-	manifest.Path = path
-	err = yaml.Unmarshal(data, &manifest)
+	err = yaml.Unmarshal([]byte(contents), m)
 	if err != nil {
-		return nil, err
+		return nil
+	}
+	m.applyDefaults()
+
+	if m.Trust == Developer {
+		m.ExpectedChecksum = "developer"
+	} else {
+		checksum, sp_err := file.CalculateChecksum(path)
+		if sp_err != nil {
+			return nil
+		}
+		m.ExpectedChecksum = checksum
 	}
 
-	if err := validateManifest(&manifest); err != nil {
-		return nil, err
-	}
-
-	return &manifest, nil
+	return m
 }
 
+// applyDefaults fills fields left blank in the YAML with their default values.
+func (m *Manifest) applyDefaults() {
+	if m.Namespace == "" {
+		m.Namespace = Hyphae
+	}
+	if m.Launch == "" {
+		m.Launch = Auto
+	}
+}
+
+func (m *Manifest) Close() {}
+
+func (m *Manifest) Verify() {
+	if file.IsReadable(m.Path) == false {
+		m.Status.Set(status.RequiresUserSpace)
+		return
+	}
+
+	if m.Trust == Developer {
+		m.Status.Set(status.RequiresDeveloper)
+		return
+	}
+
+	checksum, err := file.CalculateChecksum(m.Path)
+	if err != nil {
+		m.Status.Set(status.FailedChecksum)
+		return
+	}
+	expected := m.ExpectedChecksum
+	if !strings.HasPrefix(expected, "sha256:") {
+		expected = "sha256:" + expected
+	}
+	if checksum != expected {
+		m.Status.Set(status.FailedChecksum)
+		return
+	}
+
+	m.Status.Set(status.Verified)
+}
+
+func (m *Manifest) Load() {
+	contents, err := file.Read(m.Path)
+	if err != nil {
+		return
+	}
+
+	err = yaml.Unmarshal([]byte(contents), m)
+	if err != nil {
+		return
+	}
+	m.applyDefaults()
+}
+
+func (m *Manifest) LoadContent(content string) {
+	yaml.Unmarshal([]byte(content), m)
+	m.applyDefaults()
+}
+
+// 
+//
+// imanifest
+//
+
+func (m *Manifest) GetId() string {
+	return m.ID
+}
+
+func (m *Manifest) GetName() string {
+	return m.Name
+}
+
+func (m *Manifest) GetTrust() string {
+	return string(m.Trust)
+}
+
+func (m *Manifest) GetManifestPath() string {
+	return m.Path
+}
+
+func (m *Manifest) GetManifestChecksum() string {
+	return m.ExpectedChecksum
+}
+
+func (m *Manifest) GetBinaryPath() string {
+	dir := filepath.Dir(m.Path)
+	path := filepath.Join(dir, m.App)
+	path = filepath.Clean(path)
+	return path
+}

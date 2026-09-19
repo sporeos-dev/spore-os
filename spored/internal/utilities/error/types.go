@@ -1,0 +1,38 @@
+package error
+
+type Code string
+const (
+	OK Code = "OK"
+	Collision Code = "Collision"
+	ConnectionFailure Code = "ConnectionFailure"
+	Empty Code = "Empty"
+	Generic Code = "Generic"
+	HandleInUse Code = "HandleInUse"
+	HandshakeDenial Code = "HandshakeDenial"
+	InitializationFailure Code = "InitializationFailure"
+	Malformed Code = "Malformed"
+	Missing Code = "Missing"
+	NoMatches Code = "NoMatches"
+	NotApplicable Code = "NotApplicable"
+	NotImplemented Code = "NotImplemented"
+	NotPermitted Code = "NotPermitted"
+	ReservedLanguage Code = "ReservedLanguage"
+	Timeout Code = "Timeout"
+	UserDenial Code = "UserDenial"
+)
+
+type Module string
+const (
+	Bus Module = "Bus"
+	Hub Module = "Hub"
+	Hyphae Module = "Hyphae"
+	Manifest Module = "Manifest"
+	Message Module = "Message"
+	Node Module = "Node"
+	Parser Module = "Parser"
+	Permission Module = "Permission"
+	Pipe Module = "Pipe"
+	Policy Module = "Policy"
+	Registry Module = "Registry"
+	Spore Module = "Spore"
+)

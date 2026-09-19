@@ -4,6 +4,8 @@ on:
     branches:
       - main
 
+permissions: {}
+
 jobs:
   check-source:
     runs-on: ubuntu-latest

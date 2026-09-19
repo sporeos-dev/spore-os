@@ -1,0 +1,122 @@
+package await
+
+import (
+	"spored/internal/iface"
+	"spored/internal/message"
+	"spored/internal/utilities/error"
+	"spored/internal/utilities/out"
+	"spored/internal/witness"
+	"sync"
+	"time"
+)
+
+type Pending struct {
+	module error.Module
+	mu sync.Mutex
+	channels map[string]chan iface.Message
+	timeout time.Duration
+}
+
+func New(module error.Module) *Pending {
+	return &Pending{
+		module: module,
+		channels: make(map[string]chan iface.Message),
+		timeout: 0,
+	}
+}
+
+func (p *Pending) WithTimeout(timeout time.Duration) *Pending {
+	p.timeout = timeout
+	return p
+}
+func (p *Pending) Await(handle string) chan iface.Message {
+	ch := make(chan iface.Message, 1)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.channels[handle] = ch
+	return ch
+}
+
+func (p *Pending) Delete(handle string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	delete(p.channels, handle)
+}
+func (p *Pending) WaitFor(handle string, ch chan iface.Message) (iface.Message, *error.Error) {
+	return p.WaitForTimeout(handle, ch, nil)
+}
+
+func (p *Pending) WaitForTimeout(handle string, ch chan iface.Message, override *time.Duration) (iface.Message, *error.Error) {
+	timeout := p.timeout
+	if override != nil {
+		timeout = *override
+	}
+
+	if timeout <= 0 {
+		msg := <-ch
+		return msg, nil
+	}
+
+	select {
+	case msg := <-ch:
+		return msg, nil
+	case <-time.After(timeout):
+		p.mu.Lock()
+		defer p.mu.Unlock()
+		delete(p.channels, handle)
+		return nil, error.New(
+			error.Timeout,
+			p.module,
+			"timed out pending",
+			out.Pair("handle", handle))
+	}
+}
+
+func (p *Pending) Receive(msg iface.Message) *error.Error {
+	handle := msg.Handle()
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	
+	ch, ok := p.channels[handle]
+	if ok {
+		delete(p.channels, handle)
+	}
+	
+	if ok {
+		ch <- msg
+	} else {
+		// no waiter left for this handle (already timed out or never registered) - message would otherwise vanish silently
+		witness.Send(
+			error.New(
+				error.Missing,
+				p.module,
+				"dropped response for unknown or expired handle",
+				out.Pair("handle", handle)))
+	}
+
+	return nil
+}
+
+func (p *Pending) Resolve(handle string) *error.Error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	ch, ok := p.channels[handle]
+	if ok {
+		delete(p.channels, handle)
+	}
+
+	if ok {
+		signal := message.Signal(handle)
+		ch <- signal
+	}
+
+	return nil
+}
+
+func (p *Pending) Has(handle string) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	_, ok := p.channels[handle]
+	return ok
+}

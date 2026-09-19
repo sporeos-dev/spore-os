@@ -246,28 +246,19 @@ api:
         required: true
       - name: capability
         type: string
-        description: Capability shorthand.
+        description: Fully-qualified capability ID.
         required: true
       - name: reasons
         type: array
         description: Reasons for requesting permission.
         required: false
     outputs:
-      - name: Always
+      - name: yes
         type: flag
-        description: Flag present if always granted.
-      - name: Once
-        type: flag
-        description: Flag present if granted this time only.
-      - name: No
+        description: Flag present if granted.
+      - name: no
         type: flag
         description: Flag present if denied.
-      - name: Never
-        type: flag
-        description: Flag present if denied moving forward.
-        notes: 
-          - Not yet meaningfully implemented.
-          - Currently acts the same as No.
   
   - name: permission.grant
     description: Grant permission to a node for a capability.
@@ -281,7 +272,7 @@ api:
         required: true
       - name: capability
         type: string
-        description: Capability shorthand.
+        description: Fully-qualified capability ID.
         required: true
     outputs: []
   
@@ -297,7 +288,7 @@ api:
         required: true
       - name: capability
         type: string
-        description: Capability shorthand.
+        description: Fully-qualified capability ID.
         required: true
     outputs: []
   

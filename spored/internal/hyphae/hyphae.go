@@ -11,6 +11,7 @@ import (
 	"spored/internal/utilities/error"
 	"spored/internal/utilities/out"
 	"spored/internal/utilities/status"
+	"spored/internal/witness"
 	"sync/atomic"
 	"time"
 
@@ -28,7 +29,7 @@ type Hyphae struct {
 
 func New() *Hyphae {
 	return &Hyphae{
-		pending: await.New(error.Hyphae).WithTimeout(time.Second * 2),
+		pending: await.New(error.Hyphae).WithTimeout(time.Second * 12),
 	}
 }
 
@@ -62,13 +63,13 @@ func (h *Hyphae) PrepareForInstallation(path string) (*manifest.Manifest, *regis
 		return nil, nil, err
 	}
 
-	manifest := &manifest.Manifest{
+	man := &manifest.Manifest{
 		Status: status.New(),
 		Path: path,
 		ExpectedChecksum: "not yet",
 	}
 
-	erro := yaml.Unmarshal([]byte(manifestContent), &manifest)
+	erro := yaml.Unmarshal([]byte(manifestContent), &man)
 	if erro != nil {
 		return nil, nil, error.New(
 			error.Malformed,
@@ -77,30 +78,35 @@ func (h *Hyphae) PrepareForInstallation(path string) (*manifest.Manifest, *regis
 			out.Pair("error", erro.Error()))
 	}
 
-	fullBinaryPath := filepath.Join(filepath.Dir(path), manifest.App)
+	fullBinaryPath := filepath.Join(filepath.Dir(path), man.App)
 	registry := &registry.Element{
-		ID: manifest.ID,
-		Name: manifest.Name,
+		ID: man.ID,
+		Name: man.Name,
 		Manifest: path,
 		Checksum: "not yet",
 		Binary: fullBinaryPath,
 		BinaryChecksum: "not yet",
 	}
 
-	manifestChecksum, err := h.fileHash(path)
-	if err != nil {
-		return nil, nil, err
+	if man.Trust == manifest.Developer {
+		man.ExpectedChecksum = string(manifest.Developer)
+		registry.Checksum = string(manifest.Developer)
+		registry.BinaryChecksum = string(manifest.Developer)
+	} else {
+		manifestChecksum, err := h.fileHash(path)
+		if err != nil {
+			return nil, nil, err
+		}
+		man.ExpectedChecksum = manifestChecksum
+		registry.Checksum = manifestChecksum
+	
+		binaryChecksum, err := h.fileHash(fullBinaryPath)
+		if err != nil {
+			return nil, nil, err
+		}
+		registry.BinaryChecksum = binaryChecksum
 	}
-	manifest.ExpectedChecksum = manifestChecksum
-	registry.Checksum = manifestChecksum
-
-	binaryChecksum, err := h.fileHash(fullBinaryPath)
-	if err != nil {
-		return nil, nil, err
-	}
-	registry.BinaryChecksum = binaryChecksum
-
-	return manifest, registry, nil
+	return man, registry, nil
 }
 
 func (h *Hyphae) HashFile(path string) (string, *error.Error) {
@@ -136,12 +142,18 @@ func (h *Hyphae) manifestRead(path string) (string, *error.Error) {
 	err := h.bus.Request(msg)
 	if err != nil {
 		h.pending.Delete(handle)
+		witness.Send(err)
 		return "", err
 	}
 	response, err := h.pending.WaitFor(handle, ch)
 	if err != nil {
+		witness.Send(err)
 		return "", err
 	}
+	witness.Send(
+		message.Witness(
+			"manifest read wait completed",
+			out.Pair("handle", handle)))
 	if response.Flag("error") {
 		return "", error.New(
 			error.Generic, 
@@ -240,7 +252,7 @@ func (h *Hyphae) fileHash(path string) (string, *error.Error) {
 
 func (h *Hyphae) nodeSpawn(path string) *error.Error {
 	handle := h.handle()
-	raw := fmt.Sprintf(`dev.sporeos.HYPHAE.node.spawn binary="%s" ~%s`, path, handle)
+	raw := fmt.Sprintf(`dev.sporeos.HYPHAE.hspawn binary="%s" ~%s`, path, handle)
 	msg, ok := message.Request(raw, h.Id())
 	if !ok {
 		return error.New(
@@ -271,7 +283,7 @@ func (h *Hyphae) nodeSpawn(path string) *error.Error {
 
 func (h *Hyphae) nodeKill(pid int) *error.Error {
 	handle := h.handle()
-	raw := fmt.Sprintf("dev.sporeos.HYPHAE.node.kill pid=%d ~%s", pid, handle)
+	raw := fmt.Sprintf("dev.sporeos.HYPHAE.hkill pid=%d ~%s", pid, handle)
 	msg, ok := message.Request(raw, h.Id())
 	if !ok {
 		return error.New(

@@ -7,7 +7,13 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
+
+// noDeadlineConn is a no-op deadlineSetter for tests that don't use a real socket.
+type noDeadlineConn struct{}
+
+func (noDeadlineConn) SetWriteDeadline(t time.Time) error { return nil }
 
 // TestWriterConcurrentWritesDoNotInterleave guards against the writer.mu
 // removal: without serialization, concurrent WriteMessage calls can
@@ -15,7 +21,7 @@ import (
 // wire protocol (see the "failed to request" / blank-line bug).
 func TestWriterConcurrentWritesDoNotInterleave(t *testing.T) {
 	var buf bytes.Buffer
-	w := newWriter(bufio.NewWriter(&buf))
+	w := newWriter(noDeadlineConn{}, bufio.NewWriter(&buf))
 
 	const goroutines = 200
 	var wg sync.WaitGroup

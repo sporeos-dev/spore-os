@@ -11,20 +11,25 @@ type Element struct {
 	BinaryChecksum string `yaml:"binaryChecksum"`
 }
 
-func ElementFromManifest(manifest imanifest) *Element {
+func ElementFromManifest(man imanifest) *Element {
 	el := &Element {
-		ID: manifest.GetId(),
-		Name: manifest.GetName(),
-		Manifest: manifest.GetManifestPath(),
-		Checksum: manifest.GetManifestChecksum(),
-		Binary: manifest.GetBinaryPath(),
+		ID: man.GetId(),
+		Name: man.GetName(),
+		Manifest: man.GetManifestPath(),
+		Checksum: man.GetManifestChecksum(),
+		Binary: man.GetBinaryPath(),
 	}
 
-	checksum, err := file.CalculateChecksum(el.Binary)
-	if err != nil {
-		return nil
+	if man.GetTrust() == "developer" {
+		el.Checksum = "developer"
+		el.BinaryChecksum = "developer"
+	} else {
+		checksum, err := file.CalculateChecksum(el.Binary)
+		if err != nil {
+			return nil
+		}
+		el.BinaryChecksum = checksum
 	}
-	el.BinaryChecksum = checksum
 	
 	return el
 }

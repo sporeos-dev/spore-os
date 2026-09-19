@@ -2,6 +2,7 @@ package nodes
 
 import (
 	"net"
+	"spored/internal/manifest"
 	"spored/internal/pal"
 	"spored/internal/registry"
 	"spored/internal/utilities/file"
@@ -29,9 +30,29 @@ func newBinary(registry *registry.Element) *binary {
 	return b
 }
 
+func newDeveloperBinary(registry *registry.Element) *binary {
+	b := &binary{
+		status: status.New(),
+		path: registry.Binary,
+		expectedChecksum: string(manifest.Developer),
+	}
+	
+	if file.Exists(b.path) == false {
+		b.status.Set(status.Missing)
+	} else {
+		b.status.Set(status.Verified)
+	}
+
+	return b
+}
+
 func (b *binary) close() {}
 
 func (b *binary) verify(conn net.Conn) {
+	if b.status.Get() == status.Verified {
+		return
+	}
+
 	if file.IsReadable(b.path) == false {
 		b.status.Set(status.RequiresUserSpace)
 		return

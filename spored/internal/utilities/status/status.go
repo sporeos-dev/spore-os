@@ -8,6 +8,7 @@ type Estatus string
 const (
 	Unverified Estatus = "Unverified"
 	RequiresUserSpace Estatus = "RequiresUserSpace"
+	RequiresDeveloper Estatus = "RequiresDeveloperCheck"
 	Verified Estatus = "Verified"
 
 	Missing Estatus = "Missing"

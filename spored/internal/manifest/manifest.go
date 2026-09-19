@@ -105,12 +105,16 @@ func ManifestFromPath(path string) *Manifest {
 	}
 	m.applyDefaults()
 
-	checksum, sp_err := file.CalculateChecksum(path)
-	if sp_err != nil {
-		return nil
+	if m.Trust == Developer {
+		m.ExpectedChecksum = "developer"
+	} else {
+		checksum, sp_err := file.CalculateChecksum(path)
+		if sp_err != nil {
+			return nil
+		}
+		m.ExpectedChecksum = checksum
 	}
 
-	m.ExpectedChecksum = checksum
 	return m
 }
 
@@ -133,9 +137,7 @@ func (m *Manifest) Verify() {
 	}
 
 	if m.Trust == Developer {
-		// TODO
-		// witness developer skip checksum
-		m.Status.Set(status.Verified)
+		m.Status.Set(status.RequiresDeveloper)
 		return
 	}
 
@@ -185,6 +187,10 @@ func (m *Manifest) GetId() string {
 
 func (m *Manifest) GetName() string {
 	return m.Name
+}
+
+func (m *Manifest) GetTrust() string {
+	return string(m.Trust)
 }
 
 func (m *Manifest) GetManifestPath() string {

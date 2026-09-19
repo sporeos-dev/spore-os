@@ -5,7 +5,6 @@ import (
 	"spored/internal/iface"
 	"spored/internal/manifest"
 	"spored/internal/nodes"
-	"spored/internal/permissions"
 	"spored/internal/utilities/error"
 )
 
@@ -35,7 +34,7 @@ type ipermissions interface {
 	List(nodeid string) ([]string, *error.Error)
 	Grant(nodeid string, capability string) *error.Error
 	Revoke(nodeid string, capability string) *error.Error
-	Request(nodeid string, capability string, reasons []string) (permissions.Value, *error.Error)
+	Request(nodeid string, capability string, reasons []string) (bool, *error.Error)
 	Can(nodeid string, capability string) bool
 }
 

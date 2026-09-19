@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"net"
 	"os/exec"
+	"spored/internal/iface"
 	"spored/internal/manifest"
 	"spored/internal/message"
-	"spored/internal/permissions"
 	"spored/internal/registry"
 	"spored/internal/utilities/await"
 	"spored/internal/utilities/file"
@@ -23,6 +23,23 @@ import (
 )
 
 const handshakeTimeout = 5 * time.Second
+
+// selfNodeId identifies Nodes' own pending requests (e.g. install confirmation) on the bus.
+const selfNodeId = "nodes-in-spore"
+
+// nodesSelf represents Nodes itself as a bus participant, distinct from the
+// individually registered node connections, so responses to requests Nodes
+// makes on its own behalf (e.g. install confirmation) can be routed back.
+type nodesSelf struct {
+	nodes *Nodes
+}
+
+func (s *nodesSelf) Id() string { return selfNodeId }
+func (s *nodesSelf) IsConnected() bool { return true }
+func (s *nodesSelf) IsWitness() bool { return false }
+func (s *nodesSelf) GetManifest() *manifest.Manifest { return nil }
+func (s *nodesSelf) Receive(msg iface.Message) *error.Error { return s.nodes.pending.Receive(msg) }
+func (s *nodesSelf) Witness(msg iface.Message) {}
 
 type Nodes struct {
 	index atomic.Int64
@@ -63,6 +80,8 @@ func (n *Nodes) Set(bus ibus, hyphae ihyphae, permissions ipermissions, spore is
 	n.hyphae = hyphae
 	n.permissions = permissions
 	n.spore = spore
+
+	n.bus.Register(&nodesSelf{nodes: n})
 
 	n.mu.RLock()
 	defer n.mu.RUnlock()
@@ -197,14 +216,36 @@ func (n *Nodes) GetManifest(nodeid string) *manifest.Manifest {
 		content, err := n.hyphae.ManifestRead(node.manifest.Path)
 		if err == nil {
 			node.manifest.LoadContent(content)
-			checksum, err := n.hyphae.HashFile(node.manifest.Path)
-			if err == nil {
-				if node.manifest.ExpectedChecksum == checksum {
-					node.manifest.Status.Set(status.Verified)
-				} else {
+
+			// developer trust implicit
+			if node.manifest.Trust == manifest.Developer {
+				found := false
+				for _, el := range n.registry.Elements {
+					if el.ID == nodeid {
+						if el.Checksum == string(manifest.Developer) {
+							node.manifest.Status.Set(status.Verified)
+						} else {
+							node.manifest.Status.Set(status.FailedChecksum)
+						}
+						found = true
+					}
+				}
+				if !found {
 					node.manifest.Status.Set(status.FailedChecksum)
 				}
+
+			// otherwise checksum
+			} else {
+				checksum, err := n.hyphae.HashFile(node.manifest.Path)
+				if err == nil {
+					if node.manifest.ExpectedChecksum == checksum {
+						node.manifest.Status.Set(status.Verified)
+					} else {
+						node.manifest.Status.Set(status.FailedChecksum)
+					}
+				}
 			}
+			
 			n.bus.Register(node)
 		}
 	}
@@ -248,7 +289,11 @@ func (n *Nodes) Install(path string) *error.Error {
 				out.Pair("node", manifest.ID))
 		}
 
-		if !n.acceptInstallationWarning(manifest) {
+		granted, err := n.acceptInstallationWarning(manifest)
+		if err != nil {
+			return err
+		}
+		if !granted {
 			return error.New(
 				error.UserDenial,
 				error.Node,
@@ -266,7 +311,7 @@ func (n *Nodes) Install(path string) *error.Error {
 				out.Pair("path", path))
 		}
 
-		err := n.registry.Add(registryElement)
+		err = n.registry.Add(registryElement)
 		if err != nil {
 			return err
 		}
@@ -291,7 +336,11 @@ func (n *Nodes) Install(path string) *error.Error {
 				out.Pair("node", manifest.ID))
 		}
 
-		if !n.acceptInstallationWarning(manifest) {
+		granted, err := n.acceptInstallationWarning(manifest)
+		if err != nil {
+			return err
+		}
+		if !granted {
 			return error.New(
 				error.UserDenial,
 				error.Node,
@@ -310,29 +359,28 @@ func (n *Nodes) Install(path string) *error.Error {
 		n.nodes[node.registry.ID] = node
 	}
 
-	if node != nil && 
-		node.manifest.Trust != manifest.System &&
-		node.manifest.Trust != manifest.Developer &&
-		node.manifest.Trust != manifest.Trusted {
+	// freshly installed, so trust already vetted via acceptInstallationWarning
+	n.permissions.RegisterNode(node.manifest)
+
+	if len(node.manifest.Permissions) > 0 {
 		for _, el := range node.manifest.Permissions {
-			perm, err := n.permissions.Request(node.registry.ID, el.Name, el.Reasons)
+			granted, err := n.permissions.Request(node.registry.ID, el.Name, el.Reasons)
 			if err != nil {
 				witness.Send(err)
 				continue
 			}
-			switch perm {
-			case permissions.Always, permissions.Once:
+			if granted {
 				witness.Send(
 					message.Witness(
 						"permission granted",
 						out.Pair("node", node.registry.ID),
 						out.Pair("capability", el.Name)))
-			case permissions.No, permissions.Never:
+			} else {
 				witness.Send(
 					message.Witness(
 						"permission denied",
 						out.Pair("node", node.registry.ID),
-						out.Pair("capability", el.Name)))	
+						out.Pair("capability", el.Name)))
 			}
 		}
 	}
@@ -347,6 +395,13 @@ func (n *Nodes) Uninstall(nodeid string) *error.Error {
 		message.Witness(
 			"uninstalling node",
 			out.Pair("node", nodeid)))
+
+	err := n.Kill(nodeid)
+	if err != nil {
+		witness.Send(err)
+		// do not return
+		// log failure and continue
+	}
 	
 	n.mu.Lock()
 	defer n.mu.Unlock()
@@ -496,38 +551,52 @@ func (n *Nodes) resolveId(nodeid string) string {
 	return nodeid
 }
 
-func (n *Nodes) acceptInstallationWarning(m *manifest.Manifest) bool {
+func (n *Nodes) acceptInstallationWarning(m *manifest.Manifest) (bool, *error.Error) {
 
-	witness.Send(
-		message.Witness(
-			"ensuring trust",
-			out.Pair("node", m.ID),
-			out.Pair("trust", string(m.Trust))))
-
-	if m.Trust == manifest.StandardTrust || m.Trust == manifest.Untrusted {
-		witness.Send(
-			message.Witness(
-				"low trust accepted",
-				out.Pair("node", m.ID),
-				out.Pair("trust", string(m.Trust))))
-		return true
+	// e.g.
+	// dev.sporeos.shell.confirm body="Do you accept [nodeid] at a trust level of [trust]?" lines=[ ... ]
+	var conf strings.Builder
+	conf.WriteString("dev.sporeos.shell.confirm body=\"Do you accept node [")
+	conf.WriteString(m.ID)
+	conf.WriteString("] at a trust level of [")
+	conf.WriteString(string(m.Trust))
+	conf.WriteString("]?\" lines=[ \"Important Considerations\", ")
+	switch m.Trust {
+	case manifest.System:
+		conf.WriteString("\" - system trust implies full control and should only be granted to core system components.\", ")
+		conf.WriteString("\" - caution and thorough vetting are required before granting system trust.\", ")
+		conf.WriteString("\" - while you are free to proceed, we suggest denying this request\"")
+	case manifest.Developer:
+		conf.WriteString("\" - developer trust grants free permission to all capabilities in the mesh\", ")
+		conf.WriteString("\" - caution is advised when granting developer trust.\", ")
+		conf.WriteString("\" - only grant developer trust if you are the developer of the node you are installing.\"")
+	case manifest.Trusted:
+		conf.WriteString("\" - trusted trust implies a higher level of scrutiny and should be granted to nodes with a proven track record.\", ")
+		conf.WriteString("\" - only grant trusted trust if you are confident in the node's reliability.\"")
+		conf.WriteString("\" - trusted nodes require capability permissions to be granted individually.\"")
+	case manifest.StandardTrust:
+		conf.WriteString("\" - standard trust implies a baseline level of scrutiny and should be granted to nodes with a reasonable track record.\", ")
+		conf.WriteString("\" - only grant standard trust if you are confident in the node's reliability.\"")
+		conf.WriteString("\" - standard nodes require capability permissions to be granted individually.\"")
+	case manifest.Untrusted:
+		conf.WriteString("\" - untrusted nodes should be treated with caution and granted minimal permissions.\", ")
+		conf.WriteString("\" - only grant untrusted trust if you are confident in the node's reliability.\"")
+		conf.WriteString("\" - untrusted nodes require capability permissions to be granted individually.\"")
 	}
-
+	conf.WriteString(" ] ~")
 	handle := n.handle()
-	title := "Installation Warning"
-	var description strings.Builder
-	description.WriteString(fmt.Sprintf(`Do you accept [%s] as a node with a [%s] level of trust?`, m.ID, string(m.Trust)))
-	description.WriteString(fmt.Sprintf(`\n\nThis will grant it permission to all capabilities and is unadvised unless you are absolutely sure of the source.`))
-	raw := fmt.Sprintf(`dev.sporeos.dialog.alert title="%s" description="%s" entries=[ Grant Deny ] ~%s`, title, description.String(), handle)
-	msg, ok := message.Request(raw, m.ID)
+	conf.WriteString(handle)
+	raw := conf.String()
+
+	msg, ok := message.Request(raw, selfNodeId)
 	if !ok {
-		witness.Send(
-			error.New(
-				error.Malformed,
-				error.Node,
-				"failed to ensure trust",
-				out.Pair("node", m.ID)))
-		return false
+		err := error.New(
+			error.Malformed,
+			error.Node,
+			"failed to ensure trust",
+			out.Pair("node", m.ID))
+		witness.Send(err)
+		return false, err
 	}
 	
 	ch := n.pending.Await(handle)
@@ -535,26 +604,16 @@ func (n *Nodes) acceptInstallationWarning(m *manifest.Manifest) bool {
 	if err != nil {
 		n.pending.Delete(handle)
 		witness.Send(err)
-		return false
+		return false, err
 	}
 
 	response, err := n.pending.WaitFor(handle, ch)
 	if err != nil {
 		witness.Send(err)
-		return false
+		return false, err
 	}
 	if response.Flag("error") {
-		return false
+		return false, nil
 	}
-	entry, ok := response.Arg("entry")
-	if !ok {
-		witness.Send(
-			error.New(
-				error.Missing,
-				error.Node,
-				"missing in response",
-				out.Pair("argument", "entry")))
-		return false
-	}
-	return entry == "Grant"
+	return response.Flag("yes"), nil
 }

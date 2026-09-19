@@ -20,20 +20,25 @@ func (s *Spore) permissionRequest(request iface.Message) *error.Error {
 		return error.MissingArg("capability", error.Spore).WithMessage(request)
 	}
 
-	reasonsStr := request.ArgIf("reasons", `["Reasons: not provided", "Suggestion: deny"]`)
+	reasonsStr := request.ArgIf("reasons", `[ "No reasons were provided for this request", "Our suggestion is to deny this request" ] `)
 	reasons := parse.ArrayToStrings(reasonsStr)
 
 	go func() {
-		value, err := s.permissions.Request(node, cap, reasons)
+		granted, err := s.permissions.Request(node, cap, reasons)
 		if err != nil {
 			s.bus.Response(err.WithMessage(request))
 			return
 		}
 
+		value := "no"
+		if granted {
+			value = "yes"
+		}
+
 		s.bus.Response(
 			message.Spore(
 				request,
-				out.Flag(string(value))))
+				out.Flag(value)))
 	}()
 	
 	return nil

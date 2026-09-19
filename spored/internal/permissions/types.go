@@ -6,14 +6,6 @@ import (
 	"spored/internal/utilities/error"
 )
 
-type Value string
-const (
-	Always Value = "always"
-	Once Value = "once"
-	No Value = "no"
-	Never Value = "never"
-)
-
 type ibus interface {
 	Register(node bus.INode)
 	Unregister(node bus.INode)

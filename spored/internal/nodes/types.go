@@ -4,7 +4,6 @@ import (
 	"spored/internal/bus"
 	"spored/internal/iface"
 	"spored/internal/manifest"
-	"spored/internal/permissions"
 	"spored/internal/registry"
 	"spored/internal/utilities/error"
 )
@@ -27,8 +26,9 @@ type ihyphae interface {
 }
 
 type ipermissions interface {
-	Request(nodeid string, capability string, reasons []string) (permissions.Value, *error.Error)
+	Request(nodeid string, capability string, reasons []string) (bool, *error.Error)
 	Can(nodeid string, capability string) bool
+	RegisterNode(man *manifest.Manifest)
 }
 
 type ispore interface {}

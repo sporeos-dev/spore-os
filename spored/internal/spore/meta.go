@@ -17,48 +17,27 @@ func (s *Spore) help(request iface.Message) *error.Error {
 
 	go func() {
 
-		if body == "" {
+		outs := s.getHelp(body, len(body))
+		outs = append(outs, out.Pair("body", body))
+		
+		if len(outs) > 0 {
 			s.bus.Response(
 				message.Spore(
 					request,
-					out.Pair("body", body),
-					out.Array("SPORE.help",
-						[]string{
-							"Spore OS Help",
-							"Schema: " + s.manifest.Schema,
-							"Version: " + s.manifest.Version,
-							"sporeos.dev",
-							"github.com/sporeos-dev",
-						}),
-					out.Array("Getting-started-commands...",
-						[]string{
-							"SPORE.info",
-							"SPORE.node.list",
-							"SPORE.node.help node=node",
-							"SPORE.command.list",
-							"SPORE.command.help command=command",
-						})))
-
+					outs...,
+				),
+			)
+		
 		} else {
-			outs := s.getHelp(body, len(body))
-			outs = append(outs, out.Pair("body", body))
-			if len(outs) > 0 {
-				s.bus.Response(
-					message.Spore(
-						request,
-						outs...,
-					),
-				)
-			} else {
-				s.bus.Response(
-					error.New(
-						error.NoMatches,
-						error.Spore,
-						"no help matches found",
-						out.Pair("body", body)).
-						WithMessage(request))
-			}
+			s.bus.Response(
+				error.New(
+					error.NoMatches,
+					error.Spore,
+					"no help matches found",
+					out.Pair("body", body)).
+					WithMessage(request))
 		}
+
 	}()
 
 	return nil
@@ -70,35 +49,27 @@ func (s *Spore) state(request iface.Message) *error.Error {
 
 	go func() {
 
-		if body == "" {
+		outs := s.getState(body, len(body))
+		outs = append(outs, out.Pair("body", body))
+		
+		if len(outs) > 0 {
+			s.bus.Response(
+				message.Spore(
+					request,
+					outs...,
+				),
+			)
+		
+		} else {
 			s.bus.Response(
 				error.New(
-					error.NotImplemented,
+					error.NoMatches,
 					error.Spore,
-					"state not yet implemented",
-					out.Flag("empty")).
+					"no state found",
+					out.Pair("body", body)).
 					WithMessage(request))
-
-		} else {
-			outs := s.getState(body, len(body))
-			outs = append(outs, out.Pair("body", body))
-			if len(outs) > 0 {
-				s.bus.Response(
-					message.Spore(
-						request,
-						outs...,
-					),
-				)
-			} else {
-				s.bus.Response(
-					error.New(
-						error.NoMatches,
-						error.Spore,
-						"no state found",
-						out.Pair("body", body)).
-						WithMessage(request))
-			}
 		}
+
 	}()
 
 	return nil
@@ -110,35 +81,27 @@ func (s *Spore) list(request iface.Message) *error.Error {
 
 	go func() {
 
-		if body == "" {
+		outs := s.getList(body, len(body))
+		outs = append(outs, out.Pair("body", body))
+		
+		if len(outs) > 0 {
+			s.bus.Response(
+				message.Spore(
+					request,
+					outs...,
+				),
+			)
+		
+		} else {
 			s.bus.Response(
 				error.New(
-					error.NotImplemented,
+					error.NoMatches,
 					error.Spore,
-					"list not yet implemented",
-					out.Flag("empty")).
+					"no list found",
+					out.Pair("body", body)).
 					WithMessage(request))
-
-		} else {
-			outs := s.getList(body, len(body))
-			outs = append(outs, out.Pair("body", body))
-			if len(outs) > 0 {
-				s.bus.Response(
-					message.Spore(
-						request,
-						outs...,
-					),
-				)
-			} else {
-				s.bus.Response(
-					error.New(
-						error.NoMatches,
-						error.Spore,
-						"no list found",
-						out.Pair("body", body)).
-						WithMessage(request))
-			}
 		}
+
 	}()
 
 	return nil
@@ -150,35 +113,25 @@ func (s *Spore) complete(request iface.Message) *error.Error {
 
 	go func() {
 
-		if body == "" {
+		outs := s.getComplete(body, len(body))
+		
+		if len(outs) > 0 {
+			outs = append(outs, out.Pair("body", body))
+			s.bus.Response(
+				message.Spore(
+					request,
+					outs...,
+				),
+			)
+		
+		} else {
 			s.bus.Response(
 				error.New(
-					error.NotImplemented,
+					error.NoMatches,
 					error.Spore,
-					"complete not yet implemented",
-					out.Flag("empty")).
+					"no completions found",
+					out.Pair("body", body)).
 					WithMessage(request))
-
-
-		} else {
-			outs := s.getComplete(body, len(body))
-			if len(outs) > 0 {
-				outs = append(outs, out.Pair("body", body))
-				s.bus.Response(
-					message.Spore(
-						request,
-						outs...,
-					),
-				)
-			} else {
-				s.bus.Response(
-					error.New(
-						error.NoMatches,
-						error.Spore,
-						"no completions found",
-						out.Pair("body", body)).
-						WithMessage(request))
-			}
 		}
 
 	}()
@@ -194,64 +147,50 @@ func (s *Spore) hint(request iface.Message) *error.Error {
 
 	go func() {
 
-		if body == "" {
+		outs := make([]out.IOut, 0)
+		outHelps := s.getHelp(body, cursor)
+		if len(outHelps) > 0 {
+			outs = append(outs, outHelps...)
+		}
+		outStates := s.getState(body, cursor)
+		if len(outStates) > 0 {
+			outs = append(outs, outStates...)
+		}
+		outLists := s.getList(body, cursor)
+		if len(outLists) > 0 {
+			outs = append(outs, outLists...)
+		}
+
+		// if values exist, respond
+		if len(outs) > 0 {
+			outs = append(outs, out.Pair("body", body))
 			s.bus.Response(
-				error.New(
-					error.NotImplemented,
-					error.Spore,
-					"hint not yet implemented",
-					out.Flag("empty")).
-					WithMessage(request))
+				message.Spore(
+					request,
+					outs...,
+				),
+			)
 
+		// otherwise completions
 		} else {
-			outs := make([]out.IOut, 0)
-			outHelps := s.getHelp(body, cursor)
-			if len(outHelps) > 0 {
-				outs = append(outs, out.Flag("HELP"))
-				outs = append(outs, outHelps...)
-			}
-			outStates := s.getState(body, cursor)
-			if len(outStates) > 0 {
-				outs = append(outs, out.Flag("STATE"))
-				outs = append(outs, outStates...)
-			}
-			outLists := s.getList(body, cursor)
-			if len(outLists) > 0 {
-				outs = append(outs, out.Flag("LIST"))
-				outs = append(outs, outLists...)
-			}
-
-			// if values exist, respond
-			if len(outs) > 0 {
-				outs = append(outs, out.Pair("body", body))
+			outCompletes := s.getComplete(body, cursor)
+			outCompletes = append(outCompletes, out.Pair("body", body))
+			if len(outCompletes) > 0 {
 				s.bus.Response(
 					message.Spore(
 						request,
-						outs...,
+						outCompletes...,
 					),
 				)
 
-			// otherwise completions
 			} else {
-				outCompletes := s.getComplete(body, cursor)
-				outCompletes = append(outCompletes, out.Pair("body", body))
-				if len(outCompletes) > 0 {
-					s.bus.Response(
-						message.Spore(
-							request,
-							outCompletes...,
-						),
-					)
-
-				} else {
-					s.bus.Response(
-						error.New(
-							error.NoMatches,
-							error.Spore,
-							"no hint matches found",
-							out.Pair("body", body)).
-							WithMessage(request))
-				}
+				s.bus.Response(
+					error.New(
+						error.NoMatches,
+						error.Spore,
+						"no hint matches found",
+						out.Pair("body", body)).
+						WithMessage(request))
 			}
 		}
 	}()
@@ -260,9 +199,14 @@ func (s *Spore) hint(request iface.Message) *error.Error {
 }
 
 func btos(b bool) string { if b { return "true" } else { return "false" } }
+
 func (s *Spore) getHelp(body string, cursor int) []out.IOut {
 	outs := make([]out.IOut, 0)
 	parts, _ := parseBody(body, cursor)
+
+	if len(parts) == 0 {
+		return outs
+	}
 	
 	m, errCode := s.matchNode(parts[0])
 	switch errCode {
@@ -353,6 +297,10 @@ func (s *Spore) getState(body string, cursor int) []out.IOut {
 	outs := make([]out.IOut, 0)
 	parts, _ := parseBody(body, cursor)
 
+	if len(parts) == 0 {
+		return outs
+	}
+
 	m, errCode := s.matchNode(parts[0])
 	if errCode == error.OK {
 		state, err := s.nodes.GetState(m.ID)
@@ -377,6 +325,10 @@ func (s *Spore) getState(body string, cursor int) []out.IOut {
 func (s *Spore) getList(body string, cursor int) []out.IOut {
 	outs := make([]out.IOut, 0)
 	parts, _ := parseBody(body, cursor)
+
+	if len(parts) == 0 {
+		return outs
+	}
 
 	m, errCode := s.matchNode(parts[0])
 	if errCode == error.OK {
@@ -427,6 +379,13 @@ func (s *Spore) getList(body string, cursor int) []out.IOut {
 func (s *Spore) getComplete(body string, cursor int) []out.IOut {
 	outs := make([]out.IOut, 0)
 	parts, _ := parseBody(body, cursor)
+
+	if len(parts) == 0 {
+		nodes := s.nodes.GetNodes()
+		nodes = append(nodes, "dev.sporeos.SPORE")
+		outs = append(outs, out.Array("NODES", nodes))
+		return outs
+	}
 
 	nodes := s.nodes.GetNodes()
 	nodes = append(nodes, "dev.sporeos.SPORE")

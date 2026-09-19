@@ -27,6 +27,7 @@ type spawner interface {
 
 type permitter interface {
 	Can(nodeid string, capability string) bool
+	RegisterNode(man *manifest.Manifest)
 }
 
 type node struct {
@@ -46,7 +47,7 @@ type node struct {
 
 type State struct {
 	Connected bool
-	Pid int
+	Pid       int
 }
 
 //
@@ -60,7 +61,7 @@ func newNode(registry *registry.Element, manifest *manifest.Manifest) *node {
 		registry: registry,
 		manifest: manifest,
 		bus:      nil,
-		pending: await.New(error.Node).WithTimeout(time.Second * 5),
+		pending:  await.New(error.Node).WithTimeout(time.Second * 5),
 	}
 
 	n.manifest.Verify()
@@ -107,7 +108,7 @@ func (n *node) state() *State {
 
 func (n *node) handleConnection(conn net.Conn, reader *bufio.Reader, wr *bufio.Writer, hyphae ihyphae) *error.Error {
 
-	writer := newWriter(wr)
+	writer := newWriter(conn, wr)
 
 	err := n.checkManifestForFailure()
 	if err != nil {
@@ -115,7 +116,21 @@ func (n *node) handleConnection(conn net.Conn, reader *bufio.Reader, wr *bufio.W
 	}
 
 	n.manifest.Verify()
-	if n.manifest.Status.Get() == status.RequiresUserSpace {
+	if n.manifest.Status.Get() == status.RequiresDeveloper {
+
+		if n.registry.Checksum == string(manifest.Developer) {
+			n.manifest.Status.Set(status.Verified)
+		} else {
+			n.manifest.Status.Set(status.FailedChecksum)
+			return error.New(
+				error.HandshakeDenial,
+				error.Node,
+				"failed manifest verification: developer checksum mismatch",
+				out.Pair("expected", string(manifest.Developer)))
+		}
+
+	} else if n.manifest.Status.Get() == status.RequiresUserSpace {
+		
 		checksum, err := hyphae.HashFile(n.manifest.Path)
 		if err != nil {
 			return err
@@ -132,6 +147,7 @@ func (n *node) handleConnection(conn net.Conn, reader *bufio.Reader, wr *bufio.W
 				out.Pair("expected", n.manifest.ExpectedChecksum))
 		}
 	}
+
 	err = n.checkManifestForFailure()
 	if err != nil {
 		return err
@@ -154,7 +170,15 @@ func (n *node) handleConnection(conn net.Conn, reader *bufio.Reader, wr *bufio.W
 			out.Pair("manifest_status", n.manifest.Status.String()))
 	}
 
-	b := newBinary(n.registry)
+	// manifest verified against its checksum, so its declared trust level can be relied upon
+	n.permitter.RegisterNode(n.manifest)
+
+	var b *binary
+	if n.manifest.Trust == manifest.Developer {
+		b = newDeveloperBinary(n.registry)
+	} else {
+		b = newBinary(n.registry)
+	}
 	err = n.checkBinaryForFailure(b)
 	if err != nil {
 		return err
@@ -211,29 +235,81 @@ func (n *node) handleConnection(conn net.Conn, reader *bufio.Reader, wr *bufio.W
 	return nil
 }
 
-func (n *node) listen() {
+// readStatus reports the outcome of readMessage without spelling the builtin
+// error interface, which is shadowed in this file by the utilities/error import.
+type readStatus int
+
+const (
+	readOK readStatus = iota
+	readClosed
+	readFailure
+)
+
+// readMessage reads one complete wire message, accumulating physical lines
+// that make up a block value (key=<< ... >>), mirroring spore_c's Client::listen().
+func (n *node) readMessage() (string, readStatus) {
+	var line string
+	multiline := false
 
 	for {
-		raw, err := n.reader.ReadString('\n')
-		if err != nil {
-			if err == io.EOF || errors.Is(err, net.ErrClosed) {
-				witness.Send(
-					message.Witness(
-						"node disconnecting",
-						out.Pair("node", n.registry.ID)))
-				break
-			} else {
-				n.Receive(
-					error.New(
-						error.InitializationFailure,
-						error.Node,
-						"read failure",
-						out.Pair("node", n.registry.ID)))
+		raw, readErr := n.reader.ReadString('\n')
+		if readErr != nil {
+			if readErr == io.EOF || errors.Is(readErr, net.ErrClosed) {
+				return "", readClosed
+			}
+			return "", readFailure
+		}
+
+		currentLine := strings.TrimSuffix(raw, "\n")
+		currentLine = strings.TrimSuffix(currentLine, "\r")
+
+		if !multiline {
+			if strings.Contains(currentLine, "<<") {
+				multiline = true
+				line = currentLine + "\n"
+				continue
+			}
+			line = currentLine
+		} else {
+			isClose := currentLine == ">>" || strings.HasPrefix(currentLine, ">> ")
+			if !isClose {
+				line += currentLine + "\n"
+				continue
+			}
+			line += currentLine
+			if strings.Contains(currentLine, "<<") {
 				continue
 			}
 		}
-		raw = strings.TrimSpace(raw)
-		if raw == "" {
+
+		multiline = false
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		return line, readOK
+	}
+}
+
+func (n *node) listen() {
+
+listen:
+	for {
+		raw, status := n.readMessage()
+		switch status {
+		case readClosed:
+			witness.Send(
+				message.Witness(
+					"node disconnecting",
+					out.Pair("node", n.registry.ID)))
+			break listen
+		case readFailure:
+			n.Receive(
+				error.New(
+					error.InitializationFailure,
+					error.Node,
+					"read failure",
+					out.Pair("node", n.registry.ID)))
 			continue
 		}
 		// i := index
@@ -245,7 +321,8 @@ func (n *node) listen() {
 			witness.Send(message.Incoming(raw, n.registry.ID))
 			pipeMsg, ok := message.Pipe(raw, n.registry.ID)
 			if !ok {
-				n.Receive(error.New(
+				// no parsed message to attach, so report internally instead of echoing raw text back over the wire
+				witness.Send(error.New(
 					error.Malformed,
 					error.Node,
 					"failed to parse pipe",
@@ -274,7 +351,8 @@ func (n *node) listen() {
 			witness.Send(message.Incoming(raw, n.registry.ID))
 			broadcast, ok := message.Broadcast(raw, n.registry.ID)
 			if !ok {
-				n.Receive(error.New(
+				// no parsed message to attach, so report internally instead of echoing raw text back over the wire
+				witness.Send(error.New(
 					error.Malformed,
 					error.Node,
 					"failed to publish",
@@ -313,7 +391,8 @@ func (n *node) listen() {
 			witness.Send(message.Incoming(raw, n.registry.ID))
 			response, ok := message.Response(raw, n.registry.ID)
 			if !ok {
-				n.Receive(error.New(
+				// no parsed message to attach, so report internally instead of echoing raw text back over the wire
+				witness.Send(error.New(
 					error.Malformed,
 					error.Node,
 					"failed to respond",
@@ -323,6 +402,7 @@ func (n *node) listen() {
 			}
 			err := n.bus.Response(response)
 			if err != nil {
+				witness.Send(err)
 				n.Receive(err)
 			}
 
@@ -332,7 +412,8 @@ func (n *node) listen() {
 			witness.Send(message.Incoming(raw, n.registry.ID))
 			request, ok := message.Request(raw, n.registry.ID)
 			if !ok {
-				n.Receive(error.New(
+				// no parsed message to attach, so report internally instead of echoing raw text back over the wire
+				witness.Send(error.New(
 					error.Malformed,
 					error.Node,
 					"failed to request",
@@ -341,21 +422,20 @@ func (n *node) listen() {
 				continue
 			}
 
-			// if n.manifest.Trust == manifest.StandardTrust || n.manifest.Trust == manifest.Untrusted {
-			// 	command := msg.Command()
-			// 	if !n.permitter.Can(n.registry.ID, command) {
-			// 		n.Error(error.New(
-			// 			error.NotPermitted,
-			// 			error.Node,
-			// 			"permission required",
-			// 			out.Pair("node", n.registry.ID),
-			// 			out.Pair("capability", command)), "", "")
-			// 		return
-			// 	}
-			// }
+			command := request.Capability()
+			if !n.permitter.Can(n.registry.ID, command) {
+				n.Receive(error.New(
+					error.NotPermitted,
+					error.Node,
+					"permission required",
+					out.Pair("node", n.registry.ID),
+					out.Pair("capability", command)))
+				return
+			}
 
 			err := n.bus.Request(request)
 			if err != nil {
+				witness.Send(err)
 				n.Receive(err)
 			}
 		}
@@ -366,6 +446,7 @@ func (n *node) listen() {
 	n.reader = nil
 	n.writer = nil
 	n.conn.Close()
+	n.conn = nil
 }
 
 func (n *node) ProcessID() (int, bool) {
@@ -403,7 +484,7 @@ func (n *node) GetManifest() *manifest.Manifest {
 }
 
 func (n *node) Receive(message iface.Message) *error.Error {
-	
+
 	n.mu.RLock()
 	writer := n.writer
 	n.mu.RUnlock()
@@ -446,7 +527,7 @@ func (n *node) Receive(message iface.Message) *error.Error {
 				response.ArgIf("what", "lazy instantiation failed"))
 		}
 	}
-	
+
 	n.mu.RLock()
 	defer n.mu.RUnlock()
 

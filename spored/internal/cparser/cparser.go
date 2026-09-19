@@ -60,7 +60,7 @@ func (p *ParsedMessage) Stringify() string {
 				b.WriteString(flag)
 			}
 
-			b.WriteString("~")
+			b.WriteString(" ~")
 			b.WriteString(p.Handle)
 
 		case TypeResponse: 

@@ -5,6 +5,7 @@ import (
 	"spored/internal/message"
 	"spored/internal/utilities/error"
 	"spored/internal/utilities/out"
+	"spored/internal/witness"
 	"sync"
 	"time"
 )
@@ -42,15 +43,24 @@ func (p *Pending) Delete(handle string) {
 	delete(p.channels, handle)
 }
 func (p *Pending) WaitFor(handle string, ch chan iface.Message) (iface.Message, *error.Error) {
-	if p.timeout == 0 {
+	return p.WaitForTimeout(handle, ch, nil)
+}
+
+func (p *Pending) WaitForTimeout(handle string, ch chan iface.Message, override *time.Duration) (iface.Message, *error.Error) {
+	timeout := p.timeout
+	if override != nil {
+		timeout = *override
+	}
+
+	if timeout <= 0 {
 		msg := <-ch
 		return msg, nil
 	}
-	
+
 	select {
 	case msg := <-ch:
 		return msg, nil
-	case <-time.After(p.timeout):
+	case <-time.After(timeout):
 		p.mu.Lock()
 		defer p.mu.Unlock()
 		delete(p.channels, handle)
@@ -75,6 +85,14 @@ func (p *Pending) Receive(msg iface.Message) *error.Error {
 	
 	if ok {
 		ch <- msg
+	} else {
+		// no waiter left for this handle (already timed out or never registered) - message would otherwise vanish silently
+		witness.Send(
+			error.New(
+				error.Missing,
+				p.module,
+				"dropped response for unknown or expired handle",
+				out.Pair("handle", handle)))
 	}
 
 	return nil

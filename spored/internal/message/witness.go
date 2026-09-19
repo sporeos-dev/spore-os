@@ -35,6 +35,8 @@ func Witness(body string, outs ...out.IOut) iface.Message {
 
 // from node
 func Node(raw string, cast string) iface.Message {
+	raw = strings.ReplaceAll(raw, "\n", "\\n")
+	raw = strings.ReplaceAll(raw, "\"", "\\\"")
 	return &witness{
 		raw: raw,
 		cast: cast,
@@ -44,6 +46,8 @@ func Node(raw string, cast string) iface.Message {
 
 // incoming
 func Incoming(raw string, cast string) iface.Message {
+	raw = strings.ReplaceAll(raw, "\n", "\\n")
+	raw = strings.ReplaceAll(raw, "\"", "\\\"")
 	return &witness {
 		raw: raw,
 		cast: cast,

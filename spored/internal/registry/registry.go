@@ -1,130 +1,120 @@
-// Copyright 2026 Matt Harrison
-// SPDX-License-Identifier: AGPL-3.0-only
-
 package registry
 
 import (
-	"fmt"
+	"log/slog"
 	"os"
-	"path/filepath"
-	"spored/internal/manifest"
-	"spored/internal/utilities"
-	"strings"
+	"sync"
+
+	"spored/internal/pal"
+	"spored/internal/utilities/error"
+	"spored/internal/utilities/out"
 
 	"gopkg.in/yaml.v3"
 )
 
 type Registry struct {
-	paths []string
+	mu       sync.RWMutex
+	Version  int        `yaml:"version"`
+	Elements []*Element `yaml:"nodes"`
 }
 
-func (r *Registry) Open() error {
+func New() *Registry {
 	
-	registryPath, err := RegistryPath()
-	if err != nil {
-		return err
-	}
-
-	EnsureRegistryDir(registryPath)
-	if _, err := os.Stat(registryPath); os.IsNotExist(err) {
-		file, err := os.Create(registryPath)
-		if err != nil {
-			return err
-		}
-		file.Close()
-	}
-
-	data, err := os.ReadFile(registryPath)
-	if err != nil {
-		return err
-	}
-
-	r.paths = make([]string, 0)
-	for _, line := range strings.Split(string(data), "\n") {
-		if line != "" {
-			r.paths = append(r.paths, line)
-		}
-	}
+	reg := &Registry{}
 	
-	return nil
+	err := reg.Load()
+	if err != nil {
+		slog.Error("Failed to load registry", "error", err)
+		os.Exit(1)
+	}
+
+	return reg
 }
 
-func (r *Registry) Paths() []string {
-	return r.paths
-}
+func (r *Registry) Close() {}
 
-func (r *Registry) Add(path string) error {
-	if !strings.HasSuffix(path, ".manifest.spore.yaml") {
-		return fmt.Errorf("registry: %q is not a .manifest.spore.yaml file", path)
-	}
+func (r *Registry) Add(el *Element) *error.Error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		return fmt.Errorf("registry: manifest file not found: %q", path)
-	}
-
-	m, err := manifest.LoadManifest(path)
-	if err != nil {
-		return fmt.Errorf("registry: invalid manifest %q: %w", path, err)
-	}
-
-	// Resolve app: to an absolute path before writing the stored copy.
-	// Relative paths in app: are defined (SPEC §8.2) as relative to the source
-	// manifest's directory. After copying, m.Path points to the system copy, so
-	// we must canonicalise now while the source directory is still known.
-	resolvedApp, err := utilities.ResolveAppPath(m.App, filepath.Dir(path))
-	if err != nil {
-		return fmt.Errorf("registry: resolve app path: %w", err)
-	}
-	m.App = resolvedApp
-
-	// Copy the manifest into the daemon-owned nodes directory so _spore can
-	// always read it, regardless of where the source file lives.
-	nodesDir, err := ManifestsDir()
-	if err != nil {
-		return fmt.Errorf("registry: nodes dir: %w", err)
-	}
-	if err := os.MkdirAll(nodesDir, 0755); err != nil {
-		return fmt.Errorf("registry: create nodes dir: %w", err)
-	}
-	systemPath := filepath.Join(nodesDir, m.ID+".manifest.spore.yaml")
-	data, err := yaml.Marshal(m)
-	if err != nil {
-		return fmt.Errorf("registry: serialise manifest: %w", err)
-	}
-	if err := os.WriteFile(systemPath, data, 0644); err != nil {
-		return fmt.Errorf("registry: write manifest copy: %w", err)
-	}
-
-	r.paths = append(r.paths, systemPath)
+	r.Elements = append(r.Elements, el)
 	return r.save()
 }
 
-func (r *Registry) Remove(path string) error {
-	newPaths := make([]string, 0, len(r.paths))
-	for _, p := range r.paths {
-		if p != path {
-			newPaths = append(newPaths, p)
+func (r *Registry) Remove(id string) *error.Error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	for i, el := range r.Elements {
+		if id != el.ID {
+			continue
 		}
+		r.Elements = append(r.Elements[:i], r.Elements[i+1:]...)
+		return r.save()
 	}
-	r.paths = newPaths
-	if err := r.save(); err != nil {
-		return err
+
+	return error.New(
+		error.Missing, 
+		error.Registry, 
+		"unable to remove element", 
+		out.Pair("node", id))
+}
+
+func (r *Registry) Load() *error.Error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	return r.load()
+}
+
+func (r *Registry) load() *error.Error {
+	
+	data, err := os.ReadFile(pal.FileRegistry())
+	if err != nil {
+		return error.New(
+			error.Missing,
+			error.Registry,
+			"unable to read registry",
+			out.Pair("err", err.Error()))
 	}
-	// Clean up the managed copy if it lives in the nodes directory.
-	if nodesDir, err := ManifestsDir(); err == nil && strings.HasPrefix(path, nodesDir) {
-		_ = os.Remove(path)
+
+	err = yaml.Unmarshal(data, r)
+	if err != nil {
+		return error.New(
+			error.Malformed,
+			error.Registry,
+			"unable to parse registry",
+			out.Pair("err", err.Error()))
 	}
+	
 	return nil
 }
 
-func (r *Registry) save() error {
-	registryPath, err := RegistryPath()
+func (r *Registry) Save() *error.Error {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	return r.save()
+}
+
+func (r *Registry) save() *error.Error {
+	data, err := yaml.Marshal(r)
 	if err != nil {
-		return err
+		return error.New(
+			error.Malformed,
+			error.Registry,
+			"unable to serialize registry",
+			out.Pair("err", err.Error()))
 	}
-	content := strings.Join(r.paths, "\n")
-	if len(r.paths) > 0 {
-		content += "\n"
+
+	err = os.WriteFile(pal.FileRegistry(), data, 0600) // only readable/writable by the spore
+	if err != nil {
+		return error.New(
+			error.Generic,
+			error.Registry, 
+			"unable to write registry",
+			out.Pair("err", err.Error()))
 	}
-	return os.WriteFile(registryPath, []byte(content), 0600)
+	
+	return nil
 }

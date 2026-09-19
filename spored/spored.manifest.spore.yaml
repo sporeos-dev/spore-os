@@ -1,161 +1,301 @@
 # Copyright 2026 Matt Harrison
 # SPDX-License-Identifier: AGPL-3.0-only
 
-# yaml-language-server: $schema=../../spore-os-protocol/versions/v1/spore.manifest.v1.schema.yaml
+# yaml-language-server: $schema=../../spore-os-protocol/versions/v0d2/spore.manifest.v0.schema.yaml
 
 id: dev.sporeos.SPORE
 name: Spore OS
 description: The central hub of the Spore ecosystem.
-schema: SPORE/v1d0
-version: 0.0.1
+trust: system
+
+schema: SPORE/v0d2
+version: 0.2.0
 app: n/a
 
+launch: auto
+namespace: spore
+
 api:
-  - name: SPORE.help
-    description: Get generic help.
+  - name: help
+    description: Get help.
+    risk: benign
     usage:
-      - SPORE.node.help
+      - help
+    inputs:
+      - name: body
+        type: string
+        description: Help request body.
+        required: true
     outputs:
-      - name: nodeinfo
-        type: object
-        description: Node information of dev.sporeos.SPORE
-
-  - name: SPORE.node.install
-    description: Install a node.
-    usage:
-      - SPORE.node.install path=/path/to/manifest/node.manifest.spore.yaml
-      - SPORE.node.install path=(dialog ext=[ '.manifest.spore.yaml' ])
-    inputs:
-      - name: path
+      - name: body
         type: string
-        description: Path to .manifest.spore.yaml file.
-        required: true
-    outputs: []
-
-  - name: SPORE.node.uninstall
-    description: Uninstall a node.
-    usage:
-      - SPORE.node.uninstall node=node
-    inputs:
-      - name: node
+        description: The original body.
+    # if called on node
+      - name: id
+        type: string 
+        description: Node ID.
+      - name: name
         type: string
-        description: Node ID
-        required: false
-      - name: path
+        description: Node name.
+      - name: description
         type: string
-        description: Path to .manifest.spore.yaml file.
-        required: false
-    outputs: []
-    notes:
-      - Only one of 'node', 'path' required.
-
-  - name: SPORE.node.spawn
-    description: Start a node.
-    usage:
-      - SPORE.node.spawn node=node
-    inputs:
-      - name: node
+        description: Node description.
+      - name: trust
         type: string
-        description: Node ID
-        required: true
-    outputs: []
-    notes:
-      - Nodes will spawn headless.
-
-  - name: SPORE.node.kill
-    description: Stop a node.
-    usage:
-      - SPORE.node.kill node=node
-    inputs:
-      - name: node
+        description: Node trust level.
+      - name: schema
         type: string
-        description: Node ID
-        required: true
-    outputs: []
+        description: Schema.
+      - name: version
+        type: string
+        description: Spore OS target version.
+      - name: app
+        type: string
+        description: Relative path to node from manifest file.
+      - name: launch
+        type: string
+        description: Launch mode of the node (Auto, Lazy, Manual).
+      - name: namespace
+        type: string
+        description: Runtime namespace (Hyphae, Spore, Any).
+      - name: witness
+        type: bool
+        description: Whether the node is a witness.
 
-  - name: SPORE.node.list
-    description: Get a list of installed nodes by ID.
+  - name: state
+    description: Get runtime state.
+    risk: standard
     usage:
-      - SPORE.node.list
-      - SPORE.node.list connected
-    inputs:
+      - state
+    inputs: []
+    outputs:
+      - name: body
+        type: string
+        description: The original body.
+    # if called on node
+      - name: manifest
+        type: string
+        description: "Absolute path to manifest file."
+      - name: binary
+        type: string
+        description: "Absolute path to binary file."
       - name: connected
-        type: flag
-        description: Append the 'connected' token to each node that is currently connected.
-    outputs:
-      - name: nodes
-        type: array
-        description: List of node IDs. Additional information controlled by flags.
+        type: bool
+        description: Whether the node is connected.
 
-  - name: SPORE.node.help
-    description: Get help with a node.
+  - name: list
+    description: List children.
+    risk: standard
     usage:
-      - SPORE.node.help node=node
+      - list 
+    inputs: 
+      - name: body
+        type: string
+        description: .
+        required: true
+    outputs:
+      - name: body
+        type: string
+        description: The original body.
+    # if called on node
+      - name: api
+        type: array
+        description: List of request calls.
+      - name: topics
+        type: array
+        description: List of topics.
+      - name: errors
+        type: array
+        description: List of defined error codes.
+      - name: permissions
+        type: array
+        description: List of permissions listed in the manifest.
+
+  - name: complete
+    description: Get command completions.
+    risk: standard
+    usage:
+      - complete body=""
+    inputs:
+      - name: body
+        type: string
+        description: Partial command input.
+        required: true
+    outputs:
+      - name: body
+        type: string
+        description: The original body.
+      - name: completions
+        type: array
+        description: List of possible completions.
+
+  - name: hint
+    description: Get hints for using Spore OS.
+    risk: standard
+    usage:
+      - hint body=""
+      - hint body="SPORE.no"
+      - hint body="SPORE.node.spawn"
+    inputs: 
+      - name: body
+        type: string
+        description: Hint body.
+        required: true
+      - name: cursor
+        type: integer
+        description: Cursor position within the body.
+        required: true
+    outputs: 
+      - name: body
+        type: string
+        description: The original body.
+      - name: open
+        type: any
+        description: Some combination of commands 'help', 'state', 'list', and 'complete'.
+
+# ==================================================================================
+# SPORE.node
+
+  - name: node.install
+    description: Install a node.
+    risk: protected
+    usage:
+      - node.install path=/path/to/manifest/node.manifest.spore.yaml
+    inputs:
+      - name: path
+        type: string
+        description: Path to .manifest.spore.yaml file.
+        required: true
+    outputs: []
+
+  - name: node.uninstall
+    description: Uninstall a node.
+    risk: protected
+    usage:
+      - node.uninstall node=node
     inputs:
       - name: node
         type: string
-        description: Node ID
-        required: true
-    outputs:
-      - name: nodeinfo
-        type: object
-        description: Node information
+        description: Node ID.
+        required: false
+    outputs: []
 
-  - name: SPORE.command.list
-    description: Get list of commands.
+  - name: node.spawn
+    description: Start a node.
+    risk: standard
     usage:
-      - SPORE.command.list
-        SPORE.command.list node=node
+      - node.spawn node=node
     inputs:
       - name: node
         type: string
         description: Node ID.
         required: true
-    outputs:
-      - name: commands
-        type: array
-        description: List of commands.
+    outputs: []
 
-  - name: SPORE.command.help
-    description: Get help with a command.
+  - name: node.kill
+    description: Stop a node.
+    risk: standard
     usage:
-      - SPORE.command.help command=command
-    inputs:
-      - name: command
-        type: string
-        description: Command shorthand.
-        required: true
-    outputs:
-      - name: commandinfo
-        type: object
-        description: Command information.
-
-  - name: SPORE.error.list
-    description: Get a list of error codes.
-    usage:
-      - SPORE.error.list
-      - SPORE.error.list node=node
+      - node.kill node=node
     inputs:
       - name: node
         type: string
-        description: Node ID. Omit for standard error codes.
+        description: Node ID.
+        required: true
+    outputs: []
+
+# ==================================================================================
+# SPORE.topic
+
+  - name: topic.subscribe
+    description: Subscribe to a topic.
+    risk: standard
+    usage:
+      - topic.subscribe topic=topic
+    inputs:
+      - name: topic
+        type: string
+        description: Subscription topic.
+        required: true
+    outputs: []
+
+  - name: topic.unsubscribe
+    description: Unsubscribe to a topic.
+    risk: standard
+    usage:
+      - topic.unsubscribe topic=topic
+    inputs:
+      - name: topic
+        type: string
+        description: Subscription topic.
+        required: true
+    outputs: []
+
+# ==================================================================================
+# SPORE.permission
+
+  - name: permission.request
+    description: Request permission. Called by nodes, granted or denied by user.
+    risk: standard
+    usage:
+      - permission.request node=node capability=capability
+    inputs:
+      - name: node
+        type: string
+        description: Node ID.
+        required: true
+      - name: capability
+        type: string
+        description: Fully-qualified capability ID.
+        required: true
+      - name: reasons
+        type: array
+        description: Reasons for requesting permission.
         required: false
     outputs:
-      - name: errors
-        type: array
-        description: List of error code names.
-
-  - name: SPORE.error.help
-    description: Get help for an error code.
+      - name: yes
+        type: flag
+        description: Flag present if granted.
+      - name: no
+        type: flag
+        description: Flag present if denied.
+  
+  - name: permission.grant
+    description: Grant permission to a node for a capability.
+    risk: standard
     usage:
-      - SPORE.error.help error=RouteNotFound
-      - SPORE.error.help error=clock.err.invalid_timezone
+      - permission.grant node=node capability=capability
     inputs:
-      - name: error
+      - name: node
         type: string
-        description: Error code.
+        description: Node ID.
         required: true
-    outputs:
-      - name: errorinfo
-        type: object
-        description: Error information.
+      - name: capability
+        type: string
+        description: Fully-qualified capability ID.
+        required: true
+    outputs: []
+  
+  - name: permission.revoke
+    description: Revoke permission from a node for a capability.
+    risk: standard
+    usage:
+      - permission.revoke node=node capability=capability
+    inputs:
+      - name: node
+        type: string
+        description: Node ID.
+        required: true
+      - name: capability
+        type: string
+        description: Fully-qualified capability ID.
+        required: true
+    outputs: []
+  
+# ==================================================================================
+# other
+
+topics: []
+permissions: []
+errors: []
+          

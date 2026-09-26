@@ -26,12 +26,12 @@ func tokenize(raw string) ([]string, string) {
 	for i < n {
 		ch := raw[i]
 
-		switch {
-		case ch == ' ' || ch == '\t':
+		switch ch {
+		case ' ', '\t':
 			flush()
 			i++
 
-		case ch == '\'':
+		case '\'':
 			buf = append(buf, ch)
 			i++
 			for i < n && raw[i] != '\'' {
@@ -44,7 +44,7 @@ func tokenize(raw string) ([]string, string) {
 			buf = append(buf, raw[i])
 			i++
 
-		case ch == '"':
+		case '"':
 			buf = append(buf, ch)
 			i++
 			for i < n {
@@ -64,7 +64,7 @@ func tokenize(raw string) ([]string, string) {
 			buf = append(buf, raw[i])
 			i++
 
-		case ch == '{':
+		case '{':
 			buf = append(buf, ch)
 			i++
 			for i < n && raw[i] != '}' {
@@ -77,7 +77,7 @@ func tokenize(raw string) ([]string, string) {
 			buf = append(buf, raw[i])
 			i++
 
-		case ch == '[':
+		case '[':
 			buf = append(buf, ch)
 			i++
 			for i < n && raw[i] != ']' {
@@ -90,14 +90,15 @@ func tokenize(raw string) ([]string, string) {
 			buf = append(buf, raw[i])
 			i++
 
-		case ch == '(':
+		case '(':
 			depth := 1
 			buf = append(buf, ch)
 			i++
 			for i < n && depth > 0 {
-				if raw[i] == '(' {
+				switch raw[i] {
+				case '(':
 					depth++
-				} else if raw[i] == ')' {
+				case ')':
 					depth--
 				}
 				buf = append(buf, raw[i])

@@ -27,7 +27,8 @@ func Witness(body string, outs ...out.IOut) iface.Message {
 			witnessFlag = el.String()
 			continue
 		}
-		builder.WriteString(fmt.Sprintf(` %s`, el.String()))
+		builder.WriteByte(' ')
+		builder.WriteString(el.String())
 	}
 	return &witness{
 		raw: builder.String(),

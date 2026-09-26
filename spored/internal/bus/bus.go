@@ -9,27 +9,28 @@ import (
 )
 
 type Bus struct {
-	api *api
+	api       *api
 	broadcast *broadcast
 	responses *responses
-	witness *witness
-	pipe *pipe
-	
-	hyphae ihyphae
-	nodes inodes
+	witness   *witness
+	pipe      *pipe
+
+	hyphae      ihyphae
+	nodes       inodes
 	permissions ipermissions
-	spore ispore
+	spore       ispore
 }
 
 func New() *Bus {
-	b := &Bus {
-		api: newApi(),
+	b := &Bus{
+		api:       newApi(),
 		broadcast: newBroadcast(),
 		responses: newResponses(),
-		witness: newWitness(),
-		pipe: newPipe(),
+		witness:   newWitness(),
+		pipe:      newPipe(),
 	}
 	b.pipe.setBus(b)
+	b.responses.register(b.pipe)
 	return b
 }
 
@@ -53,7 +54,6 @@ func (b *Bus) Register(n INode) {
 	b.broadcast.register(n)
 	b.responses.register(n)
 	b.witness.register(n)
-	b.responses.register(b.pipe)
 }
 
 func (b *Bus) Unregister(n INode) {
@@ -61,7 +61,6 @@ func (b *Bus) Unregister(n INode) {
 	b.broadcast.unregister(n)
 	b.responses.unregister(n)
 	b.witness.unregister(n)
-	b.responses.unregister(b.pipe)
 }
 
 //
@@ -90,7 +89,7 @@ func (b *Bus) Unsubscribe(cast string, topic string) *error.Error {
 	return b.broadcast.unsubscribe(cast, topic)
 }
 
-// 
+//
 // request
 // response
 //

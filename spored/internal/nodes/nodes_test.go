@@ -4,9 +4,30 @@
 package nodes
 
 import (
+	"spored/internal/bus"
+	"spored/internal/iface"
+	"spored/internal/manifest"
+	"spored/internal/registry"
+	sporeerror "spored/internal/utilities/error"
 	"sync"
 	"testing"
 )
+
+type testBus struct {
+	unregistered bus.INode
+}
+
+func (b *testBus) Register(bus.INode) {}
+
+func (b *testBus) Unregister(node bus.INode) {
+	b.unregistered = node
+}
+
+func (b *testBus) Request(iface.Message) *sporeerror.Error   { return nil }
+func (b *testBus) Response(iface.Message) *sporeerror.Error  { return nil }
+func (b *testBus) Broadcast(iface.Message) *sporeerror.Error { return nil }
+func (b *testBus) Pipe(iface.Message, bus.INode)             {}
+func (b *testBus) Witness(iface.Message)                     {}
 
 // TestNodesHandleUnique guards against the index++ race: concurrent Install/
 // Uninstall-triggered handle() calls must never produce the same handle,
@@ -33,5 +54,17 @@ func TestNodesHandleUnique(t *testing.T) {
 			t.Fatalf("duplicate handle generated: %q", h)
 		}
 		seen[h] = true
+	}
+}
+
+func TestNodeCloseUnregistersNode(t *testing.T) {
+	testBus := &testBus{}
+	node := newNode(&registry.Element{}, &manifest.Manifest{})
+	node.bus = testBus
+
+	node.close()
+
+	if testBus.unregistered != node {
+		t.Fatal("close() did not unregister the node")
 	}
 }

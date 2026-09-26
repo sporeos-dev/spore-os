@@ -83,11 +83,11 @@ func main() {
 				return
 			case "restart":
 				bootstrapScript := "sleep 1 && launchctl bootstrap system " + plist + " &>/dev/null"
-				_ = exec.Command("/bin/sh", "-c", bootstrapScript+" &").Run()
-				_ = darwinLaunchctl("bootout", "system", plist)
+				exec.Command("/bin/sh", "-c", bootstrapScript+" &").Run()
+				darwinLaunchctl("bootout", "system", plist)
 				return
 			case "uninstall":
-				_ = darwinLaunchctl("bootout", "system", plist)
+				darwinLaunchctl("bootout", "system", plist)
 				// fall through to kardianos to remove the plist file
 			}
 		}

@@ -36,7 +36,7 @@ func newWriter(conn deadlineSetter, w *bufio.Writer) *writer {
 // flush bounds the write with a deadline so a stalled peer can't block this writer forever.
 func (w *writer) flush() {
 	w.conn.SetWriteDeadline(time.Now().Add(writeTimeout))
-	defer w.conn.SetWriteDeadline(time.Time{})
+	defer w.conn.SetWriteDeadline(time.Time{}) //nolint:errcheck
 	if err := w.writer.Flush(); err != nil {
 		slog.Warn("write timed out", "error", err)
 	}

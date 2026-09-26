@@ -18,11 +18,13 @@ type ibus interface {
 	Response(msg iface.Message) *error.Error
 	Broadcast(msg iface.Message) *error.Error
 	Pipe(msg iface.Message, node bus.INode)
+	Witness(msg iface.Message)
 }
 
 type ihyphae interface {
 	ManifestRead(path string) (string, *error.Error)
 	HashFile(path string) (string, *error.Error)
+	HashBinary(pid int) (string, *error.Error)
 	PrepareForInstallation(path string) (manifest *manifest.Manifest, registryElement *registry.Element, err *error.Error)
 	Spawn(path string) *error.Error
 	Kill(pid int) *error.Error
@@ -34,5 +36,4 @@ type ipermissions interface {
 	RegisterNode(man *manifest.Manifest)
 }
 
-type ispore interface {}
-
+type ispore interface{}

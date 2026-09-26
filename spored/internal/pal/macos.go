@@ -41,7 +41,7 @@ func (m *macos) processId(conn net.Conn) (int, error) {
 		return -1, err
 	}
 	var pid int
-	_ = raw.Control(func(fd uintptr) {
+	raw.Control(func(fd uintptr) {
 		pid, _ = syscall.GetsockoptInt(int(fd), syscall.AF_UNIX, localPeerPID)
 	})
 	return pid, nil

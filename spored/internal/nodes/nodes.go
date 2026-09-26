@@ -37,33 +37,33 @@ type nodesSelf struct {
 	nodes *Nodes
 }
 
-func (s *nodesSelf) Id() string { return selfNodeId }
-func (s *nodesSelf) IsConnected() bool { return true }
-func (s *nodesSelf) IsWitness() bool { return false }
-func (s *nodesSelf) GetManifest() *manifest.Manifest { return nil }
+func (s *nodesSelf) Id() string                             { return selfNodeId }
+func (s *nodesSelf) IsConnected() bool                      { return true }
+func (s *nodesSelf) IsWitness() bool                        { return false }
+func (s *nodesSelf) GetManifest() *manifest.Manifest        { return nil }
 func (s *nodesSelf) Receive(msg iface.Message) *error.Error { return s.nodes.pending.Receive(msg) }
-func (s *nodesSelf) Witness(msg iface.Message) {}
+func (s *nodesSelf) Witness(msg iface.Message)              {}
 
 type Nodes struct {
-	index atomic.Int64
+	index   atomic.Int64
 	pending *await.Pending
 
 	registry *registry.Registry
 
-	mu sync.RWMutex
+	mu    sync.RWMutex
 	nodes map[string]*node
 
-	bus ibus
-	hyphae ihyphae
+	bus         ibus
+	hyphae      ihyphae
 	permissions ipermissions
-	spore ispore
+	spore       ispore
 }
 
 func New() *Nodes {
 	nodes := &Nodes{
-		pending: await.New(error.Node),
+		pending:  await.New(error.Node),
 		registry: registry.New(),
-		nodes:   make(map[string]*node),
+		nodes:    make(map[string]*node),
 	}
 
 	nodes.mu.Lock()
@@ -98,7 +98,7 @@ func (n *Nodes) Close() {
 }
 
 func (n *Nodes) Autostart() {
-	
+
 	n.mu.RLock()
 	defer n.mu.RUnlock()
 	for _, el := range n.nodes {
@@ -134,8 +134,16 @@ func (n *Nodes) Autostart() {
 
 func (n *Nodes) HandleConnection(conn net.Conn) {
 
-	conn.SetReadDeadline(time.Now().Add(handshakeTimeout))
-	defer conn.SetReadDeadline(time.Time{})
+	erro := conn.SetReadDeadline(time.Now().Add(handshakeTimeout))
+	defer conn.SetReadDeadline(time.Time{}) //nolint:errcheck
+	if erro != nil {
+		n.bus.Witness(
+			error.New(
+				error.Generic, 
+				error.Node,
+				"unable to read deadline",
+				out.Pair("error", erro.Error())))
+	}
 
 	reader := bufio.NewReader(conn)
 	writer := bufio.NewWriter(conn)
@@ -147,7 +155,7 @@ func (n *Nodes) HandleConnection(conn net.Conn) {
 			error.Node,
 			"failed handshake at step 1: initial read",
 			out.Pair("error", erro.Error()))
-		
+
 		witness.Send(err)
 		writer.Flush()
 		conn.Close()
@@ -169,7 +177,7 @@ func (n *Nodes) HandleConnection(conn net.Conn) {
 			error.Node,
 			"node not installed",
 			out.Pair("node", nodeid))
-		
+
 		witness.Send(err)
 		writer.WriteString(err.Wire() + "\n")
 		writer.Flush()
@@ -184,7 +192,7 @@ func (n *Nodes) HandleConnection(conn net.Conn) {
 		writer.WriteString(err.Wire() + "\n")
 		writer.Flush()
 		conn.Close()
-		return;
+		return
 	}
 }
 
@@ -213,7 +221,9 @@ func (n *Nodes) GetManifest(nodeid string) *manifest.Manifest {
 	n.mu.RLock()
 	node, ok := n.nodes[nodeid]
 	n.mu.RUnlock()
-	if !ok { return nil }
+	if !ok {
+		return nil
+	}
 
 	if node.manifest.ID == "" && n.hyphae != nil {
 		content, err := n.hyphae.ManifestRead(node.manifest.Path)
@@ -237,7 +247,7 @@ func (n *Nodes) GetManifest(nodeid string) *manifest.Manifest {
 					node.manifest.Status.Set(status.FailedChecksum)
 				}
 
-			// otherwise checksum
+				// otherwise checksum
 			} else {
 				checksum, err := n.hyphae.HashFile(node.manifest.Path)
 				if err == nil {
@@ -248,7 +258,7 @@ func (n *Nodes) GetManifest(nodeid string) *manifest.Manifest {
 					}
 				}
 			}
-			
+
 			n.bus.Register(node)
 		}
 	}
@@ -265,7 +275,7 @@ func (n *Nodes) Install(path string) *error.Error {
 
 	if !file.Exists(path) {
 		return error.New(
-			error.Missing, 
+			error.Missing,
 			error.Node,
 			"unable to install due to bad path",
 			out.Pair("path", path))
@@ -323,7 +333,7 @@ func (n *Nodes) Install(path string) *error.Error {
 		node.set(n.bus, n, n.permissions)
 		n.nodes[node.registry.ID] = node
 
-	// not readable, handle via hyphae
+		// not readable, handle via hyphae
 	} else {
 
 		manifest, registry, err := n.hyphae.PrepareForInstallation(path)
@@ -405,7 +415,7 @@ func (n *Nodes) Uninstall(nodeid string) *error.Error {
 		// do not return
 		// log failure and continue
 	}
-	
+
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
@@ -418,6 +428,7 @@ func (n *Nodes) Uninstall(nodeid string) *error.Error {
 			out.Pair("node", nodeid))
 	}
 
+	node.close()
 	delete(n.nodes, nodeid)
 	return n.registry.Remove(node.registry.ID)
 }
@@ -504,7 +515,7 @@ func (n *Nodes) Kill(nodeid string) *error.Error {
 	}
 
 	err := n.hyphae.Kill(pid)
-	if (err != nil) {
+	if err != nil {
 		return err
 	}
 	return nil
@@ -512,7 +523,7 @@ func (n *Nodes) Kill(nodeid string) *error.Error {
 
 func (n *Nodes) GetState(nodeid string) (*State, *error.Error) {
 	nodeid = n.resolveId(nodeid)
-	
+
 	node, ok := n.nodes[nodeid]
 	if !ok {
 		return nil, error.New(
@@ -539,7 +550,7 @@ func (n *Nodes) resolveId(nodeid string) string {
 	n.mu.RLock()
 	defer n.mu.RUnlock()
 
-	_, ok := n.nodes[nodeid]; 
+	_, ok := n.nodes[nodeid]
 	if ok {
 		return nodeid
 	}
@@ -601,7 +612,7 @@ func (n *Nodes) acceptInstallationWarning(m *manifest.Manifest) (bool, *error.Er
 		witness.Send(err)
 		return false, err
 	}
-	
+
 	ch := n.pending.Await(handle)
 	err := n.bus.Request(msg)
 	if err != nil {

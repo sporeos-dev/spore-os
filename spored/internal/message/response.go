@@ -17,8 +17,6 @@ type response struct {
 	args map[string]string
 	flags []string
 	handle string
-
-	isError bool
 }
 
 func Response(raw string, captureID string) (iface.Message, bool) {

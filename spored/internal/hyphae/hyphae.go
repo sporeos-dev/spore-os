@@ -22,12 +22,12 @@ import (
 )
 
 type Hyphae struct {
-	index   atomic.Int64
-	pending *await.Pending
-	bus     ibus
-	nodes   inodes
+	index       atomic.Int64
+	pending     *await.Pending
+	bus         ibus
+	nodes       inodes
 	permissions ipermissions
-	spore   ispore
+	spore       ispore
 }
 
 func New() *Hyphae {
@@ -36,7 +36,7 @@ func New() *Hyphae {
 	}
 }
 
-func (h *Hyphae) Set(bus ibus, nodes inodes, permissions ipermissions,spore ispore) {
+func (h *Hyphae) Set(bus ibus, nodes inodes, permissions ipermissions, spore ispore) {
 	h.bus = bus
 	h.nodes = nodes
 	h.permissions = permissions
@@ -67,8 +67,8 @@ func (h *Hyphae) PrepareForInstallation(path string) (*manifest.Manifest, *regis
 	}
 
 	man := &manifest.Manifest{
-		Status: status.New(),
-		Path: path,
+		Status:           status.New(),
+		Path:             path,
 		ExpectedChecksum: "not yet",
 	}
 
@@ -83,11 +83,11 @@ func (h *Hyphae) PrepareForInstallation(path string) (*manifest.Manifest, *regis
 
 	fullBinaryPath := filepath.Join(filepath.Dir(path), man.App)
 	registry := &registry.Element{
-		ID: man.ID,
-		Name: man.Name,
-		Manifest: path,
-		Checksum: "not yet",
-		Binary: fullBinaryPath,
+		ID:             man.ID,
+		Name:           man.Name,
+		Manifest:       path,
+		Checksum:       "not yet",
+		Binary:         fullBinaryPath,
 		BinaryChecksum: "not yet",
 	}
 
@@ -102,7 +102,7 @@ func (h *Hyphae) PrepareForInstallation(path string) (*manifest.Manifest, *regis
 		}
 		man.ExpectedChecksum = manifestChecksum
 		registry.Checksum = manifestChecksum
-	
+
 		binaryChecksum, err := h.fileHash(fullBinaryPath)
 		if err != nil {
 			return nil, nil, err
@@ -114,6 +114,10 @@ func (h *Hyphae) PrepareForInstallation(path string) (*manifest.Manifest, *regis
 
 func (h *Hyphae) HashFile(path string) (string, *error.Error) {
 	return h.fileHash(path)
+}
+
+func (h *Hyphae) HashBinary(pid int) (string, *error.Error) {
+	return h.binaryHash(pid)
 }
 
 func (h *Hyphae) Spawn(path string) *error.Error {
@@ -159,8 +163,8 @@ func (h *Hyphae) manifestRead(path string) (string, *error.Error) {
 			out.Pair("handle", handle)))
 	if response.Flag("error") {
 		return "", error.New(
-			error.Generic, 
-			error.Hyphae, 
+			error.Generic,
+			error.Hyphae,
 			response.ArgIf("what", "manifest read failed"))
 	}
 
@@ -179,7 +183,7 @@ func (h *Hyphae) binaryHash(pid int) (string, *error.Error) {
 	handle := h.handle()
 	raw := fmt.Sprintf(`dev.sporeos.HYPHAE.binary.hash pid=%d ~%s`, pid, handle)
 	msg, ok := message.Request(raw, h.Id())
-		if !ok {
+	if !ok {
 		return "", error.New(
 			error.Malformed,
 			error.Hyphae,
@@ -198,27 +202,27 @@ func (h *Hyphae) binaryHash(pid int) (string, *error.Error) {
 	}
 	if response.Flag("error") {
 		return "", error.New(
-			error.Generic, 
-			error.Hyphae, 
+			error.Generic,
+			error.Hyphae,
 			response.ArgIf("what", "binary hash failed"))
 	}
 
-	content, ok := response.Arg("content")
+	hash, ok := response.Arg("hash")
 	if !ok {
 		return "", error.New(
 			error.Missing,
 			error.Hyphae,
 			"missing in response",
-			out.Pair("argument", "content"))
+			out.Pair("argument", "hash"))
 	}
-	return content, nil
+	return hash, nil
 }
 
 func (h *Hyphae) fileHash(path string) (string, *error.Error) {
 	handle := h.handle()
 	raw := fmt.Sprintf(`dev.sporeos.HYPHAE.file.hash path=%s ~%s`, path, handle)
 	msg, ok := message.Request(raw, h.Id())
-		if !ok {
+	if !ok {
 		return "", error.New(
 			error.Malformed,
 			error.Hyphae,
@@ -237,8 +241,8 @@ func (h *Hyphae) fileHash(path string) (string, *error.Error) {
 	}
 	if response.Flag("error") {
 		return "", error.New(
-			error.Generic, 
-			error.Hyphae, 
+			error.Generic,
+			error.Hyphae,
 			response.ArgIf("what", "file hash failed"))
 	}
 
@@ -276,8 +280,8 @@ func (h *Hyphae) nodeSpawn(path string) *error.Error {
 	}
 	if response.Flag("error") {
 		return error.New(
-			error.Generic, 
-			error.Hyphae, 
+			error.Generic,
+			error.Hyphae,
 			response.ArgIf("what", "node spawn failed"))
 	}
 
@@ -307,8 +311,8 @@ func (h *Hyphae) nodeKill(pid int) *error.Error {
 	}
 	if response.Flag("error") {
 		return error.New(
-			error.Generic, 
-			error.Hyphae, 
+			error.Generic,
+			error.Hyphae,
 			response.ArgIf("what", "node kill failed"))
 	}
 

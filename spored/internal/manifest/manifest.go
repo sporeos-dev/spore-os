@@ -84,7 +84,7 @@ func New(registry *registry.Element) *Manifest {
 		ExpectedChecksum: registry.Checksum,
 	}
 
-	if file.Exists(m.Path) == false {
+	if !file.Exists(m.Path) {
 		m.Status.Set(status.Missing)
 	}
 
@@ -104,6 +104,7 @@ func ManifestFromPath(path string) *Manifest {
 
 	err = yaml.Unmarshal([]byte(contents), m)
 	if err != nil {
+		m.Status.Set(status.Malformed)
 		return nil
 	}
 	m.applyDefaults()
@@ -134,7 +135,7 @@ func (m *Manifest) applyDefaults() {
 func (m *Manifest) Close() {}
 
 func (m *Manifest) Verify() {
-	if file.IsReadable(m.Path) == false {
+	if !file.IsReadable(m.Path) {
 		m.Status.Set(status.RequiresUserSpace)
 		return
 	}
@@ -169,13 +170,16 @@ func (m *Manifest) Load() {
 
 	err = yaml.Unmarshal([]byte(contents), m)
 	if err != nil {
-		return
+		m.Status.Set(status.Malformed)	
 	}
 	m.applyDefaults()
 }
 
 func (m *Manifest) LoadContent(content string) {
-	yaml.Unmarshal([]byte(content), m)
+	err := yaml.Unmarshal([]byte(content), m) // nolint:errcheck
+	if err != nil {
+		m.Status.Set(status.Malformed)
+	}
 	m.applyDefaults()
 }
 

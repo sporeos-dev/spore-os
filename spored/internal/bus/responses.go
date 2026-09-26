@@ -63,8 +63,12 @@ func (r *responses) response(msg iface.Message) *error.Error {
 
 	handle := msg.Handle()
 	if handle == "n/a" {
-		
+		return error.New(
+			error.Missing,
+			error.Bus,
+			"missing handle");
 	}
+	
 	nodeid, ok := r.responses[handle]
 	if !ok {
 		r.mu.Unlock()

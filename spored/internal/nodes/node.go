@@ -133,7 +133,7 @@ func (n *node) handleConnection(conn net.Conn, reader *bufio.Reader, wr *bufio.W
 		}
 
 	} else if n.manifest.Status.Get() == status.RequiresUserSpace {
-		
+
 		checksum, err := hyphae.HashFile(n.manifest.Path)
 		if err != nil {
 			return err
@@ -189,7 +189,16 @@ func (n *node) handleConnection(conn net.Conn, reader *bufio.Reader, wr *bufio.W
 
 	b.verify(conn)
 	if b.status.Get() == status.RequiresUserSpace {
-		checksum, err := hyphae.HashFile(n.registry.Binary)
+		pid, erro := pal.ProcessID(conn)
+		if erro != nil {
+			return error.New(
+				error.HandshakeDenial,
+				error.Node,
+				"failed to identify connecting process",
+				out.Pair("error", erro.Error()))
+		}
+
+		checksum, err := hyphae.HashBinary(pid)
 		if err != nil {
 			return err
 		}
@@ -233,7 +242,10 @@ func (n *node) handleConnection(conn net.Conn, reader *bufio.Reader, wr *bufio.W
 			out.Pair("node", n.registry.ID)))
 
 	go n.listen()
-	n.pending.Resolve("lazy")
+	err = n.pending.Resolve("lazy")
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -570,6 +582,12 @@ func (n *node) checkManifestForFailure() *error.Error {
 			"invalid manifest",
 			out.Pair("node", n.registry.ID),
 			out.Pair("expected_checksum", n.manifest.ExpectedChecksum))
+	case status.Malformed:
+		return error.New(
+			error.HandshakeDenial,
+			error.Spore,
+			"malformed manifest",
+			out.Pair("node", n.registry.ID))
 	}
 	return nil
 }
@@ -591,6 +609,12 @@ func (n *node) checkBinaryForFailure(b *binary) *error.Error {
 			"failed checksum",
 			out.Pair("node", n.registry.ID),
 			out.Pair("expected_checksum", b.expectedChecksum))
+	case status.Malformed:
+		return error.New(
+			error.HandshakeDenial,
+			error.Spore,
+			"malformed (canary)",
+			out.Pair("node", n.registry.ID))
 	}
 	return nil
 }

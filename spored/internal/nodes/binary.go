@@ -26,7 +26,7 @@ func newBinary(registry *registry.Element) *binary {
 		expectedChecksum: registry.BinaryChecksum,
 	}
 
-	if file.Exists(b.path) == false {
+	if !file.Exists(b.path) {
 		b.status.Set(status.Missing)
 	}
 
@@ -40,7 +40,7 @@ func newDeveloperBinary(registry *registry.Element) *binary {
 		expectedChecksum: string(manifest.Developer),
 	}
 	
-	if file.Exists(b.path) == false {
+	if !file.Exists(b.path) {
 		b.status.Set(status.Missing)
 	} else {
 		b.status.Set(status.Verified)
@@ -49,14 +49,12 @@ func newDeveloperBinary(registry *registry.Element) *binary {
 	return b
 }
 
-func (b *binary) close() {}
-
 func (b *binary) verify(conn net.Conn) {
 	if b.status.Get() == status.Verified {
 		return
 	}
 
-	if file.IsReadable(b.path) == false {
+	if !file.IsReadable(b.path) {
 		b.status.Set(status.RequiresUserSpace)
 		return
 	}

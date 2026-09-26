@@ -14,8 +14,9 @@ const (
 	RequiresDeveloper Estatus = "RequiresDeveloperCheck"
 	Verified Estatus = "Verified"
 
-	Missing Estatus = "Missing"
 	FailedChecksum Estatus = "FailedChecksum"
+	Malformed Estatus = "Malformed"
+	Missing Estatus = "Missing"
 )
 
 type Status struct {

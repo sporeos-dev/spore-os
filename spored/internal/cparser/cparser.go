@@ -163,9 +163,7 @@ func parse(raw string, validate bool) (ParsedMessage, bool) {
 		return out, false
 	}
 
-	// trace boolean init false
-	t := C.bool(false)
-	parser := C.spore_parser_create(t)
+	parser := C.spore_parser_create()
 	if parser == nil {
 		return out, false
 	}

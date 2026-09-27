@@ -24,7 +24,7 @@ func newWitness() *witness {
 func (w *witness) close() {}
 
 func (w *witness) register(n INode) {
-	if !n.IsWitness() {
+	if !n.IsWitness()  {
 		return
 	}
 

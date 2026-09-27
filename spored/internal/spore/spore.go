@@ -94,6 +94,9 @@ func (s *Spore) Receive(request iface.Message) *error.Error {
 	case "dev.sporeos.SPORE.permission.grant": return s.permissionGrant(request)
 	case "dev.sporeos.SPORE.permission.revoke": return s.permissionRevoke(request)
 
+	case "dev.sporeos.SPORE.state.persist": return s.statePersist(request)
+	case "dev.sporeos.SPORE.state.retrieve": return s.stateRetrieve(request)
+
 	case "dev.sporeos.SPORE.security.keyring.grant": return s.securityKeyringGrant(request)
 	case "dev.sporeos.SPORE.security.keyring.revoke": return s.securityKeyringRevoke(request)
 	case "dev.sporeos.SPORE.security.signature.sign": return s.securitySignatureSign(request)

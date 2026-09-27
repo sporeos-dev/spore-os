@@ -8,6 +8,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"slices"
 	"spored/internal/cparser"
 	"spored/internal/iface"
 	"spored/internal/manifest"
@@ -490,8 +491,13 @@ func (n *node) IsConnected() bool {
 func (n *node) IsWitness() bool {
 	if n.manifest == nil {
 		return false
+	
+	// deprecated
+	} else if n.manifest.Witness {
+		return true
 	}
-	return n.manifest.Witness
+
+	return slices.Contains(n.manifest.Roles, "witness")
 }
 
 func (n *node) GetManifest() *manifest.Manifest {

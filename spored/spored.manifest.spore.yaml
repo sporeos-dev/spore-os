@@ -291,6 +291,44 @@ api:
         description: Fully-qualified capability ID.
         required: true
     outputs: []
+
+# ==================================================================================
+# SPORE.persistence
+
+  - name: state.persist
+    description: Persist state by key as a string blob.
+    risk: standard
+    usage:
+      - state.persist
+    inputs: 
+      - name: key
+        type: string
+        description: Data key.
+        required: true
+      - name: body
+        type: string
+        description: String blob to persist.
+        required: true
+    outputs: []
+    notes:
+      - Data persisted stays associated to the node.
+  
+  - name: state.retrieve
+    description: Retrieve state by key as a string blob.
+    risk: standard
+    usage:
+      - state.retrieve key=key
+    inputs:
+      - name: key
+        type: string
+        description: Data key.
+        required: true
+    outputs:
+      - name: body
+        type: string
+        description: String blob to retrieve.
+    notes:
+      - Nodes can only retrieve data they have persisted.
   
 # ==================================================================================
 # other

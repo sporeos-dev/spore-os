@@ -24,6 +24,7 @@ type Manifest struct {
 	Launch 		Launch          `yaml:"launch"`
 	Namespace	Namespace		`yaml:"namespace"`
 	Witness		bool			`yaml:"witness"`
+	Roles		[]string		`yaml:"roles"`
 	Api         []Command       `yaml:"api"`
 	Topics		[]Topic			`yaml:"topics"`	
 	Permissions []Permission	`yaml:"permissions"`

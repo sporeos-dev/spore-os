@@ -58,12 +58,15 @@ func (s *Spore) stateRetrieve(request iface.Message) *error.Error {
 	go func() {
 		body, retrieveError := os.ReadFile(filename)
 		if retrieveError != nil {
-			code := error.Generic
 			if os.IsNotExist(retrieveError) {
-				code = error.Missing
+				s.bus.Response(message.Spore(
+					request, 
+					out.Pair("body", ""),
+					out.Flag("empty")))
+				return
 			}
 			s.bus.Response(error.New(
-				code,
+				error.Generic,
 				error.Spore,
 				"unable to retrieve persisted state",
 				out.Pair("err", retrieveError.Error())).
@@ -71,7 +74,9 @@ func (s *Spore) stateRetrieve(request iface.Message) *error.Error {
 			return
 		}
 
-		s.bus.Response(message.Spore(request, out.Pair("body", string(body))))
+		s.bus.Response(
+			message.Spore(
+				request, out.Pair("body", string(body))))
 	}()
 
 	return nil

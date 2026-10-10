@@ -68,8 +68,8 @@ func newNode(registry *registry.Element, manifest *manifest.Manifest) *node {
 		pending:  await.New(error.Node).WithTimeout(time.Second * 5),
 	}
 
-	n.manifest.Verify()
 	n.manifest.Load()
+	n.manifest.Verify()
 
 	return n
 }
@@ -491,8 +491,8 @@ func (n *node) IsConnected() bool {
 func (n *node) IsWitness() bool {
 	if n.manifest == nil {
 		return false
-	
-	// deprecated
+
+		// deprecated
 	} else if n.manifest.Witness {
 		return true
 	}

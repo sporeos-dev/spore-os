@@ -4,11 +4,14 @@
 package nodes
 
 import (
+	"os"
+	"path/filepath"
 	"spored/internal/bus"
 	"spored/internal/iface"
 	"spored/internal/manifest"
 	"spored/internal/registry"
 	sporeerror "spored/internal/utilities/error"
+	"spored/internal/utilities/status"
 	"sync"
 	"testing"
 )
@@ -66,5 +69,24 @@ func TestNodeCloseUnregistersNode(t *testing.T) {
 
 	if testBus.unregistered != node {
 		t.Fatal("close() did not unregister the node")
+	}
+}
+
+func TestNewNodeLoadsDeveloperTrustBeforeVerification(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "developer.manifest.spore.yaml")
+	content := []byte("id: dev.sporeos.DEVELOPER\nname: Developer Node\ntrust: developer\napp: developer\n")
+	if err := os.WriteFile(path, content, 0o600); err != nil {
+		t.Fatalf("write developer manifest: %v", err)
+	}
+
+	registryElement := &registry.Element{
+		ID:       "dev.sporeos.DEVELOPER",
+		Manifest: path,
+		Checksum: string(manifest.Developer),
+	}
+	node := newNode(registryElement, manifest.New(registryElement))
+
+	if got := node.manifest.Status.Get(); got != status.RequiresDeveloper {
+		t.Fatalf("developer manifest status = %s, want %s", got, status.RequiresDeveloper)
 	}
 }

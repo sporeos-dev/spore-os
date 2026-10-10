@@ -19,6 +19,7 @@ const (
 	NotApplicable Code = "NotApplicable"
 	NotImplemented Code = "NotImplemented"
 	NotPermitted Code = "NotPermitted"
+	NotReady Code = "NotReady"
 	ReservedLanguage Code = "ReservedLanguage"
 	Timeout Code = "Timeout"
 	UserDenial Code = "UserDenial"

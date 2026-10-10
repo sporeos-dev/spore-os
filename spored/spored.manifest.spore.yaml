@@ -327,6 +327,9 @@ api:
       - name: body
         type: string
         description: String blob to retrieve.
+      - name: empty
+        type: flag
+        description: Flag present if no data is found for the given key.
     notes:
       - Nodes can only retrieve data they have persisted.
   

@@ -418,8 +418,9 @@ listen:
 			}
 			err := n.bus.Response(response)
 			if err != nil {
-				witness.Send(err)
-				n.Receive(err)
+				if receiveErr := n.Receive(err); receiveErr != nil {
+					witness.Send(receiveErr)
+				}
 			}
 
 			// fallback to request
@@ -445,14 +446,16 @@ listen:
 					error.Node,
 					"permission required",
 					out.Pair("node", n.registry.ID),
-					out.Pair("capability", command)))
-				return
+					out.Pair("capability", command)).
+					WithMessage(request))
+				continue
 			}
 
 			err := n.bus.Request(request)
 			if err != nil {
-				witness.Send(err)
-				n.Receive(err)
+				if receiveErr := n.Receive(err); receiveErr != nil {
+					witness.Send(receiveErr)
+				}
 			}
 		}
 	}

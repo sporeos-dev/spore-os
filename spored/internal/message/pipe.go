@@ -10,9 +10,9 @@ import (
 )
 
 type pipe struct {
-	id     string
-	raw    string
-	parts  []string
+	id    string
+	raw   string
+	parts []string
 }
 
 func IsPipe(raw string) bool {
@@ -29,9 +29,9 @@ func Pipe(raw string, id string) (iface.Message, bool) {
 	}
 
 	p := &pipe{
-		id:     id,
-		raw:    raw,
-		parts:  parts,
+		id:    id,
+		raw:   raw,
+		parts: parts,
 	}
 
 	return p, true
@@ -113,19 +113,36 @@ func splitPipe(raw string) []string {
 	bracketDepth := 0
 	braceDepth := 0
 	escaped := false
+	inBlock := false
+	atLineStart := true
 
 	for i := 0; i < len(raw); i++ {
 		ch := raw[i]
 
+		if inBlock {
+			if atLineStart && ch == '>' && i+1 < len(raw) && raw[i+1] == '>' {
+				buf.WriteString(">>")
+				i++
+				inBlock = false
+				atLineStart = false
+				continue
+			}
+			buf.WriteByte(ch)
+			atLineStart = ch == '\n'
+			continue
+		}
+
 		if escaped {
 			buf.WriteByte(ch)
 			escaped = false
+			atLineStart = ch == '\n'
 			continue
 		}
 
 		if ch == '\\' && inDouble {
 			buf.WriteByte(ch)
 			escaped = true
+			atLineStart = false
 			continue
 		}
 
@@ -171,6 +188,12 @@ func splitPipe(raw string) []string {
 		default:
 			buf.WriteByte(ch)
 		}
+
+		if !inSingle && !inDouble && bracketDepth == 0 && braceDepth == 0 &&
+			ch == '<' && i > 0 && raw[i-1] == '=' && i+1 < len(raw) && raw[i+1] == '<' {
+			inBlock = true
+		}
+		atLineStart = ch == '\n'
 	}
 
 	if buf.Len() > 0 {
@@ -180,4 +203,3 @@ func splitPipe(raw string) []string {
 
 	return parts
 }
-

@@ -27,22 +27,22 @@ type Manager struct {
 	index   atomic.Int64
 	pending *await.Pending
 
-	mu sync.RWMutex
-	allowances map[string][]string
-	devNodes []string // granted outright
-	sysNodes []string // granted outright
+	mu             sync.RWMutex
+	allowances     map[string][]string
+	devNodes       []string // granted outright
+	sysNodes       []string // granted outright
 	benignCommands []string // granted outright
-	benignTopics []string // granted outright
+	benignTopics   []string // granted outright
 
-	bus ibus
+	bus    ibus
 	hyphae ihyphae
-	nodes inodes
-	spore ispore
+	nodes  inodes
+	spore  ispore
 }
 
 func New() *Manager {
 	m := &Manager{
-		pending: await.New(error.Permission),
+		pending:    await.New(error.Permission),
 		allowances: make(map[string][]string),
 	}
 
@@ -69,7 +69,7 @@ func (m *Manager) Set(bus ibus, hyphae ihyphae, nodes inodes, spore ispore) {
 func (m *Manager) List(nodeid string) ([]string, *error.Error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	
+
 	allowances, ok := m.allowances[nodeid]
 	if !ok {
 		return nil, error.New(
@@ -115,6 +115,9 @@ func (m *Manager) RegisterNode(man *manifest.Manifest) {
 func (m *Manager) Grant(nodeid string, command string) *error.Error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if slices.Contains(m.allowances[nodeid], command) {
+		return nil
+	}
 	m.allowances[nodeid] = append(m.allowances[nodeid], command)
 
 	return m.save()
@@ -134,12 +137,12 @@ func (m *Manager) Revoke(nodeid string, command string) *error.Error {
 	return m.save()
 }
 
-func (m *Manager) Request(nodeid string, capability string, reason []string, ) (bool, *error.Error) {
+func (m *Manager) Request(nodeid string, capability string, reason []string) (bool, *error.Error) {
 	handle := m.handle()
 
 	// e.g.
 	// dev.sporeos.shell.confirm body="Grant node [nodeid] permission to [capability]?" lines=[ "Reasons", " - reason A", " - reason B"  ]
-	var conf strings.Builder; 
+	var conf strings.Builder
 	conf.WriteString("dev.sporeos.shell.confirm body=\"Grant node [")
 	conf.WriteString(nodeid)
 	conf.WriteString("] permission to [")
@@ -178,17 +181,23 @@ func (m *Manager) Request(nodeid string, capability string, reason []string, ) (
 	if response.Flag("error") {
 		return false, error.New(error.Generic, error.Permission, response.ArgIf("what", "permission request failed"))
 	}
-	return response.Flag("yes"), nil
+	if !response.Flag("yes") {
+		return false, nil
+	}
+	if err := m.Grant(nodeid, capability); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func (m *Manager) Can(nodeid string, capability string) bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return slices.Contains(m.sysNodes, nodeid) ||
-		   slices.Contains(m.devNodes, nodeid) || 
-		   slices.Contains(m.benignCommands, capability) ||
-		   slices.Contains(m.benignTopics, capability) ||
-		   slices.Contains(m.allowances[nodeid], capability)
+		slices.Contains(m.devNodes, nodeid) ||
+		slices.Contains(m.benignCommands, capability) ||
+		slices.Contains(m.benignTopics, capability) ||
+		slices.Contains(m.allowances[nodeid], capability)
 }
 
 // Load reads allowances from disk, replacing the in-memory set.

@@ -32,8 +32,8 @@ type ihyphae interface {
 
 type ipermissions interface {
 	Request(nodeid string, capability string, reasons []string) (bool, *error.Error)
-	Can(nodeid string, capability string) bool
 	RegisterNode(man *manifest.Manifest)
+	RemoveNode(nodeid string) *error.Error
 }
 
 type ispore interface{}

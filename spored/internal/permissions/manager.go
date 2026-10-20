@@ -4,6 +4,8 @@
 package permissions
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"log/slog"
 	"os"
@@ -19,20 +21,37 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
+
+const (
+	protectedCaller                  = "hyphae-in-spore"
+	hyphaeConfirmationCapability     = "dev.sporeos.HYPHAE.confirm"
+	permissionCaller                 = "permission-in-spore"
+	permissionConfirmationCapability = "dev.sporeos.shell.confirm"
+	permissionTokenLifetime          = 30 * time.Second
+)
+
+type permit struct {
+	origin     string
+	capability string
+	expiresAt  time.Time
+}
 
 type Manager struct {
 	index   atomic.Int64
 	pending *await.Pending
 
-	mu             sync.RWMutex
-	allowances     map[string][]string
-	devNodes       []string // granted outright
-	sysNodes       []string // granted outright
-	benignCommands []string // granted outright
-	benignTopics   []string // granted outright
+	mu                sync.RWMutex
+	allowances        map[string][]string
+	permits           map[string]permit
+	sysNodes          []string // granted outright
+	benignCommands    []string // granted outright
+	benignTopics      []string // granted outright
+	adminCommands     []string
+	protectedCommands []string
 
 	bus    ibus
 	hyphae ihyphae
@@ -44,6 +63,7 @@ func New() *Manager {
 	m := &Manager{
 		pending:    await.New(error.Permission),
 		allowances: make(map[string][]string),
+		permits:    make(map[string]permit),
 	}
 
 	if err := m.Load(); err != nil {
@@ -91,17 +111,22 @@ func (m *Manager) RegisterNode(man *manifest.Manifest) {
 	}
 
 	switch man.Trust {
-	case manifest.Developer:
-		m.devNodes = append(m.devNodes, man.ID)
 	case manifest.System:
 		m.sysNodes = append(m.sysNodes, man.ID)
 	default:
-		// do nothing for trusted, standard, untrusted nodes
+		// do nothing for developer, trusted, standard, or untrusted nodes
 	}
 
 	for _, command := range man.Api {
+		capability := man.ID + "." + command.Name
 		if command.Risk == manifest.Benign {
-			m.benignCommands = append(m.benignCommands, command.Name)
+			m.benignCommands = append(m.benignCommands, capability)
+		}
+		if command.Risk == manifest.Admin {
+			m.adminCommands = append(m.adminCommands, capability)
+		}
+		if command.Risk == manifest.Protected {
+			m.protectedCommands = append(m.protectedCommands, capability)
 		}
 	}
 
@@ -137,7 +162,67 @@ func (m *Manager) Revoke(nodeid string, command string) *error.Error {
 	return m.save()
 }
 
+// RemoveNode removes every persisted capability grant for an uninstalled node.
+func (m *Manager) RemoveNode(nodeid string) *error.Error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	delete(m.allowances, nodeid)
+	return m.save()
+}
+
 func (m *Manager) Request(nodeid string, capability string, reason []string) (bool, *error.Error) {
+	granted, err := m.confirm(nodeid, capability, reason)
+	if err != nil || !granted {
+		return granted, err
+	}
+	if err := m.Grant(nodeid, capability); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func (m *Manager) RequestPermit(nodeid string, capability string, reason []string) (string, bool, *error.Error) {
+	m.mu.RLock()
+	isAdmin := slices.Contains(m.adminCommands, capability)
+	isProtected := slices.Contains(m.protectedCommands, capability)
+	m.mu.RUnlock()
+	if isAdmin || isProtected {
+		return "", false, error.New(
+			error.NotPermitted,
+			error.Permission,
+			"permission permits cannot authorize this capability",
+			out.Pair("capability", capability))
+	}
+
+	granted, err := m.confirm(nodeid, capability, reason)
+	if err != nil || !granted {
+		return "", granted, err
+	}
+
+	token, err := newPermitToken()
+	if err != nil {
+		return "", false, err
+	}
+	m.mu.Lock()
+	if m.permits == nil {
+		m.permits = make(map[string]permit)
+	}
+	for existingToken, existingPermit := range m.permits {
+		if !time.Now().Before(existingPermit.expiresAt) {
+			delete(m.permits, existingToken)
+		}
+	}
+	m.permits[token] = permit{
+		origin:     nodeid,
+		capability: capability,
+		expiresAt:  time.Now().Add(permissionTokenLifetime),
+	}
+	m.mu.Unlock()
+	return token, true, nil
+}
+
+func (m *Manager) confirm(nodeid string, capability string, reason []string) (bool, *error.Error) {
 	handle := m.handle()
 
 	// e.g.
@@ -184,20 +269,73 @@ func (m *Manager) Request(nodeid string, capability string, reason []string) (bo
 	if !response.Flag("yes") {
 		return false, nil
 	}
-	if err := m.Grant(nodeid, capability); err != nil {
-		return false, err
-	}
 	return true, nil
 }
 
-func (m *Manager) Can(nodeid string, capability string) bool {
+func (m *Manager) Can(msg iface.Message, capability string) (bool, *error.Error) {
+	actor := msg.Actor()
+	origin := msg.Origin()
+
 	m.mu.RLock()
-	defer m.mu.RUnlock()
-	return slices.Contains(m.sysNodes, nodeid) ||
-		slices.Contains(m.devNodes, nodeid) ||
+	isProtected := slices.Contains(m.protectedCommands, capability)
+	isAdmin := slices.Contains(m.adminCommands, capability)
+	allowed := slices.Contains(m.sysNodes, origin) ||
 		slices.Contains(m.benignCommands, capability) ||
 		slices.Contains(m.benignTopics, capability) ||
-		slices.Contains(m.allowances[nodeid], capability)
+		allows(m.allowances[origin], capability)
+	m.mu.RUnlock()
+
+	if isProtected {
+		return actor == protectedCaller, nil
+	}
+	if origin == permissionCaller && capability == permissionConfirmationCapability {
+		return true, nil
+	}
+	if origin == protectedCaller && capability == hyphaeConfirmationCapability {
+		return true, nil
+	}
+	if allowed {
+		if !isAdmin {
+			return true, nil
+		}
+		if m.hyphae == nil {
+			return false, error.New(
+				error.Generic,
+				error.Permission,
+				"Hyphae confirmation is unavailable",
+				out.Pair("capability", capability))
+		}
+		return m.hyphae.Confirm(origin, capability)
+	}
+	if isAdmin {
+		return false, nil
+	}
+	token, ok := msg.Arg("permission.token")
+	if !ok {
+		return false, nil
+	}
+	return m.consumePermit(origin, capability, token), nil
+}
+
+func (m *Manager) consumePermit(origin string, capability string, token string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	permit, ok := m.permits[token]
+	if !ok || permit.origin != origin || permit.capability != capability || !time.Now().Before(permit.expiresAt) {
+		return false
+	}
+	delete(m.permits, token)
+	return true
+}
+
+func allows(allowances []string, capability string) bool {
+	for _, allowance := range allowances {
+		if allowance == capability || strings.HasSuffix(capability, "."+allowance) {
+			return true
+		}
+	}
+	return false
 }
 
 // Load reads allowances from disk, replacing the in-memory set.
@@ -290,7 +428,19 @@ func (h *Manager) handle() string {
 //
 
 func (m *Manager) Id() string {
-	return "permission-in-spore"
+	return permissionCaller
+}
+
+func newPermitToken() (string, *error.Error) {
+	data := make([]byte, 32)
+	if _, err := rand.Read(data); err != nil {
+		return "", error.New(
+			error.Generic,
+			error.Permission,
+			"unable to create permission permit",
+			out.Pair("err", err.Error()))
+	}
+	return base64.RawURLEncoding.EncodeToString(data), nil
 }
 
 func (m *Manager) IsConnected() bool {

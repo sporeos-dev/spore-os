@@ -139,7 +139,7 @@ func (n *Nodes) HandleConnection(conn net.Conn) {
 	if erro != nil {
 		n.bus.Witness(
 			error.New(
-				error.Generic, 
+				error.Generic,
 				error.Node,
 				"unable to read deadline",
 				out.Pair("error", erro.Error())))
@@ -266,7 +266,7 @@ func (n *Nodes) GetManifest(nodeid string) *manifest.Manifest {
 	return node.manifest
 }
 
-func (n *Nodes) Install(path string) *error.Error {
+func (n *Nodes) Install(path string, load bool) *error.Error {
 
 	witness.Send(
 		message.Witness(
@@ -302,19 +302,6 @@ func (n *Nodes) Install(path string) *error.Error {
 				out.Pair("node", manifest.ID))
 		}
 
-		granted, err := n.acceptInstallationWarning(manifest)
-		if err != nil {
-			return err
-		}
-		if !granted {
-			return error.New(
-				error.UserDenial,
-				error.Node,
-				"installation cancelled due to trust misalignment",
-				out.Pair("node", manifest.ID),
-				out.Pair("trust", string(manifest.Trust)))
-		}
-
 		registryElement := registry.ElementFromManifest(manifest)
 		if registryElement == nil {
 			return error.New(
@@ -324,7 +311,7 @@ func (n *Nodes) Install(path string) *error.Error {
 				out.Pair("path", path))
 		}
 
-		err = n.registry.Add(registryElement)
+		err := n.registry.Add(registryElement)
 		if err != nil {
 			return err
 		}
@@ -349,19 +336,6 @@ func (n *Nodes) Install(path string) *error.Error {
 				out.Pair("node", manifest.ID))
 		}
 
-		granted, err := n.acceptInstallationWarning(manifest)
-		if err != nil {
-			return err
-		}
-		if !granted {
-			return error.New(
-				error.UserDenial,
-				error.Node,
-				"installation cancelled due to trust misalignment",
-				out.Pair("node", manifest.ID),
-				out.Pair("trust", string(manifest.Trust)))
-		}
-
 		err = n.registry.Add(registry)
 		if err != nil {
 			return err
@@ -372,7 +346,6 @@ func (n *Nodes) Install(path string) *error.Error {
 		n.nodes[node.registry.ID] = node
 	}
 
-	// freshly installed, so trust already vetted via acceptInstallationWarning
 	n.permissions.RegisterNode(node.manifest)
 
 	if len(node.manifest.Permissions) > 0 {
@@ -396,6 +369,10 @@ func (n *Nodes) Install(path string) *error.Error {
 						out.Pair("capability", el.Name)))
 			}
 		}
+	}
+
+	if load {
+		return n.Spawn(node.registry.ID)
 	}
 
 	return nil
@@ -430,7 +407,39 @@ func (n *Nodes) Uninstall(nodeid string) *error.Error {
 
 	node.close()
 	delete(n.nodes, nodeid)
-	return n.registry.Remove(node.registry.ID)
+	if err := n.registry.Remove(node.registry.ID); err != nil {
+		return err
+	}
+	return n.permissions.RemoveNode(node.registry.ID)
+}
+
+func (n *Nodes) Reinstall(nodeid string, load bool) *error.Error {
+	nodeid = n.resolveId(nodeid)
+
+	n.mu.RLock()
+	node, ok := n.nodes[nodeid]
+	if !ok {
+		n.mu.RUnlock()
+		return error.New(
+			error.Missing,
+			error.Node,
+			"cannot reinstall; node not installed",
+			out.Pair("node", nodeid))
+	}
+	path := node.registry.Manifest
+	n.mu.RUnlock()
+
+	if err := n.Uninstall(nodeid); err != nil {
+		return err
+	}
+	return n.Install(path, load)
+}
+
+func (n *Nodes) Reload(nodeid string) *error.Error {
+	if err := n.Kill(nodeid); err != nil {
+		return err
+	}
+	return n.Spawn(nodeid)
 }
 
 func (n *Nodes) Spawn(nodeid string) *error.Error {
@@ -563,71 +572,4 @@ func (n *Nodes) resolveId(nodeid string) string {
 	}
 
 	return nodeid
-}
-
-func (n *Nodes) acceptInstallationWarning(m *manifest.Manifest) (bool, *error.Error) {
-
-	// e.g.
-	// dev.sporeos.shell.confirm body="Do you accept [nodeid] at a trust level of [trust]?" lines=[ ... ]
-	var conf strings.Builder
-	conf.WriteString("dev.sporeos.shell.confirm body=\"Do you accept node [")
-	conf.WriteString(m.ID)
-	conf.WriteString("] at a trust level of [")
-	conf.WriteString(string(m.Trust))
-	conf.WriteString("]?\" lines=[ \"Important Considerations\", ")
-	switch m.Trust {
-	case manifest.System:
-		conf.WriteString("\" - system trust implies full control and should only be granted to core system components.\", ")
-		conf.WriteString("\" - caution and thorough vetting are required before granting system trust.\", ")
-		conf.WriteString("\" - while you are free to proceed, we suggest denying this request\"")
-	case manifest.Developer:
-		conf.WriteString("\" - developer trust grants free permission to all capabilities in the mesh\", ")
-		conf.WriteString("\" - caution is advised when granting developer trust.\", ")
-		conf.WriteString("\" - only grant developer trust if you are the developer of the node you are installing.\"")
-	case manifest.Trusted:
-		conf.WriteString("\" - trusted trust implies a higher level of scrutiny and should be granted to nodes with a proven track record.\", ")
-		conf.WriteString("\" - only grant trusted trust if you are confident in the node's reliability.\"")
-		conf.WriteString("\" - trusted nodes require capability permissions to be granted individually.\"")
-	case manifest.StandardTrust:
-		conf.WriteString("\" - standard trust implies a baseline level of scrutiny and should be granted to nodes with a reasonable track record.\", ")
-		conf.WriteString("\" - only grant standard trust if you are confident in the node's reliability.\"")
-		conf.WriteString("\" - standard nodes require capability permissions to be granted individually.\"")
-	case manifest.Untrusted:
-		conf.WriteString("\" - untrusted nodes should be treated with caution and granted minimal permissions.\", ")
-		conf.WriteString("\" - only grant untrusted trust if you are confident in the node's reliability.\"")
-		conf.WriteString("\" - untrusted nodes require capability permissions to be granted individually.\"")
-	}
-	conf.WriteString(" ] ~")
-	handle := n.handle()
-	conf.WriteString(handle)
-	raw := conf.String()
-
-	msg, ok := message.Request(raw, selfNodeId)
-	if !ok {
-		err := error.New(
-			error.Malformed,
-			error.Node,
-			"failed to ensure trust",
-			out.Pair("node", m.ID))
-		witness.Send(err)
-		return false, err
-	}
-
-	ch := n.pending.Await(handle)
-	err := n.bus.Request(msg)
-	if err != nil {
-		n.pending.Delete(handle)
-		witness.Send(err)
-		return false, err
-	}
-
-	response, err := n.pending.WaitFor(handle, ch)
-	if err != nil {
-		witness.Send(err)
-		return false, err
-	}
-	if response.Flag("error") {
-		return false, nil
-	}
-	return response.Flag("yes"), nil
 }

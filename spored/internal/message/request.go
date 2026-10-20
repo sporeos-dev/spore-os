@@ -12,11 +12,11 @@ import (
 type request struct {
 	raw string
 	id  string
-	
+
 	command string
-	args map[string]string
-	flags []string
-	handle string
+	args    map[string]string
+	flags   []string
+	handle  string
 }
 
 func Request(raw string, id string) (iface.Message, bool) {
@@ -25,12 +25,12 @@ func Request(raw string, id string) (iface.Message, bool) {
 		return nil, false
 	}
 	r := &request{
-		raw: raw,
-		id: id,
+		raw:     raw,
+		id:      id,
 		command: parsed.command,
-		args: parsed.args,
-		flags: parsed.flags,
-		handle: parsed.handle,
+		args:    parsed.args,
+		flags:   parsed.flags,
+		handle:  parsed.handle,
 	}
 
 	return r, true
@@ -42,6 +42,14 @@ func (r *request) Capability() string {
 
 func (r *request) Cast() string {
 	return r.id
+}
+
+func (r *request) Actor() string {
+	return castIdentity(r.id).Actor
+}
+
+func (r *request) Origin() string {
+	return castIdentity(r.id).Origin
 }
 
 func (r *request) Capture() string {

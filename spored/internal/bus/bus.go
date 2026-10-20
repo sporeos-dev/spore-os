@@ -39,6 +39,7 @@ func (b *Bus) Set(hyphae ihyphae, nodes inodes, permissions ipermissions, spore 
 	b.nodes = nodes
 	b.permissions = permissions
 	b.spore = spore
+	b.api.setPermissions(permissions)
 }
 
 func (b *Bus) Close() {
@@ -99,7 +100,13 @@ func (b *Bus) Request(msg iface.Message) *error.Error {
 	if err != nil {
 		return err
 	}
-	return b.api.request(msg)
+
+	err = b.api.request(msg)
+	if err != nil {
+		b.responses.cancel(msg.Handle())
+		return err
+	}
+	return nil
 }
 
 func (b *Bus) Response(msg iface.Message) *error.Error {

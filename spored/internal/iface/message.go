@@ -6,6 +6,8 @@ package iface
 type Message interface {
 	Capability() string
 	Cast() string
+	Actor() string
+	Origin() string
 	Capture() string
 	Arg(key string) (string, bool)
 	ArgIf(key string, ifnot string) string

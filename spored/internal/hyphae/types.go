@@ -15,8 +15,8 @@ type ibus interface {
 	Request(msg iface.Message) *error.Error
 }
 
-type inodes interface {}
+type inodes interface{}
 
-type ipermissions interface {}
+type ipermissions interface{}
 
-type ispore interface {}
+type ispore interface{}

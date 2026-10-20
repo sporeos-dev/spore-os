@@ -128,6 +128,10 @@ func (h *Hyphae) Kill(pid int) *error.Error {
 	return h.nodeKill(pid)
 }
 
+func (h *Hyphae) Confirm(node string, command string) (bool, *error.Error) {
+	return h.confirm(node, command)
+}
+
 //
 //
 // private
@@ -317,6 +321,37 @@ func (h *Hyphae) nodeKill(pid int) *error.Error {
 	}
 
 	return nil
+}
+
+func (h *Hyphae) confirm(node string, command string) (bool, *error.Error) {
+	handle := h.handle()
+	raw := fmt.Sprintf("dev.sporeos.HYPHAE.confirm node=%q command=%q ~%s", node, command, handle)
+	msg, ok := message.Request(raw, h.Id())
+	if !ok {
+		return false, error.New(
+			error.Malformed,
+			error.Hyphae,
+			"failure to request confirmation")
+	}
+
+	ch := h.pending.Await(handle)
+	err := h.bus.Request(msg)
+	if err != nil {
+		h.pending.Delete(handle)
+		return false, err
+	}
+	response, err := h.pending.WaitFor(handle, ch)
+	if err != nil {
+		return false, err
+	}
+	if response.Flag("error") {
+		return false, error.New(
+			error.Generic,
+			error.Hyphae,
+			response.ArgIf("what", "confirmation failed"))
+	}
+
+	return response.Flag("yes"), nil
 }
 
 //

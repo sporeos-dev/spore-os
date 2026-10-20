@@ -12,13 +12,13 @@ import (
 )
 
 type spore struct {
-	request iface.Message
+	request   iface.Message
 	responses []string
 }
 
 func Spore(request iface.Message, responses ...out.IOut) iface.Message {
-	s := &spore {
-		request: request,
+	s := &spore{
+		request:   request,
 		responses: make([]string, 0),
 	}
 	for _, el := range responses {
@@ -33,6 +33,14 @@ func (s *spore) Capability() string {
 
 func (s *spore) Cast() string {
 	return s.request.Cast()
+}
+
+func (s *spore) Actor() string {
+	return s.request.Actor()
+}
+
+func (s *spore) Origin() string {
+	return s.request.Origin()
 }
 
 func (s *spore) Capture() string {
@@ -70,7 +78,7 @@ func (s *spore) Witness() string {
 	return fmt.Sprintf("witness body='%s' spore_outgoing spore_time=%d", s.Wire(), t)
 }
 
-// 
+//
 // private
 // helpers
 //

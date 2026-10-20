@@ -4,33 +4,38 @@
 package manifest
 
 type Launch string
+
 const (
-	Auto Launch = "auto"
-	Lazy Launch = "lazy"
+	Auto   Launch = "auto"
+	Lazy   Launch = "lazy"
 	Manual Launch = "manual"
 )
 
 type Namespace string
+
 const (
-	Spore Namespace = "spore"
+	Spore  Namespace = "spore"
 	Hyphae Namespace = "hyphae"
-	Any Namespace = "any"
+	Any    Namespace = "any"
 )
 
 type Trust string
+
 const (
-	System Trust = "system"
-	Developer Trust = "developer"
-	Trusted Trust = "trusted"
+	System        Trust = "system"
+	Developer     Trust = "developer"
+	Trusted       Trust = "trusted"
 	StandardTrust Trust = "standard"
-	Untrusted Trust = "untrusted"
+	Untrusted     Trust = "untrusted"
 )
 
 type Risk string
+
 const (
-	Benign Risk = "benign"
+	Benign       Risk = "benign"
 	StandardRisk Risk = "standard"
-	Personal Risk = "personal"
-	Secret Risk = "secret"
-	Protected Risk = "protected"
+	Personal     Risk = "personal"
+	Secret       Risk = "secret"
+	Admin        Risk = "admin"
+	Protected    Risk = "protected"
 )

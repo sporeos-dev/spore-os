@@ -48,6 +48,7 @@ func (p *pipe) pipe(msg iface.Message, node INode) {
 
 	complete, _ := msg.Arg("raw")
 	cast := node.Id()
+	origin := msg.Origin()
 	args := make(map[string]string)
 	flags := make([]string, 0)
 
@@ -224,15 +225,14 @@ func (p *pipe) pipe(msg iface.Message, node INode) {
 			if pm.Handle == "" {
 				pm.Handle = pipeHandle()
 			}
-			raw = pm.Stringify()
-			witnesslog.Send(message.Incoming(raw, cast))
-
 			// intermediate stages route back to the pipe itself; only the
 			// last stage responds directly to the original caller
 			stageCast := cast
 			if !isLast {
-				stageCast = p.Id()
+				stageCast = message.DelegatedCast(p.Id(), origin)
 			}
+			raw = pm.Stringify()
+			witnesslog.Send(message.Incoming(raw, stageCast))
 
 			request, ok := message.Request(raw, stageCast)
 			if !ok {

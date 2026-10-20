@@ -11,12 +11,12 @@ import (
 
 type response struct {
 	raw string
-	id string 
+	id  string
 
 	command string
-	args map[string]string
-	flags []string
-	handle string
+	args    map[string]string
+	flags   []string
+	handle  string
 }
 
 func Response(raw string, captureID string) (iface.Message, bool) {
@@ -42,6 +42,14 @@ func (r *response) Capability() string {
 // Cast returns the responding node's ID (the capture).
 func (r *response) Cast() string {
 	return r.ArgIf("cast", "n/a")
+}
+
+func (r *response) Actor() string {
+	return castIdentity(r.Cast()).Actor
+}
+
+func (r *response) Origin() string {
+	return castIdentity(r.Cast()).Origin
 }
 
 func (r *response) Capture() string {

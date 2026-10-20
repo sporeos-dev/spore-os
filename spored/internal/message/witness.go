@@ -12,8 +12,8 @@ import (
 )
 
 type witness struct {
-	raw string
-	cast string
+	raw         string
+	cast        string
 	witnessFlag string
 }
 
@@ -31,8 +31,8 @@ func Witness(body string, outs ...out.IOut) iface.Message {
 		builder.WriteString(el.String())
 	}
 	return &witness{
-		raw: builder.String(),
-		cast: "n/a",
+		raw:         builder.String(),
+		cast:        "n/a",
 		witnessFlag: witnessFlag,
 	}
 }
@@ -42,8 +42,8 @@ func Node(raw string, cast string) iface.Message {
 	raw = strings.ReplaceAll(raw, "\n", "\\n")
 	raw = strings.ReplaceAll(raw, "\"", "\\\"")
 	return &witness{
-		raw: raw,
-		cast: cast,
+		raw:         raw,
+		cast:        cast,
 		witnessFlag: "spore_node",
 	}
 }
@@ -52,9 +52,9 @@ func Node(raw string, cast string) iface.Message {
 func Incoming(raw string, cast string) iface.Message {
 	raw = strings.ReplaceAll(raw, "\n", "\\n")
 	raw = strings.ReplaceAll(raw, "\"", "\\\"")
-	return &witness {
-		raw: raw,
-		cast: cast,
+	return &witness{
+		raw:         raw,
+		cast:        cast,
 		witnessFlag: "spore_incoming",
 	}
 }
@@ -63,9 +63,9 @@ func Incoming(raw string, cast string) iface.Message {
 func Outgoing(raw string, cast string) iface.Message {
 	raw = strings.ReplaceAll(raw, "\n", "\\n")
 	raw = strings.ReplaceAll(raw, "\"", "\\\"")
-	return &witness {
-		raw: raw,
-		cast: cast,
+	return &witness{
+		raw:         raw,
+		cast:        cast,
 		witnessFlag: "spore_outgoing",
 	}
 }
@@ -76,6 +76,14 @@ func (w *witness) Capability() string {
 
 func (w *witness) Cast() string {
 	return w.cast
+}
+
+func (w *witness) Actor() string {
+	return castIdentity(w.cast).Actor
+}
+
+func (w *witness) Origin() string {
+	return castIdentity(w.cast).Origin
 }
 
 func (w *witness) Capture() string {
@@ -111,15 +119,15 @@ func (w *witness) Wire() string {
 // witness spore: +witness +message +spore_event +spore_time
 // --> witness body='<raw>' spore_event spore_time=time
 // witness node: +witness +body +cast +spore_node +spore_time
-// --> witness body='<raw>' cast=witnesser.id spore_node spore_time=time 
+// --> witness body='<raw>' cast=witnesser.id spore_node spore_time=time
 func (w *witness) Witness() string {
 	t := time.Now().UnixMilli()
-	
+
 	// spore_event
 	if w.cast == "n/a" {
-		return fmt.Sprintf(`witness body='%s' %s spore_time=%d`, w.raw, w.witnessFlag, t)	
+		return fmt.Sprintf(`witness body='%s' %s spore_time=%d`, w.raw, w.witnessFlag, t)
 
-	// spore_node
+		// spore_node
 	} else {
 		return fmt.Sprintf(`witness body='%s' cast=%s %s spore_time=%d`, w.raw, w.cast, w.witnessFlag, t)
 	}

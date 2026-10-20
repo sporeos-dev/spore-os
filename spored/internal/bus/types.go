@@ -18,10 +18,12 @@ type INode interface {
 	Witness(message iface.Message)
 }
 
-type ihyphae interface {}
+type ihyphae interface{}
 
-type inodes interface {}
+type inodes interface{}
 
-type ipermissions interface {}
+type ipermissions interface {
+	Can(msg iface.Message, capability string) (bool, *error.Error)
+}
 
-type ispore interface {}
+type ispore interface{}

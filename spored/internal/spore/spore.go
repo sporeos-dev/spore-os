@@ -16,16 +16,16 @@ import (
 type Spore struct {
 	manifest *manifest.Manifest
 
-	bus ibus
-	hyphae ihyphae
+	bus         ibus
+	hyphae      ihyphae
 	permissions ipermissions
-	nodes inodes
+	nodes       inodes
 }
-	
+
 func New() *Spore {
 	m := &manifest.Manifest{
-		Status: status.New(),
-		Path: pal.FileSporeManifest(),
+		Status:           status.New(),
+		Path:             pal.FileSporeManifest(),
 		ExpectedChecksum: "n/a",
 	}
 	m.Load()
@@ -44,6 +44,7 @@ func (s *Spore) Set(bus ibus, hyphae ihyphae, nodes inodes, permissions ipermiss
 	s.permissions = permissions
 
 	s.bus.Register(s)
+	s.permissions.RegisterNode(s.manifest)
 }
 
 func (s *Spore) Close() {
@@ -76,31 +77,55 @@ func (s *Spore) Receive(request iface.Message) *error.Error {
 	fqCap := s.bus.FullyQualifiedRequest(capability)
 
 	switch fqCap {
-	case "dev.sporeos.SPORE.help": return s.help(request)
-	case "dev.sporeos.SPORE.state": return s.state(request)
-	case "dev.sporeos.SPORE.list": return s.list(request)
-	case "dev.sporeos.SPORE.complete": return s.complete(request)
-	case "dev.sporeos.SPORE.hint": return s.hint(request)
-		
-	case "dev.sporeos.SPORE.node.install": return s.nodeInstall(request)
-	case "dev.sporeos.SPORE.node.uninstall": return s.nodeUninstall(request)
-	case "dev.sporeos.SPORE.node.spawn": return s.nodeSpawn(request)
-	case "dev.sporeos.SPORE.node.kill": return s.nodeKill(request)
+	case "dev.sporeos.SPORE.help":
+		return s.help(request)
+	case "dev.sporeos.SPORE.state":
+		return s.state(request)
+	case "dev.sporeos.SPORE.list":
+		return s.list(request)
+	case "dev.sporeos.SPORE.complete":
+		return s.complete(request)
+	case "dev.sporeos.SPORE.hint":
+		return s.hint(request)
 
-	case "dev.sporeos.SPORE.topic.subscribe": return s.topicSubscribe(request)
-	case "dev.sporeos.SPORE.topic.unsubscribe": return s.topicUnsubscribe(request)
+	case "dev.sporeos.SPORE.node.install":
+		return s.nodeInstall(request)
+	case "dev.sporeos.SPORE.node.uninstall":
+		return s.nodeUninstall(request)
+	case "dev.sporeos.SPORE.node.reinstall":
+		return s.nodeReinstall(request)
+	case "dev.sporeos.SPORE.node.spawn":
+		return s.nodeSpawn(request)
+	case "dev.sporeos.SPORE.node.kill":
+		return s.nodeKill(request)
+	case "dev.sporeos.SPORE.node.reload":
+		return s.nodeReload(request)
 
-	case "dev.sporeos.SPORE.permission.request": return s.permissionRequest(request)
-	case "dev.sporeos.SPORE.permission.grant": return s.permissionGrant(request)
-	case "dev.sporeos.SPORE.permission.revoke": return s.permissionRevoke(request)
+	case "dev.sporeos.SPORE.topic.subscribe":
+		return s.topicSubscribe(request)
+	case "dev.sporeos.SPORE.topic.unsubscribe":
+		return s.topicUnsubscribe(request)
 
-	case "dev.sporeos.SPORE.state.persist": return s.statePersist(request)
-	case "dev.sporeos.SPORE.state.retrieve": return s.stateRetrieve(request)
+	case "dev.sporeos.SPORE.permission.request":
+		return s.permissionRequest(request)
+	case "dev.sporeos.SPORE.permission.grant":
+		return s.permissionGrant(request)
+	case "dev.sporeos.SPORE.permission.revoke":
+		return s.permissionRevoke(request)
 
-	case "dev.sporeos.SPORE.security.keyring.grant": return s.securityKeyringGrant(request)
-	case "dev.sporeos.SPORE.security.keyring.revoke": return s.securityKeyringRevoke(request)
-	case "dev.sporeos.SPORE.security.signature.sign": return s.securitySignatureSign(request)
-	case "dev.sporeos.SPORE.security.signature.verify": return s.securitySignatureVerify(request)
+	case "dev.sporeos.SPORE.state.persist":
+		return s.statePersist(request)
+	case "dev.sporeos.SPORE.state.retrieve":
+		return s.stateRetrieve(request)
+
+	case "dev.sporeos.SPORE.security.keyring.grant":
+		return s.securityKeyringGrant(request)
+	case "dev.sporeos.SPORE.security.keyring.revoke":
+		return s.securityKeyringRevoke(request)
+	case "dev.sporeos.SPORE.security.signature.sign":
+		return s.securitySignatureSign(request)
+	case "dev.sporeos.SPORE.security.signature.verify":
+		return s.securitySignatureVerify(request)
 	}
 
 	return error.New(

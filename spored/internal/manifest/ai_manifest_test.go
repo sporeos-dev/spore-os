@@ -36,3 +36,44 @@ func TestVerifyDoesNotReplaceMissingStatus(t *testing.T) {
 		t.Fatalf("missing manifest status = %s, want %s", got, status.Missing)
 	}
 }
+
+func TestValidateReservedLanguageRejectsColonInIdentifiers(t *testing.T) {
+	tests := []struct {
+		name     string
+		manifest Manifest
+	}{
+		{
+			name:     "node id",
+			manifest: Manifest{ID: "dev.sporeos:example"},
+		},
+		{
+			name: "api name",
+			manifest: Manifest{
+				ID:  "dev.sporeos.example",
+				Api: []Command{{Name: "call:run"}},
+			},
+		},
+		{
+			name: "topic name",
+			manifest: Manifest{
+				ID:     "dev.sporeos.example",
+				Topics: []Topic{{Name: "event:updated"}},
+			},
+		},
+		{
+			name: "error name",
+			manifest: Manifest{
+				ID:     "dev.sporeos.example",
+				Errors: []ManifestError{{Name: "invalid:input"}},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if err := test.manifest.ValidateReservedLanguage(); err == "" {
+				t.Fatal("ValidateReservedLanguage() allowed a reserved colon")
+			}
+		})
+	}
+}

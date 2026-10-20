@@ -40,3 +40,43 @@ func TestSplitPipeRecognizesPipeAfterBlockValue(t *testing.T) {
 		t.Errorf("splitPipe()[1] = %q, want %q", parts[1], "destination")
 	}
 }
+
+func TestMessageCastIdentity(t *testing.T) {
+	tests := []struct {
+		name   string
+		cast   string
+		actor  string
+		origin string
+	}{
+		{
+			name:   "direct request",
+			cast:   "dev.sporeos.shell",
+			actor:  "dev.sporeos.shell",
+			origin: "dev.sporeos.shell",
+		},
+		{
+			name:   "delegated request",
+			cast:   DelegatedCast("SPORE.pipe", "dev.sporeos.shell"),
+			actor:  "SPORE.pipe",
+			origin: "dev.sporeos.shell",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			msg, ok := Request("dev.sporeos.target.run ~test", test.cast)
+			if !ok {
+				t.Fatal("Request() failed")
+			}
+			if msg.Cast() != test.cast {
+				t.Errorf("Cast() = %q, want %q", msg.Cast(), test.cast)
+			}
+			if msg.Actor() != test.actor {
+				t.Errorf("Actor() = %q, want %q", msg.Actor(), test.actor)
+			}
+			if msg.Origin() != test.origin {
+				t.Errorf("Origin() = %q, want %q", msg.Origin(), test.origin)
+			}
+		})
+	}
+}

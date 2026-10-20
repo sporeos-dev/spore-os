@@ -11,7 +11,6 @@ import (
 	"spored/internal/manifest"
 	"spored/internal/registry"
 	sporeerror "spored/internal/utilities/error"
-	"strings"
 	"testing"
 	"time"
 )
@@ -36,13 +35,12 @@ func (b *permissionTestBus) Request(msg iface.Message) *sporeerror.Error {
 
 type permissionTestPermitter struct{}
 
-func (permissionTestPermitter) Can(_ string, capability string) bool {
-	return capability == "alias.context.add"
+func (permissionTestPermitter) RegisterNode(*manifest.Manifest) {}
+func (permissionTestPermitter) RemoveNode(string) *sporeerror.Error {
+	return nil
 }
 
-func (permissionTestPermitter) RegisterNode(*manifest.Manifest) {}
-
-func TestNodeKeepsListeningAfterPermissionDenied(t *testing.T) {
+func TestNodeDefersPermissionChecksToBus(t *testing.T) {
 	server, client := net.Pipe()
 	defer client.Close()
 
@@ -64,22 +62,20 @@ func TestNodeKeepsListeningAfterPermissionDenied(t *testing.T) {
 	}()
 
 	if _, err := client.Write([]byte("dev.sporeos.SPORE.state.retrieve key=state ~denied\n")); err != nil {
-		t.Fatalf("send denied request: %v", err)
+		t.Fatalf("send first request: %v", err)
 	}
 
-	if err := client.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
-		t.Fatalf("set read deadline: %v", err)
-	}
-	reply, err := bufio.NewReader(client).ReadString('\n')
-	if err != nil {
-		t.Fatalf("read permission-denied response: %v", err)
-	}
-	if !strings.Contains(reply, "~denied") || !strings.Contains(reply, "error") {
-		t.Fatalf("unexpected permission-denied response: %q", reply)
+	select {
+	case request := <-bus.requests:
+		if request.Handle() != "denied" {
+			t.Fatalf("first request handle = %q, want %q", request.Handle(), "denied")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("first request was not forwarded to the bus")
 	}
 
 	if _, err := client.Write([]byte("alias.context.add key=test value=value ~allowed\n")); err != nil {
-		t.Fatalf("send permitted request: %v", err)
+		t.Fatalf("send second request: %v", err)
 	}
 
 	select {

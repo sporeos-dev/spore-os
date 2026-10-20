@@ -4,9 +4,28 @@
 package permissions
 
 import (
+	"spored/internal/iface"
+	"spored/internal/manifest"
+	"spored/internal/message"
+	sporeerror "spored/internal/utilities/error"
 	"sync"
 	"testing"
+	"time"
 )
+
+type confirmationHyphae struct {
+	confirmed bool
+	calls     int
+	node      string
+	command   string
+}
+
+func (h *confirmationHyphae) Confirm(node string, command string) (bool, *sporeerror.Error) {
+	h.calls++
+	h.node = node
+	h.command = command
+	return h.confirmed, nil
+}
 
 // TestHandleUnique guards against the index++ race in handle generation.
 func TestHandleUnique(t *testing.T) {
@@ -31,4 +50,155 @@ func TestHandleUnique(t *testing.T) {
 		}
 		seen[handle] = true
 	}
+}
+
+func TestDeveloperNodeRequiresExplicitPermission(t *testing.T) {
+	m := &Manager{
+		allowances: make(map[string][]string),
+	}
+	m.RegisterNode(&manifest.Manifest{
+		ID:    "dev.sporeos.example",
+		Trust: manifest.Developer,
+	})
+
+	if allowed, err := m.Can(testRequest(t, "dev.sporeos.example"), "filesystem.write"); err != nil || allowed {
+		t.Fatal("developer node received an implicit capability grant")
+	}
+
+	m.allowances["dev.sporeos.example"] = []string{"filesystem.write"}
+	if allowed, err := m.Can(testRequest(t, "dev.sporeos.example"), "filesystem.write"); err != nil || !allowed {
+		t.Fatal("developer node was denied an explicit capability grant")
+	}
+}
+
+func TestProtectedCapabilityRequiresHubInternalCaller(t *testing.T) {
+	m := &Manager{
+		allowances: make(map[string][]string),
+	}
+	m.RegisterNode(&manifest.Manifest{
+		ID:    "dev.sporeos.system",
+		Trust: manifest.System,
+	})
+	m.RegisterNode(&manifest.Manifest{
+		ID: "dev.sporeos.target",
+		Api: []manifest.Command{{
+			Name: "internal",
+			Risk: manifest.Protected,
+		}},
+	})
+
+	capability := "dev.sporeos.target.internal"
+	if allowed, err := m.Can(testRequest(t, "dev.sporeos.system"), capability); err != nil || allowed {
+		t.Fatalf("system caller allowed protected capability: allowed=%t err=%v", allowed, err)
+	}
+	if allowed, err := m.Can(testRequest(t, protectedCaller+":dev.sporeos.user"), capability); err != nil || !allowed {
+		t.Fatalf("hub-internal caller denied protected capability: allowed=%t err=%v", allowed, err)
+	}
+	if allowed, err := m.Can(testRequest(t, "dev.sporeos.user:"+protectedCaller), capability); err != nil || allowed {
+		t.Fatalf("protected capability used origin instead of actor: allowed=%t err=%v", allowed, err)
+	}
+}
+
+func TestPermissionManagerCanRequestShellConfirmation(t *testing.T) {
+	m := &Manager{
+		allowances: make(map[string][]string),
+	}
+
+	if allowed, err := m.Can(testRequest(t, permissionCaller), permissionConfirmationCapability); err != nil || !allowed {
+		t.Fatalf("permission manager was denied shell confirmation: allowed=%t err=%v", allowed, err)
+	}
+	if allowed, err := m.Can(testRequest(t, permissionCaller), "dev.sporeos.shell.other"); err != nil || allowed {
+		t.Fatalf("permission manager was allowed an unrelated capability: allowed=%t err=%v", allowed, err)
+	}
+	if allowed, err := m.Can(testRequest(t, protectedCaller), hyphaeConfirmationCapability); err != nil || !allowed {
+		t.Fatalf("hyphae was denied its confirmation capability: allowed=%t err=%v", allowed, err)
+	}
+	if allowed, err := m.Can(testRequest(t, protectedCaller), "dev.sporeos.HYPHAE.other"); err != nil || allowed {
+		t.Fatalf("hyphae was allowed an unrelated capability: allowed=%t err=%v", allowed, err)
+	}
+}
+
+func TestPermissionPermitIsBoundToOriginCapabilityAndOneUse(t *testing.T) {
+	token := "permit"
+	m := &Manager{
+		allowances: make(map[string][]string),
+		permits: map[string]permit{
+			token: {
+				origin:     "dev.sporeos.requester",
+				capability: "dev.sporeos.store.get",
+				expiresAt:  time.Now().Add(permissionTokenLifetime),
+			},
+		},
+	}
+
+	if allowed, err := m.Can(
+		testRequestWithToken(t, "dev.sporeos.requester", token),
+		"dev.sporeos.store.get"); err != nil || !allowed {
+		t.Fatalf("permit authorization: allowed=%t err=%v", allowed, err)
+	}
+	if allowed, err := m.Can(
+		testRequestWithToken(t, "dev.sporeos.requester", token),
+		"dev.sporeos.store.get"); err != nil || allowed {
+		t.Fatalf("permit was reusable: allowed=%t err=%v", allowed, err)
+	}
+}
+
+func TestAdminCapabilityRequiresFreshHyphaeConfirmation(t *testing.T) {
+	hyphae := &confirmationHyphae{confirmed: true}
+	m := &Manager{
+		allowances: make(map[string][]string),
+		hyphae:     hyphae,
+	}
+	m.RegisterNode(&manifest.Manifest{
+		ID:    "dev.sporeos.system",
+		Trust: manifest.System,
+	})
+	m.RegisterNode(&manifest.Manifest{
+		ID: "dev.sporeos.target",
+		Api: []manifest.Command{{
+			Name: "change",
+			Risk: manifest.Admin,
+		}},
+	})
+
+	capability := "dev.sporeos.target.change"
+	allowed, err := m.Can(testRequest(t, "SPORE.pipe:dev.sporeos.system"), capability)
+	if err != nil || !allowed {
+		t.Fatalf("admin confirmation result: allowed=%t err=%v", allowed, err)
+	}
+	if hyphae.calls != 1 || hyphae.node != "dev.sporeos.system" || hyphae.command != capability {
+		t.Fatalf("unexpected confirmation: calls=%d node=%q command=%q",
+			hyphae.calls, hyphae.node, hyphae.command)
+	}
+
+	hyphae.confirmed = false
+	allowed, err = m.Can(testRequest(t, "SPORE.pipe:dev.sporeos.system"), capability)
+	if err != nil || allowed {
+		t.Fatalf("denied admin confirmation result: allowed=%t err=%v", allowed, err)
+	}
+	if hyphae.calls != 2 {
+		t.Fatalf("confirmation calls = %d, want 2", hyphae.calls)
+	}
+}
+
+func testRequest(t *testing.T, cast string) iface.Message {
+	t.Helper()
+
+	msg, ok := message.Request("dev.sporeos.target.run ~test", cast)
+	if !ok {
+		t.Fatal("Request() failed")
+	}
+	return msg
+}
+
+func testRequestWithToken(t *testing.T, cast string, token string) iface.Message {
+	t.Helper()
+
+	msg, ok := message.Request(
+		"dev.sporeos.target.run permission.token="+token+" ~test",
+		cast)
+	if !ok {
+		t.Fatal("Request() failed")
+	}
+	return msg
 }

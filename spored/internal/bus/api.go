@@ -12,21 +12,29 @@ import (
 )
 
 type api struct {
-	mu sync.RWMutex
-	nodes map[string]INode
-	commands map[string]string // fqname -> node id
-	abbrevs *abbreviationIndex
+	mu          sync.RWMutex
+	nodes       map[string]INode
+	commands    map[string]string // fqname -> node id
+	abbrevs     *abbreviationIndex
+	permissions ipermissions
 }
 
 func newApi() *api {
-	return &api {
-		nodes: make(map[string]INode),
+	return &api{
+		nodes:    make(map[string]INode),
 		commands: make(map[string]string),
-		abbrevs: newAbbreviationIndex(),
+		abbrevs:  newAbbreviationIndex(),
 	}
 }
 
 func (a *api) close() {}
+
+func (a *api) setPermissions(permissions ipermissions) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	a.permissions = permissions
+}
 
 func (a *api) register(n INode) {
 	a.mu.Lock()
@@ -117,6 +125,29 @@ func (a *api) request(msg iface.Message) *error.Error {
 			WithMessage(msg)
 	}
 
+	permissions := a.permissions
 	a.mu.RUnlock()
+
+	if permissions == nil {
+		return error.New(
+			error.Generic,
+			error.Bus,
+			"permission manager unavailable").
+			WithMessage(msg)
+	}
+	allowed, err := permissions.Can(msg, fqname)
+	if err != nil {
+		return err.WithMessage(msg)
+	}
+	if !allowed {
+		return error.New(
+			error.NotPermitted,
+			error.Bus,
+			"permission required",
+			out.Pair("node", msg.Origin()),
+			out.Pair("capability", fqname)).
+			WithMessage(msg)
+	}
+
 	return node.Receive(msg)
 }

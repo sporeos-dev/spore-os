@@ -16,7 +16,7 @@ import (
 
 func (s *Spore) statePersist(request iface.Message) *error.Error {
 
-	cast := request.Cast()
+	cast := request.Origin()
 	key, ok := request.Arg("key")
 	if !ok {
 		return error.MissingArg("key", error.Spore).WithMessage(request)
@@ -48,7 +48,7 @@ func (s *Spore) statePersist(request iface.Message) *error.Error {
 
 func (s *Spore) stateRetrieve(request iface.Message) *error.Error {
 
-	cast := request.Cast()
+	cast := request.Origin()
 	key, ok := request.Arg("key")
 	if !ok {
 		return error.MissingArg("key", error.Spore).WithMessage(request)
@@ -63,7 +63,7 @@ func (s *Spore) stateRetrieve(request iface.Message) *error.Error {
 		if retrieveError != nil {
 			if os.IsNotExist(retrieveError) {
 				s.bus.Response(message.Spore(
-					request, 
+					request,
 					out.Pair("body", ""),
 					out.Flag("empty")))
 				return

@@ -15,20 +15,20 @@ import (
 const responseHandleTimeout = 10 * time.Second
 
 type result struct {
-	nodeid string
+	nodeid    string
 	expiresAt time.Time
 }
 
 type responses struct {
-	mu sync.RWMutex
+	mu        sync.RWMutex
 	responses map[string]result
-	nodes map[string]INode
+	nodes     map[string]INode
 }
 
 func newResponses() *responses {
-	return &responses {
+	return &responses{
 		responses: make(map[string]result),
-		nodes: make(map[string]INode),
+		nodes:     make(map[string]INode),
 	}
 }
 
@@ -51,7 +51,7 @@ func (r *responses) request(msg iface.Message) *error.Error {
 	defer r.mu.Unlock()
 
 	handle := msg.Handle()
-	nodeid := msg.Cast()
+	nodeid := msg.Actor()
 
 	res, ok := r.responses[handle]
 	if ok && time.Now().Before(res.expiresAt) {
@@ -64,11 +64,18 @@ func (r *responses) request(msg iface.Message) *error.Error {
 	}
 
 	r.responses[handle] = result{
-		nodeid: nodeid,
+		nodeid:    nodeid,
 		expiresAt: time.Now().Add(responseHandleTimeout),
 	}
 
 	return nil
+}
+
+func (r *responses) cancel(handle string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	delete(r.responses, handle)
 }
 
 func (r *responses) response(msg iface.Message) *error.Error {
@@ -79,9 +86,9 @@ func (r *responses) response(msg iface.Message) *error.Error {
 		return error.New(
 			error.Missing,
 			error.Bus,
-			"missing handle");
+			"missing handle")
 	}
-	
+
 	res, ok := r.responses[handle]
 	if !ok {
 		r.mu.Unlock()
@@ -93,7 +100,7 @@ func (r *responses) response(msg iface.Message) *error.Error {
 			WithMessage(msg)
 	}
 	delete(r.responses, handle)
-	
+
 	nodeid := res.nodeid
 	node, ok := r.nodes[nodeid]
 	if !ok {

@@ -51,6 +51,14 @@ func (p *pipe) Cast() string {
 	return p.id
 }
 
+func (p *pipe) Actor() string {
+	return castIdentity(p.id).Actor
+}
+
+func (p *pipe) Origin() string {
+	return castIdentity(p.id).Origin
+}
+
 func (p *pipe) Capture() string {
 	return "n/a"
 }

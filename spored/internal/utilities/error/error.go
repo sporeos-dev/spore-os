@@ -12,32 +12,32 @@ import (
 )
 
 type Error struct {
-	code Code
+	code   Code
 	module Module
-	what string
+	what   string
 	extras []string
 
-	message iface.Message
+	message      iface.Message
 	incomingSent bool
 }
 
 func New(code Code, module Module, what string, out ...fmt.Stringer) *Error {
-    extraSlice := make([]string, len(out))
-    for i, o := range out {
-        extraSlice[i] = o.String()
-    }
-    
-    err := &Error{
-        code:   code,
-        module: module,
-        what:   what,
-        extras:  extraSlice,
-		message: nil,
+	extraSlice := make([]string, len(out))
+	for i, o := range out {
+		extraSlice[i] = o.String()
+	}
+
+	err := &Error{
+		code:         code,
+		module:       module,
+		what:         what,
+		extras:       extraSlice,
+		message:      nil,
 		incomingSent: false,
-    }
+	}
 
 	slog.Error(err.Error())
-    return err
+	return err
 }
 
 func (e *Error) WithMessage(message iface.Message) *Error {
@@ -54,7 +54,7 @@ func (e *Error) Append(out fmt.Stringer) {
 // interface
 //
 
-func (e *Error) Error() string{
+func (e *Error) Error() string {
 	return fmt.Sprintf(`%s code=%s.%s %s`, e.what, e.code, e.module, e.extrasToString())
 }
 
@@ -76,6 +76,20 @@ func (e *Error) Cast() string {
 		return "n/a"
 	}
 	return e.message.Cast()
+}
+
+func (e *Error) Actor() string {
+	if e.message == nil {
+		return "n/a"
+	}
+	return e.message.Actor()
+}
+
+func (e *Error) Origin() string {
+	if e.message == nil {
+		return "n/a"
+	}
+	return e.message.Origin()
 }
 
 func (e *Error) Capture() string {
@@ -126,14 +140,14 @@ func (e *Error) Wire() string {
 	// capture is n/a
 	// cast error
 	// send back
-	wire := fmt.Sprintf(`~%s:%s error code=%s.%s what="%s" %s cast=%s`, e.Handle(), e.Capability(), e.code, e.module, e.what, e.extrasToString(), e.Cast()) 
+	wire := fmt.Sprintf(`~%s:%s error code=%s.%s what="%s" %s cast=%s`, e.Handle(), e.Capability(), e.code, e.module, e.what, e.extrasToString(), e.Cast())
 
 	if e.Capture() == "n/a" {
 		return wire
 
-	// otherwise
-	// capture error
-	// send forward
+		// otherwise
+		// capture error
+		// send forward
 	} else {
 		return fmt.Sprintf("%s capture=%s", wire, e.message.Capture())
 	}
@@ -147,14 +161,14 @@ func (e *Error) Witness() string {
 	if e.message == nil {
 		return fmt.Sprintf("witness body='error code=%s.%s what=\"%s\"' %s spore_event spore_time=%d", e.code, e.module, e.what, e.extrasToString(), t)
 
-	// otherwise
-	// outgoing
+		// otherwise
+		// outgoing
 	} else {
 		return fmt.Sprintf("witness body='%s' spore_outgoing spore_time=%d", e.Wire(), t)
 	}
 }
 
-// 
+//
 // private
 // helpers
 //

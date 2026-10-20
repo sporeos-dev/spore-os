@@ -10,14 +10,33 @@ import (
 )
 
 func (s *Spore) nodeInstall(request iface.Message) *error.Error {
-	
+
 	path, ok := request.Arg("path")
 	if !ok {
 		return error.MissingArg("path", error.Spore).WithMessage(request)
 	}
 
 	go func() {
-		err := s.nodes.Install(path)
+		err := s.nodes.Install(path, request.Flag("load"))
+		if err != nil {
+			s.bus.Response(err.WithMessage(request))
+		} else {
+			s.bus.Response(message.Spore(request))
+		}
+	}()
+
+	return nil
+}
+
+func (s *Spore) nodeReinstall(request iface.Message) *error.Error {
+
+	node, ok := request.Arg("node")
+	if !ok {
+		return error.MissingArg("node", error.Spore).WithMessage(request)
+	}
+
+	go func() {
+		err := s.nodes.Reinstall(node, request.Flag("load"))
 		if err != nil {
 			s.bus.Response(err.WithMessage(request))
 		} else {
@@ -29,7 +48,7 @@ func (s *Spore) nodeInstall(request iface.Message) *error.Error {
 }
 
 func (s *Spore) nodeUninstall(request iface.Message) *error.Error {
-	
+
 	node, ok := request.Arg("node")
 	if !ok {
 		return error.MissingArg("node", error.Spore).WithMessage(request)
@@ -37,6 +56,25 @@ func (s *Spore) nodeUninstall(request iface.Message) *error.Error {
 
 	go func() {
 		err := s.nodes.Uninstall(node)
+		if err != nil {
+			s.bus.Response(err.WithMessage(request))
+		} else {
+			s.bus.Response(message.Spore(request))
+		}
+	}()
+
+	return nil
+}
+
+func (s *Spore) nodeReload(request iface.Message) *error.Error {
+
+	node, ok := request.Arg("node")
+	if !ok {
+		return error.MissingArg("node", error.Spore).WithMessage(request)
+	}
+
+	go func() {
+		err := s.nodes.Reload(node)
 		if err != nil {
 			s.bus.Response(err.WithMessage(request))
 		} else {

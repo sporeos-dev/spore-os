@@ -16,12 +16,17 @@ func (s *Spore) topicSubscribe(request iface.Message) *error.Error {
 	if !ok {
 		return error.MissingArg("topic", error.Spore).WithMessage(request)
 	}
-	cast := request.Cast()
+	cast := request.Origin()
 
 	go func() {
 		// Existence and ambiguity of the (possibly abbreviated) topic name
 		// are validated by bus.Subscribe itself.
-		if !s.permissions.Can(cast, topic) {
+		allowed, err := s.permissions.Can(request, topic)
+		if err != nil {
+			s.bus.Response(err.WithMessage(request))
+			return
+		}
+		if !allowed {
 			err := error.New(
 				error.NotPermitted,
 				error.Spore,
@@ -33,7 +38,7 @@ func (s *Spore) topicSubscribe(request iface.Message) *error.Error {
 			return
 		}
 
-		err := s.bus.Subscribe(cast, topic)
+		err = s.bus.Subscribe(cast, topic)
 		if err != nil {
 			s.bus.Response(err.WithMessage(request))
 			return
@@ -46,12 +51,12 @@ func (s *Spore) topicSubscribe(request iface.Message) *error.Error {
 }
 
 func (s *Spore) topicUnsubscribe(request iface.Message) *error.Error {
-	
+
 	topic, ok := request.Arg("topic")
 	if !ok {
 		return error.MissingArg("topic", error.Spore).WithMessage(request)
 	}
-	cast := request.Cast()
+	cast := request.Origin()
 
 	go func() {
 		err := s.bus.Unsubscribe(cast, topic)

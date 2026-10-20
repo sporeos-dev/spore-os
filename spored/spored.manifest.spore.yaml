@@ -9,7 +9,7 @@ description: The central hub of the Spore ecosystem.
 trust: system
 
 schema: SPORE/v0d2
-version: 0.2.0
+version: 0.2.1
 app: n/a
 
 launch: auto
@@ -158,19 +158,24 @@ api:
 
   - name: node.install
     description: Install a node.
-    risk: protected
+    risk: admin
     usage:
       - node.install path=/path/to/manifest/node.manifest.spore.yaml
+      - node.install path=/path/to/manifest/node.manifest.spore.yaml load
     inputs:
       - name: path
         type: string
         description: Path to .manifest.spore.yaml file.
         required: true
+      - name: load
+        type: flag
+        description: Spawn the node after it is installed.
+        required: false
     outputs: []
 
   - name: node.uninstall
     description: Uninstall a node.
-    risk: protected
+    risk: admin
     usage:
       - node.uninstall node=node
     inputs:
@@ -180,11 +185,40 @@ api:
         required: false
     outputs: []
 
+  - name: node.reinstall
+    description: Reinstall a node from its registered manifest path.
+    risk: admin
+    usage:
+      - node.reinstall node=node
+      - node.reinstall node=node load
+    inputs:
+      - name: node
+        type: string
+        description: Installed node ID.
+        required: true
+      - name: load
+        type: flag
+        description: Spawn the node after it is reinstalled.
+        required: false
+    outputs: []
+
   - name: node.spawn
     description: Start a node.
     risk: standard
     usage:
       - node.spawn node=node
+    inputs:
+      - name: node
+        type: string
+        description: Node ID.
+        required: true
+    outputs: []
+
+  - name: node.reload
+    description: Restart a node.
+    risk: standard
+    usage:
+      - node.reload node=node
     inputs:
       - name: node
         type: string
@@ -235,15 +269,11 @@ api:
 # SPORE.permission
 
   - name: permission.request
-    description: Request permission. Called by nodes, granted or denied by user.
+    description: Request a 30-second, single-use permission token for the calling node.
     risk: standard
     usage:
-      - permission.request node=node capability=capability
+      - permission.request capability=capability
     inputs:
-      - name: node
-        type: string
-        description: Node ID.
-        required: true
       - name: capability
         type: string
         description: Fully-qualified capability ID.
@@ -253,16 +283,16 @@ api:
         description: Reasons for requesting permission.
         required: false
     outputs:
-      - name: yes
-        type: flag
-        description: Flag present if granted.
+      - name: permission.token
+        type: string
+        description: Opaque 30-second, single-use token for the requested capability.
       - name: no
         type: flag
         description: Flag present if denied.
   
   - name: permission.grant
     description: Grant permission to a node for a capability.
-    risk: standard
+    risk: admin
     usage:
       - permission.grant node=node capability=capability
     inputs:
@@ -278,7 +308,7 @@ api:
   
   - name: permission.revoke
     description: Revoke permission from a node for a capability.
-    risk: standard
+    risk: admin
     usage:
       - permission.revoke node=node capability=capability
     inputs:

@@ -20,7 +20,13 @@ func (m *Manifest) ValidateReservedLanguage() string {
 	if strings.HasPrefix(m.ID, "SPORE.") {
 		return "node id uses reserved SPORE. namespace: " + m.ID
 	}
+	if strings.Contains(m.ID, ":") {
+		return "node id contains reserved colon: " + m.ID
+	}
 	for _, cmd := range m.Api {
+		if strings.Contains(cmd.Name, ":") {
+			return "subject name contains reserved colon: " + cmd.Name
+		}
 		if cmd.Name == "witness" || strings.HasPrefix(cmd.Name, "witness ") {
 			return "subject name is reserved: " + cmd.Name
 		}
@@ -35,6 +41,9 @@ func (m *Manifest) ValidateReservedLanguage() string {
 		}
 	}
 	for _, topic := range m.Topics {
+		if strings.Contains(topic.Name, ":") {
+			return "topic name contains reserved colon: " + topic.Name
+		}
 		if topic.Name == "witness" || strings.HasPrefix(topic.Name, "witness ") {
 			return "topic name is reserved: " + topic.Name
 		}
@@ -43,6 +52,11 @@ func (m *Manifest) ValidateReservedLanguage() string {
 		}
 		if err := checkOutputs(topic.Outputs); err != "" {
 			return err
+		}
+	}
+	for _, manifestError := range m.Errors {
+		if strings.Contains(manifestError.Name, ":") {
+			return "error name contains reserved colon: " + manifestError.Name
 		}
 	}
 	return ""
@@ -95,4 +109,3 @@ func (m *Manifest) ErrorIds() []string {
 	}
 	return ids
 }
-

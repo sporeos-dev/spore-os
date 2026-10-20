@@ -30,7 +30,6 @@ type spawner interface {
 }
 
 type permitter interface {
-	Can(nodeid string, capability string) bool
 	RegisterNode(man *manifest.Manifest)
 }
 
@@ -436,18 +435,6 @@ listen:
 					"failed to request",
 					out.Pair("node", n.registry.ID),
 					out.Pair("raw", raw)))
-				continue
-			}
-
-			command := request.Capability()
-			if !n.permitter.Can(n.registry.ID, command) {
-				n.Receive(error.New(
-					error.NotPermitted,
-					error.Node,
-					"permission required",
-					out.Pair("node", n.registry.ID),
-					out.Pair("capability", command)).
-					WithMessage(request))
 				continue
 			}
 

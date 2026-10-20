@@ -21,6 +21,14 @@ func (s *signal) Cast() string {
 	return "dev.sporeos.SPORE"
 }
 
+func (s *signal) Actor() string {
+	return s.Cast()
+}
+
+func (s *signal) Origin() string {
+	return s.Cast()
+}
+
 func (s *signal) Capture() string {
 	return "dev.sporeos.SPORE"
 }
@@ -48,4 +56,3 @@ func (s *signal) Wire() string {
 func (s *signal) Witness() string {
 	return s.handle
 }
-

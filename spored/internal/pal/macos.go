@@ -13,24 +13,46 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"syscall"
 	"unsafe"
 )
 
-type macos struct {}
+type macos struct{}
 
 func newImpl() impl { return newMacos() }
 
 func newMacos() *macos {
-	return &macos {}
+	return &macos{}
 }
 
 func (m *macos) commandOpenFileManager() string { return "open" }
-func (m *macos) daemonUsername() string { return "_spore" }
-func (m *macos) directoryLogging() string { return "/Library/Logs/spore-os" }
-func (m *macos) directoryRoot() string { return "/Library/Application Support/spore-os" }
+func (m *macos) daemonUsername() string         { return "_spore" }
+func (m *macos) directoryLogging() string       { return "/Library/Logs/spore-os" }
+func (m *macos) directoryRoot() string          { return "/Library/Application Support/spore-os" }
+
+func (m *macos) listenLocal() (net.Listener, error) {
+	listener, err := net.Listen("unix", FileSocket())
+	if err != nil {
+		return nil, err
+	}
+	if err := os.Chmod(FileSocket(), 0777); err != nil {
+		listener.Close()
+		return nil, err
+	}
+	return listener, nil
+}
+
+func (m *macos) removeLocalEndpoint() error {
+	err := os.Remove(FileSocket())
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}
 
 const localPeerPID = 2
+
 func (m *macos) processId(conn net.Conn) (int, error) {
 	uc, ok := conn.(*net.UnixConn)
 	if !ok {
@@ -47,13 +69,13 @@ func (m *macos) processId(conn net.Conn) (int, error) {
 	return pid, nil
 }
 
-func (m *macos) processPath(conn net.Conn) (string, error) { 
-	
+func (m *macos) processPath(conn net.Conn) (string, error) {
+
 	pid, err := m.processId(conn)
 	if err != nil {
 		return "", err
 	}
-	
+
 	//
 	//
 	// get path

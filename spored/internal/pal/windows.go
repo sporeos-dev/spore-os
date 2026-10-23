@@ -16,13 +16,33 @@ type windows struct{}
 func newImpl() impl { return newWindows() }
 
 func newWindows() *windows {
-	return &windows {}
+	return &windows{}
 }
 
 func (w *windows) commandOpenFileManager() string { return "explorer" }
-func (w *windows) daemonUsername() string { return "" }
-func (w *windows) directoryLogging() string { return os.Getenv("LOCALAPPDATA") + `\spore-os\logs` }
-func (w *windows) directoryRoot() string { return os.Getenv("LOCALAPPDATA") + `\spore-os` }
+func (w *windows) daemonUsername() string         { return "" }
+func (w *windows) directoryLogging() string       { return os.Getenv("LOCALAPPDATA") + `\spore-os\logs` }
+func (w *windows) directoryRoot() string          { return os.Getenv("LOCALAPPDATA") + `\spore-os` }
 
-func (w *windows) processId(conn net.Conn) (int, error) { return 0, errors.New("not impl.") }
+func (w *windows) listenLocal() (net.Listener, error) {
+	listener, err := net.Listen("unix", FileSocket())
+	if err != nil {
+		return nil, err
+	}
+	if err := os.Chmod(FileSocket(), 0777); err != nil {
+		listener.Close()
+		return nil, err
+	}
+	return listener, nil
+}
+
+func (w *windows) removeLocalEndpoint() error {
+	err := os.Remove(FileSocket())
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}
+
+func (w *windows) processId(conn net.Conn) (int, error)      { return 0, errors.New("not impl.") }
 func (w *windows) processPath(conn net.Conn) (string, error) { return "", errors.New("not impl.") }

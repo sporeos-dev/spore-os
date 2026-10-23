@@ -6,7 +6,6 @@ package hub
 import (
 	"errors"
 	"net"
-	"os"
 	"spored/internal/bus"
 	"spored/internal/hyphae"
 	"spored/internal/nodes"
@@ -19,22 +18,22 @@ import (
 )
 
 type Hub struct {
-	bus *bus.Bus
-	hyphae *hyphae.Hyphae
-	nodes *nodes.Nodes
-	spore *spore.Spore
+	bus         *bus.Bus
+	hyphae      *hyphae.Hyphae
+	nodes       *nodes.Nodes
+	spore       *spore.Spore
 	permissions *permissions.Manager
 
 	listener net.Listener
 }
 
 func New() (*Hub, *error.Error) {
-	
+
 	h := &Hub{
-		bus: bus.New(),
-		hyphae: hyphae.New(),
-		nodes: nodes.New(),
-		spore: spore.New(),
+		bus:         bus.New(),
+		hyphae:      hyphae.New(),
+		nodes:       nodes.New(),
+		spore:       spore.New(),
 		permissions: permissions.New(),
 	}
 
@@ -60,13 +59,26 @@ func (h *Hub) Close() {
 	if h.listener != nil {
 		h.listener.Close()
 	}
-	os.Remove(pal.FileSocket())
+	if err := pal.RemoveLocalEndpoint(); err != nil {
+		error.New(
+			error.ConnectionFailure,
+			error.Hub,
+			"Failed to remove local endpoint",
+			out.Pair("error", err.Error()))
+	}
 }
 
 func (h *Hub) listen() {
 
-	os.Remove(pal.FileSocket())
-	listener, err := net.Listen("unix", pal.FileSocket())
+	if err := pal.RemoveLocalEndpoint(); err != nil {
+		error.New(
+			error.InitializationFailure,
+			error.Hub,
+			"Failed to remove local endpoint",
+			out.Pair("error", err.Error()))
+		return
+	}
+	listener, err := pal.ListenLocal()
 	if err != nil {
 		error.New(
 			error.InitializationFailure,
@@ -76,17 +88,8 @@ func (h *Hub) listen() {
 		return
 	}
 	h.listener = listener
-	err = os.Chmod(pal.FileSocket(), 0777)
-	if err != nil {
-		error.New(
-			error.InitializationFailure,
-			error.Hub,
-			"Failed to set permissions on socket",
-			out.Pair("error", err.Error()))
-		return;
-	}
 	defer h.listener.Close()
-	
+
 	h.nodes.Autostart()
 
 	for {

@@ -12,6 +12,8 @@ type impl interface {
 	daemonUsername() string
 	directoryLogging() string
 	directoryRoot() string
+	listenLocal() (net.Listener, error)
 	processId(net.Conn) (int, error)
 	processPath(net.Conn) (string, error)
+	removeLocalEndpoint() error
 }

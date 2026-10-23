@@ -27,6 +27,26 @@ func (l *linux) daemonUsername() string         { return "spore" }
 func (l *linux) directoryLogging() string       { return "/var/log/spore-os" }
 func (l *linux) directoryRoot() string          { return "/var/lib/spore-os" }
 
+func (l *linux) listenLocal() (net.Listener, error) {
+	listener, err := net.Listen("unix", FileSocket())
+	if err != nil {
+		return nil, err
+	}
+	if err := os.Chmod(FileSocket(), 0777); err != nil {
+		listener.Close()
+		return nil, err
+	}
+	return listener, nil
+}
+
+func (l *linux) removeLocalEndpoint() error {
+	err := os.Remove(FileSocket())
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}
+
 func (l *linux) processId(conn net.Conn) (int, error) {
 	unixConn, ok := conn.(*net.UnixConn)
 	if !ok {

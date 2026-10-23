@@ -69,9 +69,10 @@ func TestValidateReservedLanguageRejectsColonInIdentifiers(t *testing.T) {
 		},
 	}
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			if err := test.manifest.ValidateReservedLanguage(); err == "" {
+	for i := range tests {
+		testCase := &tests[i]
+		t.Run(testCase.name, func(t *testing.T) {
+			if err := testCase.manifest.ValidateReservedLanguage(); err == "" {
 				t.Fatal("ValidateReservedLanguage() allowed a reserved colon")
 			}
 		})

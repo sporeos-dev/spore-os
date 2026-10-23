@@ -26,9 +26,9 @@ type ihyphae interface{}
 type inodes interface {
 	GetNodes() []string
 	GetManifest(nodeid string) *manifest.Manifest
-	Install(path string, load bool) *error.Error
+	Install(path string, load bool, origin string) *error.Error
 	Uninstall(nodeid string) *error.Error
-	Reinstall(nodeid string, load bool) *error.Error
+	Reinstall(nodeid string, load bool, origin string) *error.Error
 	Spawn(nodeid string) *error.Error
 	Kill(nodeid string) *error.Error
 	Reload(nodeid string) *error.Error

@@ -59,6 +59,11 @@ type Nodes struct {
 	spore       ispore
 }
 
+type installation struct {
+	manifest *manifest.Manifest
+	registry *registry.Element
+}
+
 func New() *Nodes {
 	nodes := &Nodes{
 		pending:  await.New(error.Node),
@@ -266,28 +271,36 @@ func (n *Nodes) GetManifest(nodeid string) *manifest.Manifest {
 	return node.manifest
 }
 
-func (n *Nodes) Install(path string, load bool) *error.Error {
+func (n *Nodes) Install(path string, load bool, origin string) *error.Error {
 
 	witness.Send(
 		message.Witness(
 			"installing node",
 			out.Pair("path", path)))
 
+	candidate, err := n.prepareInstallation(path)
+	if err != nil {
+		return err
+	}
+	if err := n.authorizeInstallation(candidate, origin, "dev.sporeos.SPORE.node.install"); err != nil {
+		return err
+	}
+	return n.completeInstallation(candidate, load)
+}
+
+func (n *Nodes) prepareInstallation(path string) (*installation, *error.Error) {
 	if !file.Exists(path) {
-		return error.New(
+		return nil, error.New(
 			error.Missing,
 			error.Node,
 			"unable to install due to bad path",
 			out.Pair("path", path))
 	}
 
-	var node *node = nil
-
-	// readable, handle via spore
 	if file.IsReadable(path) {
 		manifest := manifest.ManifestFromPath(path)
 		if manifest == nil {
-			return error.New(
+			return nil, error.New(
 				error.Generic,
 				error.Node,
 				"read failure",
@@ -295,7 +308,7 @@ func (n *Nodes) Install(path string, load bool) *error.Error {
 		}
 
 		if msg := manifest.ValidateReservedLanguage(); msg != "" {
-			return error.New(
+			return nil, error.New(
 				error.ReservedLanguage,
 				error.Node,
 				msg,
@@ -304,48 +317,57 @@ func (n *Nodes) Install(path string, load bool) *error.Error {
 
 		registryElement := registry.ElementFromManifest(manifest)
 		if registryElement == nil {
-			return error.New(
+			return nil, error.New(
 				error.Generic,
 				error.Node,
 				"failed to create registry element",
 				out.Pair("path", path))
 		}
 
-		err := n.registry.Add(registryElement)
-		if err != nil {
-			return err
-		}
-
-		node = newNode(registryElement, manifest)
-		node.set(n.bus, n, n.permissions)
-		n.nodes[node.registry.ID] = node
-
-		// not readable, handle via hyphae
-	} else {
-
-		manifest, registry, err := n.hyphae.PrepareForInstallation(path)
-		if err != nil {
-			return err
-		}
-
-		if msg := manifest.ValidateReservedLanguage(); msg != "" {
-			return error.New(
-				error.ReservedLanguage,
-				error.Node,
-				msg,
-				out.Pair("node", manifest.ID))
-		}
-
-		err = n.registry.Add(registry)
-		if err != nil {
-			return err
-		}
-
-		node = newNode(registry, manifest)
-		node.set(n.bus, n, n.permissions)
-		n.nodes[node.registry.ID] = node
+		return &installation{manifest: manifest, registry: registryElement}, nil
 	}
 
+	manifest, registryElement, err := n.hyphae.PrepareForInstallation(path)
+	if err != nil {
+		return nil, err
+	}
+	if msg := manifest.ValidateReservedLanguage(); msg != "" {
+		return nil, error.New(
+			error.ReservedLanguage,
+			error.Node,
+			msg,
+			out.Pair("node", manifest.ID))
+	}
+	return &installation{manifest: manifest, registry: registryElement}, nil
+}
+
+func (n *Nodes) authorizeInstallation(candidate *installation, origin string, capability string) *error.Error {
+	granted, err := n.permissions.AuthorizeInstallation(
+		origin,
+		candidate.manifest.ID,
+		capability,
+		candidate.manifest.Trust == manifest.Developer)
+	if err != nil {
+		return err
+	}
+	if !granted {
+		return error.New(
+			error.UserDenial,
+			error.Node,
+			"node installation was not authorized",
+			out.Pair("node", candidate.manifest.ID))
+	}
+	return nil
+}
+
+func (n *Nodes) completeInstallation(candidate *installation, load bool) *error.Error {
+	if err := n.registry.Add(candidate.registry); err != nil {
+		return err
+	}
+
+	node := newNode(candidate.registry, candidate.manifest)
+	node.set(n.bus, n, n.permissions)
+	n.nodes[node.registry.ID] = node
 	n.permissions.RegisterNode(node.manifest)
 
 	if len(node.manifest.Permissions) > 0 {
@@ -413,7 +435,7 @@ func (n *Nodes) Uninstall(nodeid string) *error.Error {
 	return n.permissions.RemoveNode(node.registry.ID)
 }
 
-func (n *Nodes) Reinstall(nodeid string, load bool) *error.Error {
+func (n *Nodes) Reinstall(nodeid string, load bool, origin string) *error.Error {
 	nodeid = n.resolveId(nodeid)
 
 	n.mu.RLock()
@@ -429,10 +451,17 @@ func (n *Nodes) Reinstall(nodeid string, load bool) *error.Error {
 	path := node.registry.Manifest
 	n.mu.RUnlock()
 
+	candidate, err := n.prepareInstallation(path)
+	if err != nil {
+		return err
+	}
+	if err := n.authorizeInstallation(candidate, origin, "dev.sporeos.SPORE.node.reinstall"); err != nil {
+		return err
+	}
 	if err := n.Uninstall(nodeid); err != nil {
 		return err
 	}
-	return n.Install(path, load)
+	return n.completeInstallation(candidate, load)
 }
 
 func (n *Nodes) Reload(nodeid string) *error.Error {

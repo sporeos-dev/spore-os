@@ -32,6 +32,8 @@ const (
 	permissionCaller                 = "permission-in-spore"
 	permissionConfirmationCapability = "dev.sporeos.shell.confirm"
 	permissionTokenLifetime          = 30 * time.Second
+	nodeInstallCapability            = "dev.sporeos.SPORE.node.install"
+	nodeReinstallCapability          = "dev.sporeos.SPORE.node.reinstall"
 )
 
 type permit struct {
@@ -222,6 +224,26 @@ func (m *Manager) RequestPermit(nodeid string, capability string, reason []strin
 	return token, true, nil
 }
 
+// AuthorizeInstallation applies the installation-specific confirmation flow.
+// Developer-trust nodes require an explicit shell warning before the standard
+// fresh Hyphae confirmation.
+func (m *Manager) AuthorizeInstallation(origin string, nodeid string, capability string, developer bool) (bool, *error.Error) {
+	if developer {
+		granted, err := m.confirmDeveloperInstallation(nodeid)
+		if err != nil || !granted {
+			return granted, err
+		}
+	}
+	if m.hyphae == nil {
+		return false, error.New(
+			error.Generic,
+			error.Permission,
+			"Hyphae confirmation is unavailable",
+			out.Pair("capability", capability))
+	}
+	return m.hyphae.Confirm(origin, capability)
+}
+
 func (m *Manager) confirm(nodeid string, capability string, reason []string) (bool, *error.Error) {
 	handle := m.handle()
 
@@ -272,6 +294,35 @@ func (m *Manager) confirm(nodeid string, capability string, reason []string) (bo
 	return true, nil
 }
 
+func (m *Manager) confirmDeveloperInstallation(nodeid string) (bool, *error.Error) {
+	handle := m.handle()
+	body := fmt.Sprintf(
+		"Install developer-trust node [%s]? Developer trust bypasses checksum verification and must not be used in production.",
+		nodeid)
+	raw := fmt.Sprintf("dev.sporeos.shell.confirm body=%q ~%s", body, handle)
+	msg, ok := message.Request(raw, m.Id())
+	if !ok {
+		return false, error.New(
+			error.Malformed,
+			error.Permission,
+			"failure to request developer installation confirmation")
+	}
+	ch := m.pending.Await(handle)
+	err := m.bus.Request(msg)
+	if err != nil {
+		m.pending.Delete(handle)
+		return false, err
+	}
+	response, err := m.pending.WaitFor(handle, ch)
+	if err != nil {
+		return false, err
+	}
+	if response.Flag("error") {
+		return false, error.New(error.Generic, error.Permission, response.ArgIf("what", "developer installation confirmation failed"))
+	}
+	return response.Flag("yes"), nil
+}
+
 func (m *Manager) Can(msg iface.Message, capability string) (bool, *error.Error) {
 	actor := msg.Actor()
 	origin := msg.Origin()
@@ -292,6 +343,9 @@ func (m *Manager) Can(msg iface.Message, capability string) (bool, *error.Error)
 		return true, nil
 	}
 	if origin == protectedCaller && capability == hyphaeConfirmationCapability {
+		return true, nil
+	}
+	if capability == nodeInstallCapability || capability == nodeReinstallCapability {
 		return true, nil
 	}
 	if allowed {

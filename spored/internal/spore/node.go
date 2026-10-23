@@ -17,7 +17,7 @@ func (s *Spore) nodeInstall(request iface.Message) *error.Error {
 	}
 
 	go func() {
-		err := s.nodes.Install(path, request.Flag("load"))
+		err := s.nodes.Install(path, request.Flag("load"), request.Origin())
 		if err != nil {
 			s.bus.Response(err.WithMessage(request))
 		} else {
@@ -36,7 +36,7 @@ func (s *Spore) nodeReinstall(request iface.Message) *error.Error {
 	}
 
 	go func() {
-		err := s.nodes.Reinstall(node, request.Flag("load"))
+		err := s.nodes.Reinstall(node, request.Flag("load"), request.Origin())
 		if err != nil {
 			s.bus.Response(err.WithMessage(request))
 		} else {

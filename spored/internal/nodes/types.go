@@ -32,6 +32,7 @@ type ihyphae interface {
 
 type ipermissions interface {
 	Request(nodeid string, capability string, reasons []string) (bool, *error.Error)
+	AuthorizeInstallation(origin string, nodeid string, capability string, developer bool) (bool, *error.Error)
 	RegisterNode(man *manifest.Manifest)
 	RemoveNode(nodeid string) *error.Error
 }

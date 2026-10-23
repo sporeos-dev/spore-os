@@ -4,10 +4,14 @@
 package permissions
 
 import (
+	"fmt"
+	"spored/internal/bus"
 	"spored/internal/iface"
 	"spored/internal/manifest"
 	"spored/internal/message"
+	"spored/internal/utilities/await"
 	sporeerror "spored/internal/utilities/error"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -20,11 +24,94 @@ type confirmationHyphae struct {
 	command   string
 }
 
+type developerInstallConfirmationBus struct {
+	manager  *Manager
+	requests []iface.Message
+	yes      bool
+}
+
+func (b *developerInstallConfirmationBus) Register(bus.INode)   {}
+func (b *developerInstallConfirmationBus) Unregister(bus.INode) {}
+
+func (b *developerInstallConfirmationBus) Request(request iface.Message) *sporeerror.Error {
+	b.requests = append(b.requests, request)
+	response, ok := message.Response(
+		fmt.Sprintf("~%s:dev.sporeos.shell.confirm yes ok", request.Handle()),
+		"dev.sporeos.shell")
+	if !ok {
+		panic("failed to create shell confirmation response")
+	}
+	if !b.yes {
+		response, ok = message.Response(
+			fmt.Sprintf("~%s:dev.sporeos.shell.confirm ok", request.Handle()),
+			"dev.sporeos.shell")
+		if !ok {
+			panic("failed to create shell denial response")
+		}
+	}
+	return b.manager.Receive(response)
+}
+
 func (h *confirmationHyphae) Confirm(node string, command string) (bool, *sporeerror.Error) {
 	h.calls++
 	h.node = node
 	h.command = command
 	return h.confirmed, nil
+}
+
+func TestDeveloperInstallationRequiresShellWarningBeforeHyphaeConfirmation(t *testing.T) {
+	hyphae := &confirmationHyphae{confirmed: true}
+	manager := &Manager{
+		pending:    await.New(sporeerror.Permission),
+		allowances: make(map[string][]string),
+		hyphae:     hyphae,
+	}
+	testBus := &developerInstallConfirmationBus{manager: manager, yes: true}
+	manager.bus = testBus
+
+	granted, err := manager.AuthorizeInstallation(
+		"dev.sporeos.shell",
+		"dev.sporeos.example",
+		"dev.sporeos.SPORE.node.install",
+		true)
+	if err != nil || !granted {
+		t.Fatalf("developer installation authorization: granted=%t err=%v", granted, err)
+	}
+	if len(testBus.requests) != 1 {
+		t.Fatalf("shell confirmation count = %d, want 1", len(testBus.requests))
+	}
+	if got := testBus.requests[0].ArgIf("body", ""); got == "" ||
+		!strings.Contains(got, "Developer trust bypasses checksum verification") {
+		t.Fatalf("developer warning body = %q", got)
+	}
+	if hyphae.calls != 1 || hyphae.node != "dev.sporeos.shell" ||
+		hyphae.command != "dev.sporeos.SPORE.node.install" {
+		t.Fatalf("unexpected Hyphae confirmation: calls=%d node=%q command=%q",
+			hyphae.calls, hyphae.node, hyphae.command)
+	}
+}
+
+func TestDeveloperInstallationDenialSkipsHyphaeConfirmation(t *testing.T) {
+	hyphae := &confirmationHyphae{confirmed: true}
+	manager := &Manager{
+		pending:    await.New(sporeerror.Permission),
+		allowances: make(map[string][]string),
+		hyphae:     hyphae,
+	}
+	testBus := &developerInstallConfirmationBus{manager: manager}
+	manager.bus = testBus
+
+	granted, err := manager.AuthorizeInstallation(
+		"dev.sporeos.shell",
+		"dev.sporeos.example",
+		"dev.sporeos.SPORE.node.install",
+		true)
+	if err != nil || granted {
+		t.Fatalf("developer installation denial: granted=%t err=%v", granted, err)
+	}
+	if hyphae.calls != 0 {
+		t.Fatalf("Hyphae confirmation calls = %d, want 0 after shell denial", hyphae.calls)
+	}
 }
 
 // TestHandleUnique guards against the index++ race in handle generation.

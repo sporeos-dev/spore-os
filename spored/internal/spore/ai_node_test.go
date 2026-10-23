@@ -48,7 +48,7 @@ func (n *nodeCommandTestNodes) GetNodes() []string { return nil }
 
 func (n *nodeCommandTestNodes) GetManifest(string) *manifest.Manifest { return nil }
 
-func (n *nodeCommandTestNodes) Install(path string, load bool) *sporeerror.Error {
+func (n *nodeCommandTestNodes) Install(path string, load bool, _ string) *sporeerror.Error {
 	n.installPath = path
 	n.installLoad = load
 	return nil
@@ -56,7 +56,7 @@ func (n *nodeCommandTestNodes) Install(path string, load bool) *sporeerror.Error
 
 func (n *nodeCommandTestNodes) Uninstall(string) *sporeerror.Error { return nil }
 
-func (n *nodeCommandTestNodes) Reinstall(node string, load bool) *sporeerror.Error {
+func (n *nodeCommandTestNodes) Reinstall(node string, load bool, _ string) *sporeerror.Error {
 	n.reinstallNode = node
 	n.reinstallLoad = load
 	return nil

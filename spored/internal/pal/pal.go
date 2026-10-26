@@ -66,3 +66,4 @@ func FileSporeManifest() string {
 // PeerPID
 func ProcessPath(conn net.Conn) (string, error) { return instance.impl.processPath(conn) }
 func ProcessID(conn net.Conn) (int, error)      { return instance.impl.processId(conn) }
+func IsTerminalPeerReadError(err error) bool    { return instance.impl.isTerminalPeerReadError(err) }

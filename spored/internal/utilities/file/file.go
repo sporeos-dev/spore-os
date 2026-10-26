@@ -8,7 +8,22 @@ import (
 	"encoding/hex"
 	"io"
 	"os"
+	"path/filepath"
+	"runtime"
 )
+
+// ExecutablePath appends ".exe" on Windows when the path has no extension,
+// since manifests name binaries without it (e.g. "./foundry-alias").
+func ExecutablePath(path string) string {
+	return executablePathFor(runtime.GOOS, path)
+}
+
+func executablePathFor(goos, path string) string {
+	if goos != "windows" || path == "" || filepath.Ext(path) != "" {
+		return path
+	}
+	return path + ".exe"
+}
 
 func Exists(path string) bool {
 	_, err := os.Stat(path)

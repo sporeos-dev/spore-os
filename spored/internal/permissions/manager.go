@@ -28,6 +28,7 @@ import (
 
 const (
 	protectedCaller                  = "hyphae-in-spore"
+	hyphaeBinaryHashCapability       = "dev.sporeos.HYPHAE.binary.hash"
 	hyphaeConfirmationCapability     = "dev.sporeos.HYPHAE.confirm"
 	permissionCaller                 = "permission-in-spore"
 	permissionConfirmationCapability = "dev.sporeos.shell.confirm"
@@ -343,6 +344,9 @@ func (m *Manager) Can(msg iface.Message, capability string) (bool, *error.Error)
 		return true, nil
 	}
 	if origin == protectedCaller && capability == hyphaeConfirmationCapability {
+		return true, nil
+	}
+	if origin == protectedCaller && capability == hyphaeBinaryHashCapability {
 		return true, nil
 	}
 	if capability == nodeInstallCapability || capability == nodeReinstallCapability {

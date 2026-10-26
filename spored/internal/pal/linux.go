@@ -47,6 +47,8 @@ func (l *linux) removeLocalEndpoint() error {
 	return nil
 }
 
+func (l *linux) isTerminalPeerReadError(error) bool { return false }
+
 func (l *linux) processId(conn net.Conn) (int, error) {
 	unixConn, ok := conn.(*net.UnixConn)
 	if !ok {

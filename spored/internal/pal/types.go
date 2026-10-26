@@ -16,4 +16,5 @@ type impl interface {
 	processId(net.Conn) (int, error)
 	processPath(net.Conn) (string, error)
 	removeLocalEndpoint() error
+	isTerminalPeerReadError(error) bool
 }

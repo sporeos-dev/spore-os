@@ -51,6 +51,8 @@ func (m *macos) removeLocalEndpoint() error {
 	return nil
 }
 
+func (m *macos) isTerminalPeerReadError(error) bool { return false }
+
 const localPeerPID = 2
 
 func (m *macos) processId(conn net.Conn) (int, error) {

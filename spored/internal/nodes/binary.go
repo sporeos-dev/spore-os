@@ -4,6 +4,7 @@
 package nodes
 
 import (
+	"errors"
 	"net"
 	"spored/internal/manifest"
 	"spored/internal/pal"
@@ -14,15 +15,15 @@ import (
 )
 
 type binary struct {
-	status status.Status
-	path string
+	status           status.Status
+	path             string
 	expectedChecksum string
 }
 
 func newBinary(registry *registry.Element) *binary {
 	b := &binary{
-		status: status.New(),
-		path: registry.Binary,
+		status:           status.New(),
+		path:             registry.Binary,
 		expectedChecksum: registry.BinaryChecksum,
 	}
 
@@ -35,11 +36,11 @@ func newBinary(registry *registry.Element) *binary {
 
 func newDeveloperBinary(registry *registry.Element) *binary {
 	b := &binary{
-		status: status.New(),
-		path: registry.Binary,
+		status:           status.New(),
+		path:             registry.Binary,
 		expectedChecksum: string(manifest.Developer),
 	}
-	
+
 	if !file.Exists(b.path) {
 		b.status.Set(status.Missing)
 	} else {
@@ -61,11 +62,11 @@ func (b *binary) verify(conn net.Conn) {
 
 	processPath, err := pal.ProcessPath(conn)
 	if err != nil {
-		b.status.Set(status.FailedChecksum)
+		b.setPeerPathFailureStatus(err)
 		return
 	}
 
-	if b.path != processPath {
+	if !pal.SameExecutablePath(b.path, processPath) {
 		b.status.Set(status.FailedChecksum)
 		return
 	}
@@ -85,4 +86,12 @@ func (b *binary) verify(conn net.Conn) {
 	}
 
 	b.status.Set(status.Verified)
+}
+
+func (b *binary) setPeerPathFailureStatus(err error) {
+	if errors.Is(err, pal.ErrPeerProcessPathAccessDenied) {
+		b.status.Set(status.RequiresUserSpace)
+		return
+	}
+	b.status.Set(status.FailedChecksum)
 }

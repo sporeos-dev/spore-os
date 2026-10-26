@@ -7,6 +7,7 @@ package cparser
 #cgo CFLAGS: -I${SRCDIR}/../../../../spore-client-libs/parser/include
 #cgo darwin LDFLAGS: -L${SRCDIR}/../../../../spore-client-libs/dist -lspore_parser -lc++
 #cgo linux  LDFLAGS: -L${SRCDIR}/../../../../spore-client-libs/dist -lspore_parser -lstdc++
+#cgo windows LDFLAGS: -L${SRCDIR}/../../../../spore-client-libs/dist -static -lspore_parser -lc++
 #include <stddef.h>
 #include <stdbool.h>
 #include <stdlib.h>

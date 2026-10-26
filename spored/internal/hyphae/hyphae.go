@@ -12,6 +12,7 @@ import (
 	"spored/internal/registry"
 	"spored/internal/utilities/await"
 	"spored/internal/utilities/error"
+	"spored/internal/utilities/file"
 	"spored/internal/utilities/out"
 	"spored/internal/utilities/status"
 	"spored/internal/witness"
@@ -81,7 +82,7 @@ func (h *Hyphae) PrepareForInstallation(path string) (*manifest.Manifest, *regis
 			out.Pair("error", erro.Error()))
 	}
 
-	fullBinaryPath := filepath.Join(filepath.Dir(path), man.App)
+	fullBinaryPath := file.ExecutablePath(filepath.Join(filepath.Dir(path), man.App))
 	registry := &registry.Element{
 		ID:             man.ID,
 		Name:           man.Name,
@@ -340,7 +341,8 @@ func (h *Hyphae) confirm(node string, command string) (bool, *error.Error) {
 		h.pending.Delete(handle)
 		return false, err
 	}
-	response, err := h.pending.WaitFor(handle, ch)
+	timeout := 2 * time.Minute
+	response, err := h.pending.WaitForTimeout(handle, ch, &timeout)
 	if err != nil {
 		return false, err
 	}

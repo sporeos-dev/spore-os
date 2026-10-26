@@ -217,5 +217,5 @@ func (m *Manifest) GetBinaryPath() string {
 	dir := filepath.Dir(m.Path)
 	path := filepath.Join(dir, m.App)
 	path = filepath.Clean(path)
-	return path
+	return file.ExecutablePath(path)
 }

@@ -200,6 +200,9 @@ func TestPermissionManagerCanRequestShellConfirmation(t *testing.T) {
 	if allowed, err := m.Can(testRequest(t, protectedCaller), hyphaeConfirmationCapability); err != nil || !allowed {
 		t.Fatalf("hyphae was denied its confirmation capability: allowed=%t err=%v", allowed, err)
 	}
+	if allowed, err := m.Can(testRequest(t, protectedCaller), hyphaeBinaryHashCapability); err != nil || !allowed {
+		t.Fatalf("hyphae was denied its binary hash capability: allowed=%t err=%v", allowed, err)
+	}
 	if allowed, err := m.Can(testRequest(t, protectedCaller), "dev.sporeos.HYPHAE.other"); err != nil || allowed {
 		t.Fatalf("hyphae was allowed an unrelated capability: allowed=%t err=%v", allowed, err)
 	}

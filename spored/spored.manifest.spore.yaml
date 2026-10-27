@@ -9,7 +9,7 @@ description: The central hub of the Spore ecosystem.
 trust: system
 
 schema: SPORE/v0d2
-version: 0.2.8
+version: 0.2.9
 app: n/a
 
 launch: auto

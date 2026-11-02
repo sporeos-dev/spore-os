@@ -3,7 +3,10 @@
 
 package nodes
 
-import "testing"
+import (
+	"errors"
+	"testing"
+)
 
 type testReadError struct {
 	timeout   bool
@@ -15,13 +18,24 @@ func (e testReadError) Timeout() bool   { return e.timeout }
 func (e testReadError) Temporary() bool { return e.temporary }
 
 func TestIsRetryableReadError(t *testing.T) {
-	if !isRetryableReadError(testReadError{timeout: true}) {
-		t.Fatal("timeout read error should be retryable")
+	tests := []struct {
+		name      string
+		err       readError
+		retryable bool
+	}{
+		{name: "timeout", err: testReadError{timeout: true}, retryable: true},
+		{name: "timeout and temporary", err: testReadError{timeout: true, temporary: true}, retryable: true},
+		{name: "temporary only", err: testReadError{temporary: true}},
+		{name: "other network error", err: testReadError{}},
+		{name: "non-network error", err: errors.New("read error")},
+		{name: "nil"},
 	}
-	if !isRetryableReadError(testReadError{temporary: true}) {
-		t.Fatal("temporary read error should be retryable")
-	}
-	if isRetryableReadError(testReadError{}) {
-		t.Fatal("terminal read error should not be retryable")
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isRetryableReadError(tt.err); got != tt.retryable {
+				t.Fatalf("isRetryableReadError() = %t, want %t", got, tt.retryable)
+			}
+		})
 	}
 }

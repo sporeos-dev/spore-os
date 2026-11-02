@@ -523,7 +523,7 @@ listen:
 
 func isRetryableReadError(readErr readError) bool {
 	netErr, ok := readErr.(net.Error)
-	return ok && (netErr.Timeout() || netErr.Temporary())
+	return ok && netErr.Timeout()
 }
 
 func (n *node) ProcessID() (int, bool) {

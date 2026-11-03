@@ -1,3 +1,6 @@
+// Copyright 2026 Matt Harrison
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package bus
 
 import (
@@ -5,18 +8,27 @@ import (
 	"spored/internal/utilities/error"
 	"spored/internal/utilities/out"
 	"sync"
+
+	"time"
 )
 
+const responseHandleTimeout = 10 * time.Second
+
+type result struct {
+	nodeid    string
+	expiresAt time.Time
+}
+
 type responses struct {
-	mu sync.RWMutex
-	responses map[string]string
-	nodes map[string]INode
+	mu        sync.RWMutex
+	responses map[string]result
+	nodes     map[string]INode
 }
 
 func newResponses() *responses {
-	return &responses {
-		responses: make(map[string]string),
-		nodes: make(map[string]INode),
+	return &responses{
+		responses: make(map[string]result),
+		nodes:     make(map[string]INode),
 	}
 }
 
@@ -39,10 +51,10 @@ func (r *responses) request(msg iface.Message) *error.Error {
 	defer r.mu.Unlock()
 
 	handle := msg.Handle()
-	nodeid := msg.Cast()
+	nodeid := msg.Actor()
 
-	_, ok := r.responses[handle]
-	if ok {
+	res, ok := r.responses[handle]
+	if ok && time.Now().Before(res.expiresAt) {
 		return error.New(
 			error.HandleInUse,
 			error.Bus,
@@ -51,8 +63,19 @@ func (r *responses) request(msg iface.Message) *error.Error {
 			WithMessage(msg)
 	}
 
-	r.responses[handle] = nodeid
+	r.responses[handle] = result{
+		nodeid:    nodeid,
+		expiresAt: time.Now().Add(responseHandleTimeout),
+	}
+
 	return nil
+}
+
+func (r *responses) cancel(handle string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	delete(r.responses, handle)
 }
 
 func (r *responses) response(msg iface.Message) *error.Error {
@@ -60,9 +83,13 @@ func (r *responses) response(msg iface.Message) *error.Error {
 
 	handle := msg.Handle()
 	if handle == "n/a" {
-		
+		return error.New(
+			error.Missing,
+			error.Bus,
+			"missing handle")
 	}
-	nodeid, ok := r.responses[handle]
+
+	res, ok := r.responses[handle]
 	if !ok {
 		r.mu.Unlock()
 		return error.New(
@@ -73,7 +100,8 @@ func (r *responses) response(msg iface.Message) *error.Error {
 			WithMessage(msg)
 	}
 	delete(r.responses, handle)
-	
+
+	nodeid := res.nodeid
 	node, ok := r.nodes[nodeid]
 	if !ok {
 		r.mu.Unlock()

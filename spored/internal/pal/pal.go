@@ -1,3 +1,6 @@
+// Copyright 2026 Matt Harrison
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package pal
 
 import (
@@ -24,17 +27,25 @@ func init() {
 // Platform behaviour
 func CommandOpenFileManager() string { return instance.impl.commandOpenFileManager() }
 func DaemonUsername() string         { return instance.impl.daemonUsername() }
+func ListenLocal() (net.Listener, error) {
+	return instance.impl.listenLocal()
+}
+func RemoveLocalEndpoint() error { return instance.impl.removeLocalEndpoint() }
 
 // Directories
-func DirectoryRoot() string      		{ return instance.impl.directoryRoot() }
-func DirectoryStore() string     		{ return filepath.Join(instance.impl.directoryRoot(), "store") }
-func DirectoryLogging() string   		{ return instance.impl.directoryLogging() }
-func DirectoryData() string  { return filepath.Join(instance.impl.directoryRoot(), "data") }
+func DirectoryRoot() string    { return instance.impl.directoryRoot() }
+func DirectoryStore() string   { return filepath.Join(instance.impl.directoryRoot(), "store") }
+func DirectoryLogging() string { return instance.impl.directoryLogging() }
+func DirectoryData() string    { return filepath.Join(instance.impl.directoryRoot(), "data") }
 
 // Files
-func FileRegistry() string    { return filepath.Join(instance.impl.directoryRoot(), "nodes.registry.yaml") }
-func FileSocket() string      { return filepath.Join(instance.impl.directoryRoot(), "spore.sock") }
-func FileLog() string         { return filepath.Join(instance.impl.directoryLogging(), "dev.sporeos.spored.log") }
+func FileRegistry() string {
+	return filepath.Join(instance.impl.directoryRoot(), "nodes.registry.yaml")
+}
+func FileSocket() string { return filepath.Join(instance.impl.directoryRoot(), "spore.sock") }
+func FileLog() string {
+	return filepath.Join(instance.impl.directoryLogging(), "dev.sporeos.spored.log")
+}
 func FilePermissions() string { return filepath.Join(DirectoryData(), "permissions.yaml") }
 func FileSporeManifest() string {
 	if service.Interactive() {
@@ -54,4 +65,5 @@ func FileSporeManifest() string {
 
 // PeerPID
 func ProcessPath(conn net.Conn) (string, error) { return instance.impl.processPath(conn) }
-func ProcessID(conn net.Conn) (int, error) { return instance.impl.processId(conn) }
+func ProcessID(conn net.Conn) (int, error)      { return instance.impl.processId(conn) }
+func IsTerminalPeerReadError(err error) bool    { return instance.impl.isTerminalPeerReadError(err) }

@@ -1,3 +1,6 @@
+// Copyright 2026 Matt Harrison
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package registry
 
 import (
@@ -7,6 +10,7 @@ import (
 
 	"spored/internal/pal"
 	"spored/internal/utilities/error"
+	"spored/internal/utilities/file"
 	"spored/internal/utilities/out"
 
 	"gopkg.in/yaml.v3"
@@ -87,6 +91,12 @@ func (r *Registry) load() *error.Error {
 			out.Pair("err", err.Error()))
 	}
 	
+	for _, el := range r.Elements {
+		if el != nil {
+			el.Binary = file.ExecutablePath(el.Binary)
+		}
+	}
+
 	return nil
 }
 

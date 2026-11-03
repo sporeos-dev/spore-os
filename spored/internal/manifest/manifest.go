@@ -1,3 +1,6 @@
+// Copyright 2026 Matt Harrison
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package manifest
 
 import (
@@ -14,27 +17,28 @@ type Manifest struct {
 	ID          string          `yaml:"id"`
 	Name        string          `yaml:"name"`
 	Description string          `yaml:"description"`
-	Trust		Trust			`yaml:"trust"`
+	Trust       Trust           `yaml:"trust"`
 	Schema      string          `yaml:"schema"`
 	Version     string          `yaml:"version"`
 	App         string          `yaml:"app"`
-	Launch 		Launch          `yaml:"launch"`
-	Namespace	Namespace		`yaml:"namespace"`
-	Witness		bool			`yaml:"witness"`
+	Launch      Launch          `yaml:"launch"`
+	Namespace   Namespace       `yaml:"namespace"`
+	Witness     bool            `yaml:"witness"`
+	Roles       []string        `yaml:"roles"`
 	Api         []Command       `yaml:"api"`
-	Topics		[]Topic			`yaml:"topics"`	
-	Permissions []Permission	`yaml:"permissions"`
+	Topics      []Topic         `yaml:"topics"`
+	Permissions []Permission    `yaml:"permissions"`
 	Errors      []ManifestError `yaml:"errors"`
 
-	Status status.Status
-	Path string
+	Status           status.Status
+	Path             string
 	ExpectedChecksum string
 }
 
 type Command struct {
 	Name        string    `yaml:"name"`
 	Description string    `yaml:"description"`
-	Risk		Risk	  `yaml:"risk"`
+	Risk        Risk      `yaml:"risk"`
 	Usage       []string  `yaml:"usage"`
 	Inputs      *[]Input  `yaml:"inputs"`
 	Outputs     *[]Output `yaml:"outputs"`
@@ -42,17 +46,17 @@ type Command struct {
 }
 
 type Topic struct {
-	Name		string	  `yaml:"name"`
-	Description string	  `yaml:"description"`
-	Risk		Risk	  `yaml:"risk"`
-	Usage		[]string  `yaml:"usage"`
-	Outputs		*[]Output `yaml:"outputs"`
-	Notes		*[]string `yaml:"notes"`
+	Name        string    `yaml:"name"`
+	Description string    `yaml:"description"`
+	Risk        Risk      `yaml:"risk"`
+	Usage       []string  `yaml:"usage"`
+	Outputs     *[]Output `yaml:"outputs"`
+	Notes       *[]string `yaml:"notes"`
 }
 
 type Permission struct {
-	Name		string		`yaml:"name"`
-	Reasons		[]string	`yaml:"reasons"`
+	Name    string   `yaml:"name"`
+	Reasons []string `yaml:"reasons"`
 }
 
 type Input struct {
@@ -76,12 +80,12 @@ type ManifestError struct {
 
 func New(registry *registry.Element) *Manifest {
 	m := &Manifest{
-		Status: status.New(), 
-		Path: registry.Manifest,
+		Status:           status.New(),
+		Path:             registry.Manifest,
 		ExpectedChecksum: registry.Checksum,
 	}
 
-	if file.Exists(m.Path) == false {
+	if !file.Exists(m.Path) {
 		m.Status.Set(status.Missing)
 	}
 
@@ -91,7 +95,7 @@ func New(registry *registry.Element) *Manifest {
 func ManifestFromPath(path string) *Manifest {
 	m := &Manifest{
 		Status: status.New(),
-		Path: path,
+		Path:   path,
 	}
 
 	contents, err := file.Read(path)
@@ -101,6 +105,7 @@ func ManifestFromPath(path string) *Manifest {
 
 	err = yaml.Unmarshal([]byte(contents), m)
 	if err != nil {
+		m.Status.Set(status.Malformed)
 		return nil
 	}
 	m.applyDefaults()
@@ -131,13 +136,17 @@ func (m *Manifest) applyDefaults() {
 func (m *Manifest) Close() {}
 
 func (m *Manifest) Verify() {
-	if file.IsReadable(m.Path) == false {
-		m.Status.Set(status.RequiresUserSpace)
+	if m.Status.Get() == status.Missing {
 		return
 	}
 
 	if m.Trust == Developer {
 		m.Status.Set(status.RequiresDeveloper)
+		return
+	}
+
+	if !file.IsReadable(m.Path) {
+		m.Status.Set(status.RequiresUserSpace)
 		return
 	}
 
@@ -166,17 +175,20 @@ func (m *Manifest) Load() {
 
 	err = yaml.Unmarshal([]byte(contents), m)
 	if err != nil {
-		return
+		m.Status.Set(status.Malformed)
 	}
 	m.applyDefaults()
 }
 
 func (m *Manifest) LoadContent(content string) {
-	yaml.Unmarshal([]byte(content), m)
+	err := yaml.Unmarshal([]byte(content), m) // nolint:errcheck
+	if err != nil {
+		m.Status.Set(status.Malformed)
+	}
 	m.applyDefaults()
 }
 
-// 
+//
 //
 // imanifest
 //
@@ -205,5 +217,5 @@ func (m *Manifest) GetBinaryPath() string {
 	dir := filepath.Dir(m.Path)
 	path := filepath.Join(dir, m.App)
 	path = filepath.Clean(path)
-	return path
+	return file.ExecutablePath(path)
 }

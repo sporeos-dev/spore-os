@@ -1,6 +1,11 @@
+// Copyright 2026 Matt Harrison
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package permissions
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"log/slog"
 	"os"
@@ -16,31 +21,52 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
+
+const (
+	protectedCaller                  = "hyphae-in-spore"
+	hyphaeBinaryHashCapability       = "dev.sporeos.HYPHAE.binary.hash"
+	hyphaeConfirmationCapability     = "dev.sporeos.HYPHAE.confirm"
+	permissionCaller                 = "permission-in-spore"
+	permissionConfirmationCapability = "dev.sporeos.shell.confirm"
+	permissionTokenLifetime          = 30 * time.Second
+	nodeInstallCapability            = "dev.sporeos.SPORE.node.install"
+	nodeReinstallCapability          = "dev.sporeos.SPORE.node.reinstall"
+)
+
+type permit struct {
+	origin     string
+	capability string
+	expiresAt  time.Time
+}
 
 type Manager struct {
 	index   atomic.Int64
 	pending *await.Pending
 
-	mu sync.RWMutex
-	allowances map[string][]string
-	devNodes []string // granted outright
-	sysNodes []string // granted outright
-	benignCommands []string // granted outright
-	benignTopics []string // granted outright
+	mu                sync.RWMutex
+	allowances        map[string][]string
+	permits           map[string]permit
+	sysNodes          []string // granted outright
+	benignCommands    []string // granted outright
+	benignTopics      []string // granted outright
+	adminCommands     []string
+	protectedCommands []string
 
-	bus ibus
+	bus    ibus
 	hyphae ihyphae
-	nodes inodes
-	spore ispore
+	nodes  inodes
+	spore  ispore
 }
 
 func New() *Manager {
 	m := &Manager{
-		pending: await.New(error.Permission),
+		pending:    await.New(error.Permission),
 		allowances: make(map[string][]string),
+		permits:    make(map[string]permit),
 	}
 
 	if err := m.Load(); err != nil {
@@ -66,7 +92,7 @@ func (m *Manager) Set(bus ibus, hyphae ihyphae, nodes inodes, spore ispore) {
 func (m *Manager) List(nodeid string) ([]string, *error.Error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	
+
 	allowances, ok := m.allowances[nodeid]
 	if !ok {
 		return nil, error.New(
@@ -88,17 +114,22 @@ func (m *Manager) RegisterNode(man *manifest.Manifest) {
 	}
 
 	switch man.Trust {
-	case manifest.Developer:
-		m.devNodes = append(m.devNodes, man.ID)
 	case manifest.System:
 		m.sysNodes = append(m.sysNodes, man.ID)
 	default:
-		// do nothing for trusted, standard, untrusted nodes
+		// do nothing for developer, trusted, standard, or untrusted nodes
 	}
 
 	for _, command := range man.Api {
+		capability := man.ID + "." + command.Name
 		if command.Risk == manifest.Benign {
-			m.benignCommands = append(m.benignCommands, command.Name)
+			m.benignCommands = append(m.benignCommands, capability)
+		}
+		if command.Risk == manifest.Admin {
+			m.adminCommands = append(m.adminCommands, capability)
+		}
+		if command.Risk == manifest.Protected {
+			m.protectedCommands = append(m.protectedCommands, capability)
 		}
 	}
 
@@ -112,6 +143,9 @@ func (m *Manager) RegisterNode(man *manifest.Manifest) {
 func (m *Manager) Grant(nodeid string, command string) *error.Error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if slices.Contains(m.allowances[nodeid], command) {
+		return nil
+	}
 	m.allowances[nodeid] = append(m.allowances[nodeid], command)
 
 	return m.save()
@@ -131,12 +165,92 @@ func (m *Manager) Revoke(nodeid string, command string) *error.Error {
 	return m.save()
 }
 
-func (m *Manager) Request(nodeid string, capability string, reason []string, ) (bool, *error.Error) {
+// RemoveNode removes every persisted capability grant for an uninstalled node.
+func (m *Manager) RemoveNode(nodeid string) *error.Error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	delete(m.allowances, nodeid)
+	return m.save()
+}
+
+func (m *Manager) Request(nodeid string, capability string, reason []string) (bool, *error.Error) {
+	granted, err := m.confirm(nodeid, capability, reason)
+	if err != nil || !granted {
+		return granted, err
+	}
+	if err := m.Grant(nodeid, capability); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func (m *Manager) RequestPermit(nodeid string, capability string, reason []string) (string, bool, *error.Error) {
+	m.mu.RLock()
+	isAdmin := slices.Contains(m.adminCommands, capability)
+	isProtected := slices.Contains(m.protectedCommands, capability)
+	m.mu.RUnlock()
+	if isAdmin || isProtected {
+		return "", false, error.New(
+			error.NotPermitted,
+			error.Permission,
+			"permission permits cannot authorize this capability",
+			out.Pair("capability", capability))
+	}
+
+	granted, err := m.confirm(nodeid, capability, reason)
+	if err != nil || !granted {
+		return "", granted, err
+	}
+
+	token, err := newPermitToken()
+	if err != nil {
+		return "", false, err
+	}
+	m.mu.Lock()
+	if m.permits == nil {
+		m.permits = make(map[string]permit)
+	}
+	for existingToken, existingPermit := range m.permits {
+		if !time.Now().Before(existingPermit.expiresAt) {
+			delete(m.permits, existingToken)
+		}
+	}
+	m.permits[token] = permit{
+		origin:     nodeid,
+		capability: capability,
+		expiresAt:  time.Now().Add(permissionTokenLifetime),
+	}
+	m.mu.Unlock()
+	return token, true, nil
+}
+
+// AuthorizeInstallation applies the installation-specific confirmation flow.
+// Developer-trust nodes require an explicit shell warning before the standard
+// fresh Hyphae confirmation.
+func (m *Manager) AuthorizeInstallation(origin string, nodeid string, capability string, developer bool) (bool, *error.Error) {
+	if developer {
+		granted, err := m.confirmDeveloperInstallation(nodeid)
+		if err != nil || !granted {
+			return granted, err
+		}
+	}
+	if m.hyphae == nil {
+		return false, error.New(
+			error.Generic,
+			error.Permission,
+			"Hyphae confirmation is unavailable",
+			out.Pair("capability", capability))
+	}
+	return m.hyphae.Confirm(origin, capability)
+}
+
+func (m *Manager) confirm(nodeid string, capability string, reason []string) (bool, *error.Error) {
 	handle := m.handle()
 
 	// e.g.
 	// dev.sporeos.shell.confirm body="Grant node [nodeid] permission to [capability]?" lines=[ "Reasons", " - reason A", " - reason B"  ]
-	var conf strings.Builder; 
+	var conf strings.Builder
 	conf.WriteString("dev.sporeos.shell.confirm body=\"Grant node [")
 	conf.WriteString(nodeid)
 	conf.WriteString("] permission to [")
@@ -175,17 +289,111 @@ func (m *Manager) Request(nodeid string, capability string, reason []string, ) (
 	if response.Flag("error") {
 		return false, error.New(error.Generic, error.Permission, response.ArgIf("what", "permission request failed"))
 	}
+	if !response.Flag("yes") {
+		return false, nil
+	}
+	return true, nil
+}
+
+func (m *Manager) confirmDeveloperInstallation(nodeid string) (bool, *error.Error) {
+	handle := m.handle()
+	body := fmt.Sprintf(
+		"Install developer-trust node [%s]? Developer trust bypasses checksum verification and must not be used in production.",
+		nodeid)
+	raw := fmt.Sprintf("dev.sporeos.shell.confirm body=%q ~%s", body, handle)
+	msg, ok := message.Request(raw, m.Id())
+	if !ok {
+		return false, error.New(
+			error.Malformed,
+			error.Permission,
+			"failure to request developer installation confirmation")
+	}
+	ch := m.pending.Await(handle)
+	err := m.bus.Request(msg)
+	if err != nil {
+		m.pending.Delete(handle)
+		return false, err
+	}
+	response, err := m.pending.WaitFor(handle, ch)
+	if err != nil {
+		return false, err
+	}
+	if response.Flag("error") {
+		return false, error.New(error.Generic, error.Permission, response.ArgIf("what", "developer installation confirmation failed"))
+	}
 	return response.Flag("yes"), nil
 }
 
-func (m *Manager) Can(nodeid string, capability string) bool {
+func (m *Manager) Can(msg iface.Message, capability string) (bool, *error.Error) {
+	actor := msg.Actor()
+	origin := msg.Origin()
+
 	m.mu.RLock()
-	defer m.mu.RUnlock()
-	return slices.Contains(m.sysNodes, nodeid) ||
-		   slices.Contains(m.devNodes, nodeid) || 
-		   slices.Contains(m.benignCommands, capability) ||
-		   slices.Contains(m.benignTopics, capability) ||
-		   slices.Contains(m.allowances[nodeid], capability)
+	isProtected := slices.Contains(m.protectedCommands, capability)
+	isAdmin := slices.Contains(m.adminCommands, capability)
+	allowed := slices.Contains(m.sysNodes, origin) ||
+		slices.Contains(m.benignCommands, capability) ||
+		slices.Contains(m.benignTopics, capability) ||
+		allows(m.allowances[origin], capability)
+	m.mu.RUnlock()
+
+	if isProtected {
+		return actor == protectedCaller, nil
+	}
+	if origin == permissionCaller && capability == permissionConfirmationCapability {
+		return true, nil
+	}
+	if origin == protectedCaller && capability == hyphaeConfirmationCapability {
+		return true, nil
+	}
+	if origin == protectedCaller && capability == hyphaeBinaryHashCapability {
+		return true, nil
+	}
+	if capability == nodeInstallCapability || capability == nodeReinstallCapability {
+		return true, nil
+	}
+	if allowed {
+		if !isAdmin {
+			return true, nil
+		}
+		if m.hyphae == nil {
+			return false, error.New(
+				error.Generic,
+				error.Permission,
+				"Hyphae confirmation is unavailable",
+				out.Pair("capability", capability))
+		}
+		return m.hyphae.Confirm(origin, capability)
+	}
+	if isAdmin {
+		return false, nil
+	}
+	token, ok := msg.Arg("permission.token")
+	if !ok {
+		return false, nil
+	}
+	return m.consumePermit(origin, capability, token), nil
+}
+
+func (m *Manager) consumePermit(origin string, capability string, token string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	permit, ok := m.permits[token]
+	if !ok || permit.origin != origin || permit.capability != capability || !time.Now().Before(permit.expiresAt) {
+		return false
+	}
+	delete(m.permits, token)
+	return true
+}
+
+func allows(allowances []string, capability string) bool {
+	for _, allowance := range allowances {
+		if allowance == capability || strings.HasSuffix(capability, "."+allowance) {
+			return true
+		}
+	}
+	return false
 }
 
 // Load reads allowances from disk, replacing the in-memory set.
@@ -278,7 +486,19 @@ func (h *Manager) handle() string {
 //
 
 func (m *Manager) Id() string {
-	return "permission-in-spore"
+	return permissionCaller
+}
+
+func newPermitToken() (string, *error.Error) {
+	data := make([]byte, 32)
+	if _, err := rand.Read(data); err != nil {
+		return "", error.New(
+			error.Generic,
+			error.Permission,
+			"unable to create permission permit",
+			out.Pair("err", err.Error()))
+	}
+	return base64.RawURLEncoding.EncodeToString(data), nil
 }
 
 func (m *Manager) IsConnected() bool {

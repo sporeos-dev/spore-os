@@ -1,3 +1,6 @@
+// Copyright 2026 Matt Harrison
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package nodes
 
 import (
@@ -34,33 +37,38 @@ type nodesSelf struct {
 	nodes *Nodes
 }
 
-func (s *nodesSelf) Id() string { return selfNodeId }
-func (s *nodesSelf) IsConnected() bool { return true }
-func (s *nodesSelf) IsWitness() bool { return false }
-func (s *nodesSelf) GetManifest() *manifest.Manifest { return nil }
+func (s *nodesSelf) Id() string                             { return selfNodeId }
+func (s *nodesSelf) IsConnected() bool                      { return true }
+func (s *nodesSelf) IsWitness() bool                        { return false }
+func (s *nodesSelf) GetManifest() *manifest.Manifest        { return nil }
 func (s *nodesSelf) Receive(msg iface.Message) *error.Error { return s.nodes.pending.Receive(msg) }
-func (s *nodesSelf) Witness(msg iface.Message) {}
+func (s *nodesSelf) Witness(msg iface.Message)              {}
 
 type Nodes struct {
-	index atomic.Int64
+	index   atomic.Int64
 	pending *await.Pending
 
 	registry *registry.Registry
 
-	mu sync.RWMutex
+	mu    sync.RWMutex
 	nodes map[string]*node
 
-	bus ibus
-	hyphae ihyphae
+	bus         ibus
+	hyphae      ihyphae
 	permissions ipermissions
-	spore ispore
+	spore       ispore
+}
+
+type installation struct {
+	manifest *manifest.Manifest
+	registry *registry.Element
 }
 
 func New() *Nodes {
 	nodes := &Nodes{
-		pending: await.New(error.Node),
+		pending:  await.New(error.Node),
 		registry: registry.New(),
-		nodes:   make(map[string]*node),
+		nodes:    make(map[string]*node),
 	}
 
 	nodes.mu.Lock()
@@ -95,7 +103,7 @@ func (n *Nodes) Close() {
 }
 
 func (n *Nodes) Autostart() {
-	
+
 	n.mu.RLock()
 	defer n.mu.RUnlock()
 	for _, el := range n.nodes {
@@ -131,8 +139,16 @@ func (n *Nodes) Autostart() {
 
 func (n *Nodes) HandleConnection(conn net.Conn) {
 
-	conn.SetReadDeadline(time.Now().Add(handshakeTimeout))
-	defer conn.SetReadDeadline(time.Time{})
+	erro := conn.SetReadDeadline(time.Now().Add(handshakeTimeout))
+	defer conn.SetReadDeadline(time.Time{}) //nolint:errcheck
+	if erro != nil {
+		n.bus.Witness(
+			error.New(
+				error.Generic,
+				error.Node,
+				"unable to read deadline",
+				out.Pair("error", erro.Error())))
+	}
 
 	reader := bufio.NewReader(conn)
 	writer := bufio.NewWriter(conn)
@@ -144,7 +160,7 @@ func (n *Nodes) HandleConnection(conn net.Conn) {
 			error.Node,
 			"failed handshake at step 1: initial read",
 			out.Pair("error", erro.Error()))
-		
+
 		witness.Send(err)
 		writer.Flush()
 		conn.Close()
@@ -166,7 +182,7 @@ func (n *Nodes) HandleConnection(conn net.Conn) {
 			error.Node,
 			"node not installed",
 			out.Pair("node", nodeid))
-		
+
 		witness.Send(err)
 		writer.WriteString(err.Wire() + "\n")
 		writer.Flush()
@@ -181,7 +197,7 @@ func (n *Nodes) HandleConnection(conn net.Conn) {
 		writer.WriteString(err.Wire() + "\n")
 		writer.Flush()
 		conn.Close()
-		return;
+		return
 	}
 }
 
@@ -210,7 +226,9 @@ func (n *Nodes) GetManifest(nodeid string) *manifest.Manifest {
 	n.mu.RLock()
 	node, ok := n.nodes[nodeid]
 	n.mu.RUnlock()
-	if !ok { return nil }
+	if !ok {
+		return nil
+	}
 
 	if node.manifest.ID == "" && n.hyphae != nil {
 		content, err := n.hyphae.ManifestRead(node.manifest.Path)
@@ -234,7 +252,7 @@ func (n *Nodes) GetManifest(nodeid string) *manifest.Manifest {
 					node.manifest.Status.Set(status.FailedChecksum)
 				}
 
-			// otherwise checksum
+				// otherwise checksum
 			} else {
 				checksum, err := n.hyphae.HashFile(node.manifest.Path)
 				if err == nil {
@@ -245,7 +263,7 @@ func (n *Nodes) GetManifest(nodeid string) *manifest.Manifest {
 					}
 				}
 			}
-			
+
 			n.bus.Register(node)
 		}
 	}
@@ -253,28 +271,36 @@ func (n *Nodes) GetManifest(nodeid string) *manifest.Manifest {
 	return node.manifest
 }
 
-func (n *Nodes) Install(path string) *error.Error {
+func (n *Nodes) Install(path string, load bool, origin string) *error.Error {
 
 	witness.Send(
 		message.Witness(
 			"installing node",
 			out.Pair("path", path)))
 
+	candidate, err := n.prepareInstallation(path)
+	if err != nil {
+		return err
+	}
+	if err := n.authorizeInstallation(candidate, origin, "dev.sporeos.SPORE.node.install"); err != nil {
+		return err
+	}
+	return n.completeInstallation(candidate, load)
+}
+
+func (n *Nodes) prepareInstallation(path string) (*installation, *error.Error) {
 	if !file.Exists(path) {
-		return error.New(
-			error.Missing, 
+		return nil, error.New(
+			error.Missing,
 			error.Node,
 			"unable to install due to bad path",
 			out.Pair("path", path))
 	}
 
-	var node *node = nil
-
-	// readable, handle via spore
 	if file.IsReadable(path) {
 		manifest := manifest.ManifestFromPath(path)
 		if manifest == nil {
-			return error.New(
+			return nil, error.New(
 				error.Generic,
 				error.Node,
 				"read failure",
@@ -282,84 +308,66 @@ func (n *Nodes) Install(path string) *error.Error {
 		}
 
 		if msg := manifest.ValidateReservedLanguage(); msg != "" {
-			return error.New(
+			return nil, error.New(
 				error.ReservedLanguage,
 				error.Node,
 				msg,
 				out.Pair("node", manifest.ID))
 		}
 
-		granted, err := n.acceptInstallationWarning(manifest)
-		if err != nil {
-			return err
-		}
-		if !granted {
-			return error.New(
-				error.UserDenial,
-				error.Node,
-				"installation cancelled due to trust misalignment",
-				out.Pair("node", manifest.ID),
-				out.Pair("trust", string(manifest.Trust)))
-		}
-
 		registryElement := registry.ElementFromManifest(manifest)
 		if registryElement == nil {
-			return error.New(
+			return nil, error.New(
 				error.Generic,
 				error.Node,
 				"failed to create registry element",
 				out.Pair("path", path))
 		}
 
-		err = n.registry.Add(registryElement)
-		if err != nil {
-			return err
-		}
-
-		node = newNode(registryElement, manifest)
-		node.set(n.bus, n, n.permissions)
-		n.nodes[node.registry.ID] = node
-
-	// not readable, handle via hyphae
-	} else {
-
-		manifest, registry, err := n.hyphae.PrepareForInstallation(path)
-		if err != nil {
-			return err
-		}
-
-		if msg := manifest.ValidateReservedLanguage(); msg != "" {
-			return error.New(
-				error.ReservedLanguage,
-				error.Node,
-				msg,
-				out.Pair("node", manifest.ID))
-		}
-
-		granted, err := n.acceptInstallationWarning(manifest)
-		if err != nil {
-			return err
-		}
-		if !granted {
-			return error.New(
-				error.UserDenial,
-				error.Node,
-				"installation cancelled due to trust misalignment",
-				out.Pair("node", manifest.ID),
-				out.Pair("trust", string(manifest.Trust)))
-		}
-
-		err = n.registry.Add(registry)
-		if err != nil {
-			return err
-		}
-
-		node = newNode(registry, manifest)
-		node.set(n.bus, n, n.permissions)
-		n.nodes[node.registry.ID] = node
+		return &installation{manifest: manifest, registry: registryElement}, nil
 	}
 
-	// freshly installed, so trust already vetted via acceptInstallationWarning
+	manifest, registryElement, err := n.hyphae.PrepareForInstallation(path)
+	if err != nil {
+		return nil, err
+	}
+	if msg := manifest.ValidateReservedLanguage(); msg != "" {
+		return nil, error.New(
+			error.ReservedLanguage,
+			error.Node,
+			msg,
+			out.Pair("node", manifest.ID))
+	}
+	return &installation{manifest: manifest, registry: registryElement}, nil
+}
+
+func (n *Nodes) authorizeInstallation(candidate *installation, origin string, capability string) *error.Error {
+	granted, err := n.permissions.AuthorizeInstallation(
+		origin,
+		candidate.manifest.ID,
+		capability,
+		candidate.manifest.Trust == manifest.Developer)
+	if err != nil {
+		return err
+	}
+	if !granted {
+		return error.New(
+			error.UserDenial,
+			error.Node,
+			"node installation was not authorized",
+			out.Pair("node", candidate.manifest.ID))
+	}
+	return nil
+}
+
+func (n *Nodes) completeInstallation(candidate *installation, load bool) *error.Error {
+	if err := n.registry.Add(candidate.registry); err != nil {
+		return err
+	}
+
+	node := newNode(candidate.registry, candidate.manifest)
+	node.set(n.bus, n, n.permissions)
+	n.nodes[node.registry.ID] = node
 	n.permissions.RegisterNode(node.manifest)
 
 	if len(node.manifest.Permissions) > 0 {
@@ -385,6 +393,10 @@ func (n *Nodes) Install(path string) *error.Error {
 		}
 	}
 
+	if load {
+		return n.Spawn(node.registry.ID)
+	}
+
 	return nil
 }
 
@@ -402,7 +414,7 @@ func (n *Nodes) Uninstall(nodeid string) *error.Error {
 		// do not return
 		// log failure and continue
 	}
-	
+
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
@@ -415,8 +427,48 @@ func (n *Nodes) Uninstall(nodeid string) *error.Error {
 			out.Pair("node", nodeid))
 	}
 
+	node.close()
 	delete(n.nodes, nodeid)
-	return n.registry.Remove(node.registry.ID)
+	if err := n.registry.Remove(node.registry.ID); err != nil {
+		return err
+	}
+	return n.permissions.RemoveNode(node.registry.ID)
+}
+
+func (n *Nodes) Reinstall(nodeid string, load bool, origin string) *error.Error {
+	nodeid = n.resolveId(nodeid)
+
+	n.mu.RLock()
+	node, ok := n.nodes[nodeid]
+	if !ok {
+		n.mu.RUnlock()
+		return error.New(
+			error.Missing,
+			error.Node,
+			"cannot reinstall; node not installed",
+			out.Pair("node", nodeid))
+	}
+	path := node.registry.Manifest
+	n.mu.RUnlock()
+
+	candidate, err := n.prepareInstallation(path)
+	if err != nil {
+		return err
+	}
+	if err := n.authorizeInstallation(candidate, origin, "dev.sporeos.SPORE.node.reinstall"); err != nil {
+		return err
+	}
+	if err := n.Uninstall(nodeid); err != nil {
+		return err
+	}
+	return n.completeInstallation(candidate, load)
+}
+
+func (n *Nodes) Reload(nodeid string) *error.Error {
+	if err := n.Kill(nodeid); err != nil {
+		return err
+	}
+	return n.Spawn(nodeid)
 }
 
 func (n *Nodes) Spawn(nodeid string) *error.Error {
@@ -501,7 +553,7 @@ func (n *Nodes) Kill(nodeid string) *error.Error {
 	}
 
 	err := n.hyphae.Kill(pid)
-	if (err != nil) {
+	if err != nil {
 		return err
 	}
 	return nil
@@ -509,7 +561,7 @@ func (n *Nodes) Kill(nodeid string) *error.Error {
 
 func (n *Nodes) GetState(nodeid string) (*State, *error.Error) {
 	nodeid = n.resolveId(nodeid)
-	
+
 	node, ok := n.nodes[nodeid]
 	if !ok {
 		return nil, error.New(
@@ -536,7 +588,7 @@ func (n *Nodes) resolveId(nodeid string) string {
 	n.mu.RLock()
 	defer n.mu.RUnlock()
 
-	_, ok := n.nodes[nodeid]; 
+	_, ok := n.nodes[nodeid]
 	if ok {
 		return nodeid
 	}
@@ -549,71 +601,4 @@ func (n *Nodes) resolveId(nodeid string) string {
 	}
 
 	return nodeid
-}
-
-func (n *Nodes) acceptInstallationWarning(m *manifest.Manifest) (bool, *error.Error) {
-
-	// e.g.
-	// dev.sporeos.shell.confirm body="Do you accept [nodeid] at a trust level of [trust]?" lines=[ ... ]
-	var conf strings.Builder
-	conf.WriteString("dev.sporeos.shell.confirm body=\"Do you accept node [")
-	conf.WriteString(m.ID)
-	conf.WriteString("] at a trust level of [")
-	conf.WriteString(string(m.Trust))
-	conf.WriteString("]?\" lines=[ \"Important Considerations\", ")
-	switch m.Trust {
-	case manifest.System:
-		conf.WriteString("\" - system trust implies full control and should only be granted to core system components.\", ")
-		conf.WriteString("\" - caution and thorough vetting are required before granting system trust.\", ")
-		conf.WriteString("\" - while you are free to proceed, we suggest denying this request\"")
-	case manifest.Developer:
-		conf.WriteString("\" - developer trust grants free permission to all capabilities in the mesh\", ")
-		conf.WriteString("\" - caution is advised when granting developer trust.\", ")
-		conf.WriteString("\" - only grant developer trust if you are the developer of the node you are installing.\"")
-	case manifest.Trusted:
-		conf.WriteString("\" - trusted trust implies a higher level of scrutiny and should be granted to nodes with a proven track record.\", ")
-		conf.WriteString("\" - only grant trusted trust if you are confident in the node's reliability.\"")
-		conf.WriteString("\" - trusted nodes require capability permissions to be granted individually.\"")
-	case manifest.StandardTrust:
-		conf.WriteString("\" - standard trust implies a baseline level of scrutiny and should be granted to nodes with a reasonable track record.\", ")
-		conf.WriteString("\" - only grant standard trust if you are confident in the node's reliability.\"")
-		conf.WriteString("\" - standard nodes require capability permissions to be granted individually.\"")
-	case manifest.Untrusted:
-		conf.WriteString("\" - untrusted nodes should be treated with caution and granted minimal permissions.\", ")
-		conf.WriteString("\" - only grant untrusted trust if you are confident in the node's reliability.\"")
-		conf.WriteString("\" - untrusted nodes require capability permissions to be granted individually.\"")
-	}
-	conf.WriteString(" ] ~")
-	handle := n.handle()
-	conf.WriteString(handle)
-	raw := conf.String()
-
-	msg, ok := message.Request(raw, selfNodeId)
-	if !ok {
-		err := error.New(
-			error.Malformed,
-			error.Node,
-			"failed to ensure trust",
-			out.Pair("node", m.ID))
-		witness.Send(err)
-		return false, err
-	}
-	
-	ch := n.pending.Await(handle)
-	err := n.bus.Request(msg)
-	if err != nil {
-		n.pending.Delete(handle)
-		witness.Send(err)
-		return false, err
-	}
-
-	response, err := n.pending.WaitFor(handle, ch)
-	if err != nil {
-		witness.Send(err)
-		return false, err
-	}
-	if response.Flag("error") {
-		return false, nil
-	}
-	return response.Flag("yes"), nil
 }

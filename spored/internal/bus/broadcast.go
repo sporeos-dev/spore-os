@@ -1,9 +1,13 @@
+// Copyright 2026 Matt Harrison
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package bus
 
 import (
 	"spored/internal/iface"
 	"spored/internal/utilities/error"
 	"spored/internal/utilities/out"
+	witnesslog "spored/internal/witness"
 	"strings"
 	"sync"
 )
@@ -141,8 +145,7 @@ func (b *broadcast) broadcast(msg iface.Message) *error.Error {
 	for _, node := range targets {
 		err := node.Receive(msg)
 		if err != nil {
-			// TODO
-			// how should I handle errors
+			witnesslog.Send(err)
 		}
 	}
 

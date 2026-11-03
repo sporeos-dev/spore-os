@@ -1,3 +1,6 @@
+// Copyright 2026 Matt Harrison
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package message
 
 type signal struct {
@@ -16,6 +19,14 @@ func (s *signal) Capability() string {
 
 func (s *signal) Cast() string {
 	return "dev.sporeos.SPORE"
+}
+
+func (s *signal) Actor() string {
+	return s.Cast()
+}
+
+func (s *signal) Origin() string {
+	return s.Cast()
 }
 
 func (s *signal) Capture() string {
@@ -45,4 +56,3 @@ func (s *signal) Wire() string {
 func (s *signal) Witness() string {
 	return s.handle
 }
-

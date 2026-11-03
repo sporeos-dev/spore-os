@@ -1,9 +1,13 @@
+// Copyright 2026 Matt Harrison
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package cparser
 
 /*
 #cgo CFLAGS: -I${SRCDIR}/../../../../spore-client-libs/parser/include
 #cgo darwin LDFLAGS: -L${SRCDIR}/../../../../spore-client-libs/dist -lspore_parser -lc++
 #cgo linux  LDFLAGS: -L${SRCDIR}/../../../../spore-client-libs/dist -lspore_parser -lstdc++
+#cgo windows LDFLAGS: -L${SRCDIR}/../../../../spore-client-libs/dist -static -lspore_parser -lc++
 #include <stddef.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -160,9 +164,7 @@ func parse(raw string, validate bool) (ParsedMessage, bool) {
 		return out, false
 	}
 
-	// trace boolean init false
-	t := C.bool(false)
-	parser := C.spore_parser_create(t)
+	parser := C.spore_parser_create()
 	if parser == nil {
 		return out, false
 	}

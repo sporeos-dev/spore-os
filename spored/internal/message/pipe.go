@@ -1,3 +1,6 @@
+// Copyright 2026 Matt Harrison
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package message
 
 import (
@@ -7,9 +10,9 @@ import (
 )
 
 type pipe struct {
-	id     string
-	raw    string
-	parts  []string
+	id    string
+	raw   string
+	parts []string
 }
 
 func IsPipe(raw string) bool {
@@ -26,9 +29,9 @@ func Pipe(raw string, id string) (iface.Message, bool) {
 	}
 
 	p := &pipe{
-		id:     id,
-		raw:    raw,
-		parts:  parts,
+		id:    id,
+		raw:   raw,
+		parts: parts,
 	}
 
 	return p, true
@@ -46,6 +49,14 @@ func (p *pipe) Capability() string {
 
 func (p *pipe) Cast() string {
 	return p.id
+}
+
+func (p *pipe) Actor() string {
+	return castIdentity(p.id).Actor
+}
+
+func (p *pipe) Origin() string {
+	return castIdentity(p.id).Origin
 }
 
 func (p *pipe) Capture() string {
@@ -110,19 +121,36 @@ func splitPipe(raw string) []string {
 	bracketDepth := 0
 	braceDepth := 0
 	escaped := false
+	inBlock := false
+	atLineStart := true
 
 	for i := 0; i < len(raw); i++ {
 		ch := raw[i]
 
+		if inBlock {
+			if atLineStart && ch == '>' && i+1 < len(raw) && raw[i+1] == '>' {
+				buf.WriteString(">>")
+				i++
+				inBlock = false
+				atLineStart = false
+				continue
+			}
+			buf.WriteByte(ch)
+			atLineStart = ch == '\n'
+			continue
+		}
+
 		if escaped {
 			buf.WriteByte(ch)
 			escaped = false
+			atLineStart = ch == '\n'
 			continue
 		}
 
 		if ch == '\\' && inDouble {
 			buf.WriteByte(ch)
 			escaped = true
+			atLineStart = false
 			continue
 		}
 
@@ -168,6 +196,12 @@ func splitPipe(raw string) []string {
 		default:
 			buf.WriteByte(ch)
 		}
+
+		if !inSingle && !inDouble && bracketDepth == 0 && braceDepth == 0 &&
+			ch == '<' && i > 0 && raw[i-1] == '=' && i+1 < len(raw) && raw[i+1] == '<' {
+			inBlock = true
+		}
+		atLineStart = ch == '\n'
 	}
 
 	if buf.Len() > 0 {
@@ -177,4 +211,3 @@ func splitPipe(raw string) []string {
 
 	return parts
 }
-

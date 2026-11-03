@@ -1,3 +1,6 @@
+// Copyright 2026 Matt Harrison
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package status
 
 import (
@@ -11,8 +14,9 @@ const (
 	RequiresDeveloper Estatus = "RequiresDeveloperCheck"
 	Verified Estatus = "Verified"
 
-	Missing Estatus = "Missing"
 	FailedChecksum Estatus = "FailedChecksum"
+	Malformed Estatus = "Malformed"
+	Missing Estatus = "Missing"
 )
 
 type Status struct {

@@ -33,7 +33,7 @@ freely, subject to the following restrictions:
 
 ## gopkg.in/yaml.v3
 
-* **License**: MIT and Apache 2.0
+* **License**: MIT
 * **Source**: https://github.com/go-yaml/yaml/blob/v3.0.1/LICENSE
    
 

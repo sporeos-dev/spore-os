@@ -12,6 +12,8 @@ directory, e.g. `$DEV/spore-os` and `$DEV/spore-client-libs`).
 
 On macOS the library ships as a universal fat binary covering both arm64 and
 x86_64. A C compiler (Xcode Command Line Tools) is required to build.
+On Windows, build the parser library for the target architecture first and use
+a GNU-compatible C/C++ toolchain such as LLVM-MinGW.
 
 ## Building
 

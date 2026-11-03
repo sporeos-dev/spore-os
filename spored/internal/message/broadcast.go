@@ -1,3 +1,6 @@
+// Copyright 2026 Matt Harrison
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package message
 
 import (
@@ -8,10 +11,10 @@ import (
 
 type broadcast struct {
 	raw string
-	id string
+	id  string
 
-	topic string 
-	args map[string]string
+	topic string
+	args  map[string]string
 	flags []string
 
 	incomingSent bool
@@ -23,10 +26,10 @@ func Broadcast(raw string, id string) (iface.Message, bool) {
 		return nil, false
 	}
 	b := &broadcast{
-		raw: raw,
-		id: id,
+		raw:   raw,
+		id:    id,
 		topic: parsed.command,
-		args: parsed.args,
+		args:  parsed.args,
 		flags: parsed.flags,
 	}
 	return b, true
@@ -39,6 +42,14 @@ func (b *broadcast) Capability() string {
 // Cast returns the publishing node's ID.
 func (b *broadcast) Cast() string {
 	return b.id
+}
+
+func (b *broadcast) Actor() string {
+	return castIdentity(b.id).Actor
+}
+
+func (b *broadcast) Origin() string {
+	return castIdentity(b.id).Origin
 }
 
 func (b *broadcast) Capture() string {

@@ -1,3 +1,6 @@
+// Copyright 2026 Matt Harrison
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package nodes
 
 import (
@@ -5,6 +8,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"slices"
 	"spored/internal/cparser"
 	"spored/internal/iface"
 	"spored/internal/manifest"
@@ -26,7 +30,6 @@ type spawner interface {
 }
 
 type permitter interface {
-	Can(nodeid string, capability string) bool
 	RegisterNode(man *manifest.Manifest)
 }
 
@@ -41,6 +44,9 @@ type node struct {
 	conn   net.Conn
 	reader *bufio.Reader
 	writer *writer
+
+	verificationDone   chan struct{}
+	verificationPassed bool
 
 	pending *await.Pending
 }
@@ -64,8 +70,8 @@ func newNode(registry *registry.Element, manifest *manifest.Manifest) *node {
 		pending:  await.New(error.Node).WithTimeout(time.Second * 5),
 	}
 
-	n.manifest.Verify()
 	n.manifest.Load()
+	n.manifest.Verify()
 
 	return n
 }
@@ -130,7 +136,7 @@ func (n *node) handleConnection(conn net.Conn, reader *bufio.Reader, wr *bufio.W
 		}
 
 	} else if n.manifest.Status.Get() == status.RequiresUserSpace {
-		
+
 		checksum, err := hyphae.HashFile(n.manifest.Path)
 		if err != nil {
 			return err
@@ -170,9 +176,6 @@ func (n *node) handleConnection(conn net.Conn, reader *bufio.Reader, wr *bufio.W
 			out.Pair("manifest_status", n.manifest.Status.String()))
 	}
 
-	// manifest verified against its checksum, so its declared trust level can be relied upon
-	n.permitter.RegisterNode(n.manifest)
-
 	var b *binary
 	if n.manifest.Trust == manifest.Developer {
 		b = newDeveloperBinary(n.registry)
@@ -184,9 +187,24 @@ func (n *node) handleConnection(conn net.Conn, reader *bufio.Reader, wr *bufio.W
 		return err
 	}
 
+	connectionActivated := false
 	b.verify(conn)
 	if b.status.Get() == status.RequiresUserSpace {
-		checksum, err := hyphae.HashFile(n.registry.Binary)
+		writer.WriteRaw("OK")
+		n.activateConnection(conn, reader, writer, true)
+		connectionActivated = true
+		defer n.finishVerification(false)
+
+		pid, erro := pal.ProcessID(conn)
+		if erro != nil {
+			return error.New(
+				error.HandshakeDenial,
+				error.Node,
+				"failed to identify connecting process",
+				out.Pair("error", erro.Error()))
+		}
+
+		checksum, err := hyphae.HashBinary(pid)
 		if err != nil {
 			return err
 		}
@@ -216,28 +234,78 @@ func (n *node) handleConnection(conn net.Conn, reader *bufio.Reader, wr *bufio.W
 			out.Pair("binary_status", b.status.String()))
 	}
 
-	writer.WriteRaw("OK")
+	if !connectionActivated {
+		writer.WriteRaw("OK")
+		n.activateConnection(conn, reader, writer, false)
+	}
 
-	n.mu.Lock()
-	n.conn = conn
-	n.reader = reader
-	n.writer = writer
-	n.mu.Unlock()
+	// The node may service the temporary binary.hash request above, but does
+	// not receive permissions until its binary checksum has been verified.
+	n.permitter.RegisterNode(n.manifest)
+	if connectionActivated {
+		n.finishVerification(true)
+	}
 
 	witness.Send(
 		message.Witness(
 			"handshake successful",
 			out.Pair("node", n.registry.ID)))
 
-	go n.listen()
-	n.pending.Resolve("lazy")
+	err = n.pending.Resolve("lazy")
+	if err != nil {
+		return err
+	}
 
 	return nil
+}
+
+func (n *node) activateConnection(conn net.Conn, reader *bufio.Reader, writer *writer, provisional bool) {
+	_ = conn.SetReadDeadline(time.Time{})
+
+	n.mu.Lock()
+	n.conn = conn
+	n.reader = reader
+	n.writer = writer
+	if provisional {
+		n.verificationDone = make(chan struct{})
+		n.verificationPassed = false
+	}
+	n.mu.Unlock()
+
+	go n.listen()
+}
+
+func (n *node) finishVerification(passed bool) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if n.verificationDone == nil {
+		return
+	}
+	n.verificationPassed = passed
+	close(n.verificationDone)
+	n.verificationDone = nil
+}
+
+func (n *node) waitForVerification() bool {
+	n.mu.RLock()
+	done := n.verificationDone
+	n.mu.RUnlock()
+	if done == nil {
+		return true
+	}
+	<-done
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+	return n.verificationPassed
 }
 
 // readStatus reports the outcome of readMessage without spelling the builtin
 // error interface, which is shadowed in this file by the utilities/error import.
 type readStatus int
+
+type readError interface {
+	Error() string
+}
 
 const (
 	readOK readStatus = iota
@@ -247,7 +315,7 @@ const (
 
 // readMessage reads one complete wire message, accumulating physical lines
 // that make up a block value (key=<< ... >>), mirroring spore_c's Client::listen().
-func (n *node) readMessage() (string, readStatus) {
+func (n *node) readMessage() (string, readStatus, readError) {
 	var line string
 	multiline := false
 
@@ -255,9 +323,9 @@ func (n *node) readMessage() (string, readStatus) {
 		raw, readErr := n.reader.ReadString('\n')
 		if readErr != nil {
 			if readErr == io.EOF || errors.Is(readErr, net.ErrClosed) {
-				return "", readClosed
+				return "", readClosed, readErr
 			}
-			return "", readFailure
+			return "", readFailure, readErr
 		}
 
 		currentLine := strings.TrimSuffix(raw, "\n")
@@ -287,7 +355,7 @@ func (n *node) readMessage() (string, readStatus) {
 		if line == "" {
 			continue
 		}
-		return line, readOK
+		return line, readOK, nil
 	}
 }
 
@@ -295,7 +363,7 @@ func (n *node) listen() {
 
 listen:
 	for {
-		raw, status := n.readMessage()
+		raw, status, readErr := n.readMessage()
 		switch status {
 		case readClosed:
 			witness.Send(
@@ -304,13 +372,26 @@ listen:
 					out.Pair("node", n.registry.ID)))
 			break listen
 		case readFailure:
+			if pal.IsTerminalPeerReadError(readErr) {
+				break listen
+			}
 			n.Receive(
 				error.New(
 					error.InitializationFailure,
 					error.Node,
 					"read failure",
-					out.Pair("node", n.registry.ID)))
+					out.Pair("node", n.registry.ID),
+					out.Pair("error", readErr.Error())))
+			if !isRetryableReadError(readErr) {
+				break listen
+			}
 			continue
+		}
+
+		if !strings.HasPrefix(raw, "~") && !strings.Contains(strings.Fields(raw)[0], ".binary.hash") {
+			if !n.waitForVerification() {
+				continue
+			}
 		}
 		// i := index
 		// index++
@@ -402,8 +483,9 @@ listen:
 			}
 			err := n.bus.Response(response)
 			if err != nil {
-				witness.Send(err)
-				n.Receive(err)
+				if receiveErr := n.Receive(err); receiveErr != nil {
+					witness.Send(receiveErr)
+				}
 			}
 
 			// fallback to request
@@ -422,21 +504,11 @@ listen:
 				continue
 			}
 
-			command := request.Capability()
-			if !n.permitter.Can(n.registry.ID, command) {
-				n.Receive(error.New(
-					error.NotPermitted,
-					error.Node,
-					"permission required",
-					out.Pair("node", n.registry.ID),
-					out.Pair("capability", command)))
-				return
-			}
-
 			err := n.bus.Request(request)
 			if err != nil {
-				witness.Send(err)
-				n.Receive(err)
+				if receiveErr := n.Receive(err); receiveErr != nil {
+					witness.Send(receiveErr)
+				}
 			}
 		}
 	}
@@ -447,6 +519,11 @@ listen:
 	n.writer = nil
 	n.conn.Close()
 	n.conn = nil
+}
+
+func isRetryableReadError(readErr readError) bool {
+	netErr, ok := readErr.(net.Error)
+	return ok && netErr.Timeout()
 }
 
 func (n *node) ProcessID() (int, bool) {
@@ -475,8 +552,13 @@ func (n *node) IsConnected() bool {
 func (n *node) IsWitness() bool {
 	if n.manifest == nil {
 		return false
+
+		// deprecated
+	} else if n.manifest.Witness {
+		return true
 	}
-	return n.manifest.Witness
+
+	return slices.Contains(n.manifest.Roles, "witness")
 }
 
 func (n *node) GetManifest() *manifest.Manifest {
@@ -567,6 +649,12 @@ func (n *node) checkManifestForFailure() *error.Error {
 			"invalid manifest",
 			out.Pair("node", n.registry.ID),
 			out.Pair("expected_checksum", n.manifest.ExpectedChecksum))
+	case status.Malformed:
+		return error.New(
+			error.HandshakeDenial,
+			error.Spore,
+			"malformed manifest",
+			out.Pair("node", n.registry.ID))
 	}
 	return nil
 }
@@ -588,6 +676,12 @@ func (n *node) checkBinaryForFailure(b *binary) *error.Error {
 			"failed checksum",
 			out.Pair("node", n.registry.ID),
 			out.Pair("expected_checksum", b.expectedChecksum))
+	case status.Malformed:
+		return error.New(
+			error.HandshakeDenial,
+			error.Spore,
+			"malformed (canary)",
+			out.Pair("node", n.registry.ID))
 	}
 	return nil
 }

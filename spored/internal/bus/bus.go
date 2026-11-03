@@ -1,3 +1,6 @@
+// Copyright 2026 Matt Harrison
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package bus
 
 import (
@@ -6,27 +9,28 @@ import (
 )
 
 type Bus struct {
-	api *api
+	api       *api
 	broadcast *broadcast
 	responses *responses
-	witness *witness
-	pipe *pipe
-	
-	hyphae ihyphae
-	nodes inodes
+	witness   *witness
+	pipe      *pipe
+
+	hyphae      ihyphae
+	nodes       inodes
 	permissions ipermissions
-	spore ispore
+	spore       ispore
 }
 
 func New() *Bus {
-	b := &Bus {
-		api: newApi(),
+	b := &Bus{
+		api:       newApi(),
 		broadcast: newBroadcast(),
 		responses: newResponses(),
-		witness: newWitness(),
-		pipe: newPipe(),
+		witness:   newWitness(),
+		pipe:      newPipe(),
 	}
 	b.pipe.setBus(b)
+	b.responses.register(b.pipe)
 	return b
 }
 
@@ -35,6 +39,7 @@ func (b *Bus) Set(hyphae ihyphae, nodes inodes, permissions ipermissions, spore 
 	b.nodes = nodes
 	b.permissions = permissions
 	b.spore = spore
+	b.api.setPermissions(permissions)
 }
 
 func (b *Bus) Close() {
@@ -50,7 +55,6 @@ func (b *Bus) Register(n INode) {
 	b.broadcast.register(n)
 	b.responses.register(n)
 	b.witness.register(n)
-	b.responses.register(b.pipe)
 }
 
 func (b *Bus) Unregister(n INode) {
@@ -58,7 +62,6 @@ func (b *Bus) Unregister(n INode) {
 	b.broadcast.unregister(n)
 	b.responses.unregister(n)
 	b.witness.unregister(n)
-	b.responses.unregister(b.pipe)
 }
 
 //
@@ -87,7 +90,7 @@ func (b *Bus) Unsubscribe(cast string, topic string) *error.Error {
 	return b.broadcast.unsubscribe(cast, topic)
 }
 
-// 
+//
 // request
 // response
 //
@@ -97,7 +100,13 @@ func (b *Bus) Request(msg iface.Message) *error.Error {
 	if err != nil {
 		return err
 	}
-	return b.api.request(msg)
+
+	err = b.api.request(msg)
+	if err != nil {
+		b.responses.cancel(msg.Handle())
+		return err
+	}
+	return nil
 }
 
 func (b *Bus) Response(msg iface.Message) *error.Error {

@@ -1,3 +1,6 @@
+// Copyright 2026 Matt Harrison
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package bus
 
 import (
@@ -21,7 +24,7 @@ func newWitness() *witness {
 func (w *witness) close() {}
 
 func (w *witness) register(n INode) {
-	if !n.IsWitness() {
+	if !n.IsWitness()  {
 		return
 	}
 

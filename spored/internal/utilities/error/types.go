@@ -1,3 +1,6 @@
+// Copyright 2026 Matt Harrison
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package error
 
 type Code string
@@ -16,6 +19,7 @@ const (
 	NotApplicable Code = "NotApplicable"
 	NotImplemented Code = "NotImplemented"
 	NotPermitted Code = "NotPermitted"
+	NotReady Code = "NotReady"
 	ReservedLanguage Code = "ReservedLanguage"
 	Timeout Code = "Timeout"
 	UserDenial Code = "UserDenial"

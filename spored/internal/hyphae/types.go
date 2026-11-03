@@ -1,3 +1,6 @@
+// Copyright 2026 Matt Harrison
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package hyphae
 
 import (
@@ -12,8 +15,8 @@ type ibus interface {
 	Request(msg iface.Message) *error.Error
 }
 
-type inodes interface {}
+type inodes interface{}
 
-type ipermissions interface {}
+type ipermissions interface{}
 
-type ispore interface {}
+type ispore interface{}

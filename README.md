@@ -13,11 +13,13 @@
 
 # spore-os
 
-A local IPC daemon that lets applications on the same machine discover and talk to each other — without knowing anything about each other's implementation.
+A local-first IPC protocol. Applications expose capabilities; Spore OS routes calls.
 
-> Think of the OS as a programming language, applications as classes.
+> Capabilities work like functions; 
+> apps like objects; 
+> a PC like a single unit.
 
-**Status:** Active development. The v1 protocol is stable; install tooling is ongoing.
+**Status:** Active development. All parts are subject to change.
 
 ---
 

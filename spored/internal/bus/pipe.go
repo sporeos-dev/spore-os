@@ -51,6 +51,7 @@ func (p *pipe) pipe(msg iface.Message, node INode) {
 	origin := msg.Origin()
 	args := make(map[string]string)
 	flags := make([]string, 0)
+	callerHandle := pipeCallerHandle(msg)
 
 	index := 0
 	for {
@@ -222,7 +223,11 @@ func (p *pipe) pipe(msg iface.Message, node INode) {
 				return
 			}
 
-			if pm.Handle == "" {
+			if !isLast {
+				pm.Handle = pipeHandle()
+			} else if callerHandle != "" {
+				pm.Handle = callerHandle
+			} else if pm.Handle == "" {
 				pm.Handle = pipeHandle()
 			}
 			// intermediate stages route back to the pipe itself; only the
@@ -256,26 +261,43 @@ func (p *pipe) pipe(msg iface.Message, node INode) {
 			ch := p.pending.Await(request.Handle())
 			err := p.bus.Request(request)
 			if err != nil {
+				p.pending.Delete(request.Handle())
+				if callerRequest, ok := pipeTimeoutRequest(msg, request.Capability(), cast); ok {
+					err.WithMessage(callerRequest)
+				}
 				node.Receive(err)
 				return
 			}
 
 			response, err := p.pending.WaitForTimeout(request.Handle(), ch, timeout)
 			if err != nil {
-				node.Receive(err)
+				callerRequest, ok := pipeTimeoutRequest(msg, request.Capability(), cast)
+				if !ok {
+					witnesslog.Send(error.New(
+						error.Missing,
+						error.Pipe,
+						"cannot report pipeline timeout without a caller handle",
+						out.Pair("complete", complete)))
+					return
+				}
+				node.Receive(err.WithMessage(callerRequest))
 				return
 			}
-			if response.Flag("error") {
-				node.Receive(error.New(
-					error.Generic,
-					error.Pipe,
-					response.ArgIf("what", "pipe response failure"),
-					out.Pair("index", fmt.Sprint(index)),
-					out.Pair("raw", raw),
-					out.Pair("complete", complete)))
+			if response.Flag("cancelled") || response.Flag("error") {
+				reply, ok := message.ResponseWithHandle(response, callerHandle)
+				if !ok {
+					witnesslog.Send(error.New(
+						error.Malformed,
+						error.Pipe,
+						"cannot return pipeline response to caller",
+						out.Pair("complete", complete)))
+					return
+				}
+				if err := node.Receive(reply); err != nil {
+					witnesslog.Send(err)
+				}
 				return
 			}
-
 			responsePipe, ok := response.(ResponsePipe)
 			if !ok {
 				node.Receive(error.New(
@@ -291,6 +313,9 @@ func (p *pipe) pipe(msg iface.Message, node INode) {
 				args[key] = value
 			}
 			for _, flag := range responsePipe.Flags() {
+				if flag == "ok" || flag == "error" || flag == "cancelled" {
+					continue
+				}
 				if !slices.Contains(flags, flag) {
 					flags = append(flags, flag)
 				}
@@ -333,6 +358,28 @@ func (p *pipe) Witness(msg iface.Message) {}
 //
 
 var pipeHandleIndex atomic.Int64
+
+func pipeCallerHandle(pipe iface.Message) string {
+	for index := 0; ; index++ {
+		raw, ok := pipe.Arg(strconv.Itoa(index))
+		if !ok {
+			return ""
+		}
+		stage, ok := cparser.Parse(strings.TrimSpace(raw))
+		if !ok || stage.Handle == "" {
+			continue
+		}
+		return stage.Handle
+	}
+}
+
+func pipeTimeoutRequest(pipe iface.Message, capability, cast string) (iface.Message, bool) {
+	handle := pipeCallerHandle(pipe)
+	if handle == "" {
+		return nil, false
+	}
+	return message.Request(fmt.Sprintf("%s ~%s", capability, handle), cast)
+}
 
 func pipeHandle() string {
 	return fmt.Sprintf("spore_pipe_%d", pipeHandleIndex.Add(1))

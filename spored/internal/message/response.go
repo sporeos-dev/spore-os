@@ -6,6 +6,7 @@ package message
 import (
 	"fmt"
 	"spored/internal/iface"
+	"strings"
 	"time"
 )
 
@@ -33,6 +34,23 @@ func Response(raw string, captureID string) (iface.Message, bool) {
 		handle:  parsed.handle,
 	}
 	return r, true
+}
+
+// ResponseWithHandle preserves the response payload and capture while changing
+// the correlation handle used to deliver an intermediate pipeline response.
+func ResponseWithHandle(msg iface.Message, handle string) (iface.Message, bool) {
+	r, ok := msg.(*response)
+	if !ok || handle == "" {
+		return nil, false
+	}
+	colon := strings.IndexByte(r.raw, ':')
+	if colon < 0 {
+		return nil, false
+	}
+	copy := *r
+	copy.handle = handle
+	copy.raw = "~" + handle + r.raw[colon:]
+	return &copy, true
 }
 
 func (r *response) Capability() string {

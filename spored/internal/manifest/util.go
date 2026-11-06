@@ -7,7 +7,7 @@ import "strings"
 
 // reservedArgNames are protocol keywords that may not be used as input/output names.
 var reservedArgNames = map[string]bool{
-	"cast": true, "capture": true, "ok": true, "error": true,
+	"cast": true, "capture": true, "ok": true, "error": true, "cancelled": true,
 	"code": true, "what": true, "module": true,
 	"spore_incoming": true, "spore_outgoing": true, "spore_event": true, "spore_node": true, "spore_time": true,
 	"json": true,
@@ -54,11 +54,6 @@ func (m *Manifest) ValidateReservedLanguage() string {
 			return err
 		}
 	}
-	for _, manifestError := range m.Errors {
-		if strings.Contains(manifestError.Name, ":") {
-			return "error name contains reserved colon: " + manifestError.Name
-		}
-	}
 	return ""
 }
 
@@ -97,14 +92,6 @@ func (m *Manifest) CommandIds() []string {
 func (m *Manifest) TopicIds() []string {
 	ids := make([]string, 0, len(m.Topics))
 	for _, el := range m.Topics {
-		ids = append(ids, el.Name)
-	}
-	return ids
-}
-
-func (m *Manifest) ErrorIds() []string {
-	ids := make([]string, 0, len(m.Errors))
-	for _, el := range m.Errors {
 		ids = append(ids, el.Name)
 	}
 	return ids

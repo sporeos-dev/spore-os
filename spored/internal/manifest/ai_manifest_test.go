@@ -60,13 +60,6 @@ func TestValidateReservedLanguageRejectsColonInIdentifiers(t *testing.T) {
 				Topics: []Topic{{Name: "event:updated"}},
 			},
 		},
-		{
-			name: "error name",
-			manifest: Manifest{
-				ID:     "dev.sporeos.example",
-				Errors: []ManifestError{{Name: "invalid:input"}},
-			},
-		},
 	}
 
 	for i := range tests {

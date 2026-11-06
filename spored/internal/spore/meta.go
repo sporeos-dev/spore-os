@@ -353,15 +353,6 @@ func (s *Spore) getList(body string, cursor int) []out.IOut {
 			outs = append(outs, out.Array("TOPICS", arr))
 		}
 
-		// errors
-		errs := make([]string, 0)
-		if len(m.Errors) > 0 {
-			for _, el := range m.Errors {
-				errs = append(errs, el.Name)
-			}
-			outs = append(outs, out.Array("ERRORS", errs))
-		}
-
 		// permissions
 		perms := make([]string, 0)
 		if len(m.Permissions) > 0 {

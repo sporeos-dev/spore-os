@@ -28,7 +28,6 @@ type Manifest struct {
 	Api         []Command       `yaml:"api"`
 	Topics      []Topic         `yaml:"topics"`
 	Permissions []Permission    `yaml:"permissions"`
-	Errors      []ManifestError `yaml:"errors"`
 
 	Status           status.Status
 	Path             string
@@ -70,12 +69,6 @@ type Output struct {
 	Name        string `yaml:"name"`
 	Type        string `yaml:"type"`
 	Description string `yaml:"description"`
-}
-
-type ManifestError struct {
-	Name        string   `yaml:"name"`
-	Description string   `yaml:"description"`
-	Examples    []string `yaml:"examples,omitempty"`
 }
 
 func New(registry *registry.Element) *Manifest {

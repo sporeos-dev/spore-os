@@ -3,6 +3,8 @@
 
 package iface
 
+const SporeID = "dev.sporeos.SPORE"
+
 type Message interface {
 	Capability() string
 	Cast() string

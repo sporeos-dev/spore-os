@@ -3,6 +3,8 @@
 
 package message
 
+import "spored/internal/iface"
+
 type signal struct {
 	handle string
 }
@@ -18,7 +20,7 @@ func (s *signal) Capability() string {
 }
 
 func (s *signal) Cast() string {
-	return "dev.sporeos.SPORE"
+	return iface.SporeID
 }
 
 func (s *signal) Actor() string {
@@ -30,7 +32,7 @@ func (s *signal) Origin() string {
 }
 
 func (s *signal) Capture() string {
-	return "dev.sporeos.SPORE"
+	return iface.SporeID
 }
 
 func (s *signal) Arg(key string) (string, bool) {

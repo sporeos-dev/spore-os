@@ -96,7 +96,11 @@ func (e *Error) Capture() string {
 	if e.message == nil {
 		return "n/a"
 	}
-	return e.message.Capture()
+	capture := e.message.Capture()
+	if capture == "n/a" {
+		return iface.SporeID
+	}
+	return capture
 }
 
 func (e *Error) Arg(key string) (string, bool) {
@@ -128,7 +132,7 @@ func (e *Error) Handle() string {
 }
 
 // build a response && an error
-// ~handle:subject error code=code.module what="what" <extras> cast=cast (capture=capture)
+// ~handle:subject error code=code.module what="what" <extras> cast=cast capture=capture
 func (e *Error) Wire() string {
 	// no message
 	// spore error
@@ -137,20 +141,8 @@ func (e *Error) Wire() string {
 		return "n/a"
 	}
 
-	// capture is n/a
-	// cast error
-	// send back
-	wire := fmt.Sprintf(`~%s:%s error code=%s.%s what="%s" %s cast=%s`, e.Handle(), e.Capability(), e.code, e.module, e.what, e.extrasToString(), e.Cast())
-
-	if e.Capture() == "n/a" {
-		return wire
-
-		// otherwise
-		// capture error
-		// send forward
-	} else {
-		return fmt.Sprintf("%s capture=%s", wire, e.message.Capture())
-	}
+	return fmt.Sprintf(`~%s:%s error code=%s.%s what="%s" %s cast=%s capture=%s`,
+		e.Handle(), e.Capability(), e.code, e.module, e.what, e.extrasToString(), e.Cast(), e.Capture())
 }
 
 func (e *Error) Witness() string {

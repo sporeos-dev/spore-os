@@ -44,7 +44,7 @@ func (s *spore) Origin() string {
 }
 
 func (s *spore) Capture() string {
-	return "dev.sporeos.SPORE"
+	return iface.SporeID
 }
 
 func (s *spore) Arg(key string) (string, bool) {

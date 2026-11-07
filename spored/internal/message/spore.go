@@ -71,11 +71,11 @@ func (s *spore) Wire() string {
 	return fmt.Sprintf("~%s:%s %s ok cast=%s capture=%s", s.Handle(), s.Capability(), s.responsesToString(), s.Cast(), s.Capture())
 }
 
-// witness out: +witness +spore_outgoing +spore_time
-// --> witness <wire> spore_outgoing spore_time=time
+// witness out: +witness +spore.outgoing +spore.time
+// --> witness <wire> spore.outgoing spore.time=time
 func (s *spore) Witness() string {
 	t := time.Now().UnixMilli()
-	return fmt.Sprintf("witness body='%s' spore_outgoing spore_time=%d", s.Wire(), t)
+	return fmt.Sprintf("witness body='%s' spore.outgoing spore.time=%d", s.Wire(), t)
 }
 
 //

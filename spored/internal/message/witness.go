@@ -19,11 +19,11 @@ type witness struct {
 
 // from spore
 func Witness(body string, outs ...out.IOut) iface.Message {
-	witnessFlag := "spore_event"
+	witnessFlag := "spore.event"
 	var builder strings.Builder
 	builder.WriteString(body)
 	for _, el := range outs {
-		if el.String() == "spore_incoming" || el.String() == "spore_outgoing" || el.String() == "spore_node" {
+		if el.String() == "spore.incoming" || el.String() == "spore.outgoing" || el.String() == "spore.node" {
 			witnessFlag = el.String()
 			continue
 		}
@@ -44,7 +44,7 @@ func Node(raw string, cast string) iface.Message {
 	return &witness{
 		raw:         raw,
 		cast:        cast,
-		witnessFlag: "spore_node",
+		witnessFlag: "spore.node",
 	}
 }
 
@@ -55,7 +55,7 @@ func Incoming(raw string, cast string) iface.Message {
 	return &witness{
 		raw:         raw,
 		cast:        cast,
-		witnessFlag: "spore_incoming",
+		witnessFlag: "spore.incoming",
 	}
 }
 
@@ -66,7 +66,7 @@ func Outgoing(raw string, cast string) iface.Message {
 	return &witness{
 		raw:         raw,
 		cast:        cast,
-		witnessFlag: "spore_outgoing",
+		witnessFlag: "spore.outgoing",
 	}
 }
 
@@ -116,19 +116,19 @@ func (w *witness) Wire() string {
 
 // raw
 // --> Could be anything.
-// witness spore: +witness +message +spore_event +spore_time
-// --> witness body='<raw>' spore_event spore_time=time
-// witness node: +witness +body +cast +spore_node +spore_time
-// --> witness body='<raw>' cast=witnesser.id spore_node spore_time=time
+// witness spore: +witness +message +spore.event +spore.time
+// --> witness body='<raw>' spore.event spore.time=time
+// witness node: +witness +body +cast +spore.node +spore.time
+// --> witness body='<raw>' cast=witnesser.id spore.node spore.time=time
 func (w *witness) Witness() string {
 	t := time.Now().UnixMilli()
 
-	// spore_event
+	// spore.event
 	if w.cast == "n/a" {
-		return fmt.Sprintf(`witness body='%s' %s spore_time=%d`, w.raw, w.witnessFlag, t)
+		return fmt.Sprintf(`witness body='%s' %s spore.time=%d`, w.raw, w.witnessFlag, t)
 
-		// spore_node
+		// spore.node
 	} else {
-		return fmt.Sprintf(`witness body='%s' cast=%s %s spore_time=%d`, w.raw, w.cast, w.witnessFlag, t)
+		return fmt.Sprintf(`witness body='%s' cast=%s %s spore.time=%d`, w.raw, w.cast, w.witnessFlag, t)
 	}
 }

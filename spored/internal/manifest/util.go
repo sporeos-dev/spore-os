@@ -9,7 +9,7 @@ import "strings"
 var reservedArgNames = map[string]bool{
 	"cast": true, "capture": true, "ok": true, "error": true, "cancelled": true,
 	"code": true, "what": true, "module": true,
-	"spore_incoming": true, "spore_outgoing": true, "spore_event": true, "spore_node": true, "spore_time": true,
+	"spore.incoming": true, "spore.outgoing": true, "spore.event": true, "spore.node": true, "spore.time": true,
 	"json": true,
 }
 

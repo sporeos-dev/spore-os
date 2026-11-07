@@ -151,12 +151,12 @@ func (e *Error) Witness() string {
 	// no message
 	// spore error
 	if e.message == nil {
-		return fmt.Sprintf("witness body='error code=%s.%s what=\"%s\"' %s spore_event spore_time=%d", e.code, e.module, e.what, e.extrasToString(), t)
+		return fmt.Sprintf("witness body='error code=%s.%s what=\"%s\"' %s spore.event spore.time=%d", e.code, e.module, e.what, e.extrasToString(), t)
 
 		// otherwise
 		// outgoing
 	} else {
-		return fmt.Sprintf("witness body='%s' spore_outgoing spore_time=%d", e.Wire(), t)
+		return fmt.Sprintf("witness body='%s' spore.outgoing spore.time=%d", e.Wire(), t)
 	}
 }
 

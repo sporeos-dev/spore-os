@@ -105,17 +105,17 @@ func (b *broadcast) Wire() string {
 	return fmt.Sprintf("%s cast=%s", b.raw, b.id)
 }
 
-// witness in: +witness +spore_incoming +spore_time
-// --> witness <wire> spore_incoming spore_time=time
-// witness out: +witness +spore_outgoing +spore_time
-// --> witness <wire> spore_outgoing spore_time=time
+// witness in: +witness +spore.incoming +spore.time
+// --> witness <wire> spore.incoming spore.time=time
+// witness out: +witness +spore.outgoing +spore.time
+// --> witness <wire> spore.outgoing spore.time=time
 func (b *broadcast) Witness() string {
 	t := time.Now().UnixMilli()
 	incomingSent := b.incomingSent
 	b.incomingSent = true
-	witnessFlag := "spore_incoming"
+	witnessFlag := "spore.incoming"
 	if incomingSent {
-		witnessFlag = "spore_outgoing"
+		witnessFlag = "spore.outgoing"
 	}
-	return fmt.Sprintf("witness body='%s' %s spore_time=%d", b.Wire(), witnessFlag, t)
+	return fmt.Sprintf("witness body='%s' %s spore.time=%d", b.Wire(), witnessFlag, t)
 }

@@ -10,7 +10,6 @@ import (
 	"os/exec"
 	"spored/internal/iface"
 	"spored/internal/manifest"
-	"spored/internal/message"
 	"spored/internal/registry"
 	"spored/internal/utilities/await"
 	"spored/internal/utilities/file"
@@ -109,30 +108,17 @@ func (n *Nodes) Autostart() {
 	for _, el := range n.nodes {
 		if el.manifest.Launch == manifest.Auto {
 			if el.manifest.Namespace == manifest.Hyphae {
-				witness.Send(
-					error.New(
-						error.Generic,
-						error.Node,
-						"skipped autostart, requires hyphae",
-						out.Pair("node", el.registry.ID)))
+				witness.Error(error.Generic, error.Node, "skipped autostart, requires hyphae", out.Pair("node", el.registry.ID))
 				continue
 			}
 
 			err := n.Spawn(el.registry.ID)
 			if err != nil {
-				witness.Send(
-					error.New(
-						error.Generic,
-						error.Node,
-						"autostart failed to spawn",
-						out.Pair("node", el.registry.ID)))
+				witness.Error(error.Generic, error.Node, "autostart failed to spawn", out.Pair("node", el.registry.ID))
 				continue
 			}
 
-			witness.Send(
-				message.Witness(
-					"node autostarted",
-					out.Pair("node", el.registry.ID)))
+			witness.Spore("node autostarted", out.Pair("node", el.registry.ID))
 		}
 	}
 }
@@ -142,12 +128,7 @@ func (n *Nodes) HandleConnection(conn net.Conn) {
 	erro := conn.SetReadDeadline(time.Now().Add(handshakeTimeout))
 	defer conn.SetReadDeadline(time.Time{}) //nolint:errcheck
 	if erro != nil {
-		n.bus.Witness(
-			error.New(
-				error.Generic,
-				error.Node,
-				"unable to read deadline",
-				out.Pair("error", erro.Error())))
+		witness.Error(error.HandshakeDenial, error.Node, "read deadline", out.Pair("error", erro.Error()))
 	}
 
 	reader := bufio.NewReader(conn)
@@ -155,50 +136,31 @@ func (n *Nodes) HandleConnection(conn net.Conn) {
 
 	nodeid, erro := reader.ReadString('\n')
 	if erro != nil {
-		err := error.New(
-			error.HandshakeDenial,
-			error.Node,
-			"failed handshake at step 1: initial read",
-			out.Pair("error", erro.Error()))
-
-		witness.Send(err)
+		witness.Error(error.HandshakeDenial, error.Node, "handshake read failed", out.Pair("error", erro.Error()))
+		writer.WriteString("FAIL handshake read failed\n")
 		writer.Flush()
 		conn.Close()
 		return
 	}
 
 	nodeid = strings.TrimSpace(nodeid)
-	witness.Send(
-		message.Witness(
-			"node connecting",
-			out.Pair("node", nodeid)))
+	witness.Spore("node connecting", out.Pair("node", nodeid))
 
 	n.mu.RLock()
 	defer n.mu.RUnlock()
 	node, ok := n.nodes[nodeid]
 	if !ok {
-		err := error.New(
-			error.HandshakeDenial,
-			error.Node,
-			"node not installed",
-			out.Pair("node", nodeid))
-
-		witness.Send(err)
-		writer.WriteString(err.Wire() + "\n")
+		witness.Error(error.HandshakeDenial, error.Node, "node not installed", out.Pair("node", nodeid))
+		writer.WriteString("FAIL node not installed\n")
 		writer.Flush()
 		conn.Close()
 		return
 	}
 
 	// Handle the connection with the node
-	err := node.handleConnection(conn, reader, writer, n.hyphae)
-	if err != nil {
-		witness.Send(err)
-		writer.WriteString(err.Wire() + "\n")
-		writer.Flush()
-		conn.Close()
-		return
-	}
+	// failures will be handled in the function
+	// (including witness & replies)
+	node.handleConnection(conn, reader, writer, n.hyphae)
 }
 
 //
@@ -273,10 +235,7 @@ func (n *Nodes) GetManifest(nodeid string) *manifest.Manifest {
 
 func (n *Nodes) Install(path string, load bool, origin string) *error.Error {
 
-	witness.Send(
-		message.Witness(
-			"installing node",
-			out.Pair("path", path)))
+	witness.Spore("installing node", out.Pair("path", path))
 
 	candidate, err := n.prepareInstallation(path)
 	if err != nil {
@@ -374,21 +333,19 @@ func (n *Nodes) completeInstallation(candidate *installation, load bool) *error.
 		for _, el := range node.manifest.Permissions {
 			granted, err := n.permissions.Request(node.registry.ID, el.Name, el.Reasons)
 			if err != nil {
-				witness.Send(err)
+				witness.Error(error.Generic, error.Permission, "permission error")
 				continue
 			}
 			if granted {
-				witness.Send(
-					message.Witness(
-						"permission granted",
-						out.Pair("node", node.registry.ID),
-						out.Pair("capability", el.Name)))
+				witness.Spore(
+					"permission granted",
+					out.Pair("node", node.registry.ID),
+					out.Pair("capability", el.Name))
 			} else {
-				witness.Send(
-					message.Witness(
-						"permission denied",
-						out.Pair("node", node.registry.ID),
-						out.Pair("capability", el.Name)))
+				witness.Spore(
+					"permission denied",
+					out.Pair("node", node.registry.ID),
+					out.Pair("capability", el.Name))
 			}
 		}
 	}
@@ -403,14 +360,13 @@ func (n *Nodes) completeInstallation(candidate *installation, load bool) *error.
 func (n *Nodes) Uninstall(nodeid string) *error.Error {
 
 	nodeid = n.resolveId(nodeid)
-	witness.Send(
-		message.Witness(
-			"uninstalling node",
-			out.Pair("node", nodeid)))
+	witness.Spore(
+		"uninstalling node",
+		out.Pair("node", nodeid))
 
 	err := n.Kill(nodeid)
 	if err != nil {
-		witness.Send(err)
+		witness.Error(error.Generic, error.Node, "kill failed")
 		// do not return
 		// log failure and continue
 	}
@@ -474,10 +430,9 @@ func (n *Nodes) Reload(nodeid string) *error.Error {
 func (n *Nodes) Spawn(nodeid string) *error.Error {
 
 	nodeid = n.resolveId(nodeid)
-	witness.Send(
-		message.Witness(
-			"spawning node",
-			out.Pair("node", nodeid)))
+	witness.Spore(
+		"spawning node",
+		out.Pair("node", nodeid))
 
 	n.mu.RLock()
 	defer n.mu.RUnlock()
@@ -529,10 +484,9 @@ func (n *Nodes) Spawn(nodeid string) *error.Error {
 func (n *Nodes) Kill(nodeid string) *error.Error {
 
 	nodeid = n.resolveId(nodeid)
-	witness.Send(
-		message.Witness(
-			"killing node",
-			out.Pair("node", nodeid)))
+	witness.Spore(
+		"killing node",
+		out.Pair("node", nodeid))
 
 	node, ok := n.nodes[nodeid]
 	if !ok {

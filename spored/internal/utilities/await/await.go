@@ -90,12 +90,7 @@ func (p *Pending) Receive(msg iface.Message) *error.Error {
 		ch <- msg
 	} else {
 		// no waiter left for this handle (already timed out or never registered) - message would otherwise vanish silently
-		witness.Send(
-			error.New(
-				error.Missing,
-				p.module,
-				"dropped response for unknown or expired handle",
-				out.Pair("handle", handle)))
+		witness.Error(error.Missing, p.module, "dropped response for unknown or expired handle", out.Pair("handle", handle))
 	}
 
 	return nil

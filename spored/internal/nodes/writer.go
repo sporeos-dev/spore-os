@@ -62,10 +62,3 @@ func (w *writer) WriteMessage(msg iface.Message) {
 	witness.Outgoing(msg.Wire(), w.id)
 }
 
-func (w *writer) WriteWitness(msg iface.Message) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	w.writer.WriteString(msg.Witness())
-	w.writer.WriteString("\n")
-	w.flush()
-}

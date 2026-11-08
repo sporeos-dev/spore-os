@@ -1,6 +1,7 @@
 package witness_event
 
 import (
+	"fmt"
 	"spored/internal/utilities/error"
 	"spored/internal/utilities/out"
 	"time"
@@ -51,16 +52,22 @@ func Outgoing(msg, orig string) IWitnessContext {
 	}
 }
 
-func Spore(msg string) IWitnessContext {
+func Spore(msg string, outs ...out.IOut) IWitnessContext {
+	var msgout string
+	if len(outs) > 0 {
+		msgout = fmt.Sprintf("%s %v", msg, outs)
+	} else {
+		msgout = msg
+	}
 	return &witness{
-		message: msg, 
+		message: msgout, 
 		origin: "dev.sporeos.SPORE",
 		time: time.Now().UnixMilli(), 
 		wtype: WTypeSpore,
 	}
 }
 
-func Error(code error.Code, module error.Module, what string, outs []out.IOut) IWitnessContext {
+func Error(code error.Code, module error.Module, what string, outs ...out.IOut) IWitnessContext {
 	msg := error.Stringify(code, module, what, outs)
 	return &witness{
 		message: msg,

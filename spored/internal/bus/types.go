@@ -12,10 +12,8 @@ import (
 type INode interface {
 	Id() string
 	IsConnected() bool
-	IsWitness() bool
 	GetManifest() *manifest.Manifest
 	Receive(message iface.Message) *error.Error
-	Witness(message iface.Message)
 }
 
 type ihyphae interface{}

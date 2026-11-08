@@ -154,18 +154,15 @@ func (h *Hyphae) manifestRead(path string) (string, *error.Error) {
 	err := h.bus.Request(msg)
 	if err != nil {
 		h.pending.Delete(handle)
-		witness.Send(err)
+		witness.Error(error.Generic, error.Hyphae, "request failed")
 		return "", err
 	}
 	response, err := h.pending.WaitFor(handle, ch)
 	if err != nil {
-		witness.Send(err)
+		witness.Error(error.Generic, error.Hyphae, "wait failed")
 		return "", err
 	}
-	witness.Send(
-		message.Witness(
-			"manifest read wait completed",
-			out.Pair("handle", handle)))
+	witness.Spore("manifest read wait completed", )
 	if response.Flag("error") {
 		return "", error.New(
 			error.Generic,

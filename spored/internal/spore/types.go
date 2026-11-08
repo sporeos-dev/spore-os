@@ -18,7 +18,6 @@ type ibus interface {
 	Unsubscribe(cast string, topic string) *error.Error
 	Response(msg iface.Message) *error.Error
 	FullyQualifiedRequest(command string) string
-	Witness(msg iface.Message)
 }
 
 type ihyphae interface{}

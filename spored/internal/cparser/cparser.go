@@ -187,11 +187,7 @@ func parse(raw string, validate bool) (ParsedMessage, bool) {
 	if bool(C.spore_parser_has_error(parser)) {
 		code := C.GoString(C.spore_parser_get_error_code(parser))
 		what := C.GoString(C.spore_parser_get_error_what(parser))
-		witness.Send(
-			error.New(
-				error.Code(code),
-				error.Parser,
-				what))
+		witness.Error(error.Code(code), error.Parser, what)
 		return out, false
 	}
 

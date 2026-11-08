@@ -7,7 +7,7 @@ import (
 	"spored/internal/iface"
 	"spored/internal/utilities/error"
 	"spored/internal/utilities/out"
-	witnesslog "spored/internal/witness"
+	"spored/internal/witness"
 	"strings"
 	"sync"
 )
@@ -145,7 +145,7 @@ func (b *broadcast) broadcast(msg iface.Message) *error.Error {
 	for _, node := range targets {
 		err := node.Receive(msg)
 		if err != nil {
-			witnesslog.Send(err)
+			witness.Error(error.Generic, error.Bus, "failed to deliver message")
 		}
 	}
 

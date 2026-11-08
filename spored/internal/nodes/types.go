@@ -18,7 +18,6 @@ type ibus interface {
 	Response(msg iface.Message) *error.Error
 	Broadcast(msg iface.Message) *error.Error
 	Pipe(msg iface.Message, node bus.INode)
-	Witness(msg iface.Message)
 }
 
 type ihyphae interface {

@@ -46,8 +46,6 @@ func New() (*Hub, *error.Error) {
 	h.permissions.Set(h.bus, h.hyphae, h.nodes, h.spore)
 	h.spore.Set(h.bus, h.hyphae, h.nodes, h.permissions)
 
-	witness.Init(h.bus)
-
 	go h.listen()
 	return h, nil
 }
@@ -63,7 +61,7 @@ func (h *Hub) Close() {
 		h.listener.Close()
 	}
 	if err := pal.RemoveLocalEndpoint(); err != nil {
-		error.New(
+		witness.Error(
 			error.ConnectionFailure,
 			error.Hub,
 			"Failed to remove local endpoint",
@@ -74,7 +72,7 @@ func (h *Hub) Close() {
 func (h *Hub) listen() {
 
 	if err := pal.RemoveLocalEndpoint(); err != nil {
-		error.New(
+		witness.Error(
 			error.InitializationFailure,
 			error.Hub,
 			"Failed to remove local endpoint",
@@ -83,7 +81,7 @@ func (h *Hub) listen() {
 	}
 	listener, err := pal.ListenLocal()
 	if err != nil {
-		error.New(
+		witness.Error(
 			error.InitializationFailure,
 			error.Hub,
 			"Failed to listen on socket",
@@ -101,7 +99,7 @@ func (h *Hub) listen() {
 			if errors.Is(err, net.ErrClosed) {
 				break
 			}
-			error.New(
+			witness.Error(
 				error.ConnectionFailure,
 				error.Hub,
 				"Failed to accept new connection",

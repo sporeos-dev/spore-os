@@ -12,7 +12,6 @@ type Bus struct {
 	api       *api
 	broadcast *broadcast
 	responses *responses
-	witness   *witness
 	pipe      *pipe
 
 	hyphae      ihyphae
@@ -26,7 +25,6 @@ func New() *Bus {
 		api:       newApi(),
 		broadcast: newBroadcast(),
 		responses: newResponses(),
-		witness:   newWitness(),
 		pipe:      newPipe(),
 	}
 	b.pipe.setBus(b)
@@ -46,7 +44,6 @@ func (b *Bus) Close() {
 	b.api.close()
 	b.broadcast.close()
 	b.responses.close()
-	b.witness.close()
 	b.pipe.close()
 }
 
@@ -54,14 +51,12 @@ func (b *Bus) Register(n INode) {
 	b.api.register(n)
 	b.broadcast.register(n)
 	b.responses.register(n)
-	b.witness.register(n)
 }
 
 func (b *Bus) Unregister(n INode) {
 	b.api.unregister(n)
 	b.broadcast.unregister(n)
 	b.responses.unregister(n)
-	b.witness.unregister(n)
 }
 
 //
@@ -115,13 +110,4 @@ func (b *Bus) Response(msg iface.Message) *error.Error {
 
 func (b *Bus) FullyQualifiedRequest(command string) string {
 	return b.api.fullyQualifiedRequest(command)
-}
-
-//
-// witness
-// routing
-//
-
-func (b *Bus) Witness(msg iface.Message) {
-	b.witness.witness(msg)
 }

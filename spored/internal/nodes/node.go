@@ -116,13 +116,17 @@ func (n *node) state() *State {
 // inode
 //
 
-func (n *node) handleConnection(conn net.Conn, reader *bufio.Reader, wr *bufio.Writer, hyphae ihyphae) *error.Error {
+func (n *node) handleConnection(conn net.Conn, reader *bufio.Reader, wr *bufio.Writer, hyphae ihyphae) {
 
 	writer := newWriter(conn, wr, n.manifest.ID)
 
 	err := n.checkManifestForFailure()
 	if err != nil {
-		return err
+		witness.Error(error.HandshakeDenial, error.Node, "manifest failure")
+		wr.WriteString("FAIL manifest failure\n")
+		wr.Flush()
+		conn.Close()
+		return
 	}
 
 	n.manifest.Verify()
@@ -131,53 +135,62 @@ func (n *node) handleConnection(conn net.Conn, reader *bufio.Reader, wr *bufio.W
 		if n.registry.Checksum == string(manifest.Developer) {
 			n.manifest.Status.Set(status.Verified)
 		} else {
-			n.manifest.Status.Set(status.FailedChecksum)
-			return error.New(
-				error.HandshakeDenial,
-				error.Node,
-				"failed manifest verification: developer checksum mismatch",
-				out.Pair("expected", string(manifest.Developer)))
+			witness.Error(error.HandshakeDenial, error.Node, "developer checksum mismatch")
+			wr.WriteString("FAIL developer checksum mismatch\n")
+			wr.Flush()
+			conn.Close()
+			return
 		}
 
 	} else if n.manifest.Status.Get() == status.RequiresUserSpace {
 
 		checksum, err := hyphae.HashFile(n.manifest.Path)
 		if err != nil {
-			return err
+			witness.Error(error.HandshakeDenial, error.Node, "hash error")
+			wr.WriteString("FAIL hash error\n")
+			wr.Flush()
+			conn.Close()
+			return
 		}
 		if checksum == n.manifest.ExpectedChecksum {
 			n.manifest.Status.Set(status.Verified)
 		} else {
 			n.manifest.Status.Set(status.FailedChecksum)
-			return error.New(
-				error.HandshakeDenial,
-				error.Node,
-				"failed manifest verification",
-				out.Pair("checksum", checksum),
-				out.Pair("expected", n.manifest.ExpectedChecksum))
+			witness.Error(error.HandshakeDenial, error.Node, "failed manifest verification")
+			wr.WriteString("FAIL manifest verification\n")
+			wr.Flush()
+			conn.Close()
+			return
 		}
 	}
 
 	err = n.checkManifestForFailure()
 	if err != nil {
-		return err
+		witness.Error(error.HandshakeDenial, error.Node, "manifest failure")
+		wr.WriteString("FAIL manifest failure\n")
+		wr.Flush()
+		conn.Close()
+		return
 	}
 
 	n.manifest.Load()
 	err = n.checkManifestForFailure()
 	if err != nil {
-		return err
+		witness.Error(error.HandshakeDenial, error.Node, "manifest failure")
+		wr.WriteString("FAIL manifest failure\n")
+		wr.Flush()
+		conn.Close()
+		return
 	}
 
 	n.bus.Register(n)
 
 	if n.manifest.Status.Get() != status.Verified {
-		return error.New(
-			error.HandshakeDenial,
-			error.Spore,
-			"unknown manifest verification failure",
-			out.Pair("node", n.registry.ID),
-			out.Pair("manifest_status", n.manifest.Status.String()))
+		witness.Error(error.HandshakeDenial, error.Node, "manifest not verified")
+		wr.WriteString("FAIL manifest not verified\n")
+		wr.Flush()
+		conn.Close()
+		return
 	}
 
 	var b *binary
@@ -188,7 +201,11 @@ func (n *node) handleConnection(conn net.Conn, reader *bufio.Reader, wr *bufio.W
 	}
 	err = n.checkBinaryForFailure(b)
 	if err != nil {
-		return err
+		witness.Error(error.HandshakeDenial, error.Node, "binary failure")
+		wr.WriteString("FAIL binary failure\n")
+		wr.Flush()
+		conn.Close()
+		return
 	}
 
 	connectionActivated := false
@@ -201,41 +218,47 @@ func (n *node) handleConnection(conn net.Conn, reader *bufio.Reader, wr *bufio.W
 
 		pid, erro := pal.ProcessID(conn)
 		if erro != nil {
-			return error.New(
-				error.HandshakeDenial,
-				error.Node,
-				"failed to identify connecting process",
-				out.Pair("error", erro.Error()))
+			witness.Error(error.HandshakeDenial, error.Node, "failed to get pid")
+			wr.WriteString("FAIL failed to get pid\n")
+			wr.Flush()
+			conn.Close()
+			return
 		}
 
 		checksum, err := hyphae.HashBinary(pid)
 		if err != nil {
-			return err
+			witness.Error(error.HandshakeDenial, error.Node, "failed binary hash")
+			wr.WriteString("FAIL binary hash\n")
+			wr.Flush()
+			conn.Close()
+			return
 		}
 		if checksum == n.registry.BinaryChecksum {
 			b.status.Set(status.Verified)
 		} else {
 			b.status.Set(status.FailedChecksum)
-			return error.New(
-				error.HandshakeDenial,
-				error.Node,
-				"failed manifest verification",
-				out.Pair("checksum", checksum),
-				out.Pair("expected", n.registry.BinaryChecksum))
+			witness.Error(error.HandshakeDenial, error.Node, "failed manifest verification")
+			wr.WriteString("FAIL manifest verification\n")
+			wr.Flush()
+			conn.Close()
+			return
 		}
 	}
 	err = n.checkBinaryForFailure(b)
 	if err != nil {
-		return err
+		witness.Error(error.HandshakeDenial, error.Node, "binary failure")
+		wr.WriteString("FAIL binary failure\n")
+		wr.Flush()
+		conn.Close()
+		return
 	}
 
 	if b.status.Get() != status.Verified {
-		return error.New(
-			error.HandshakeDenial,
-			error.Spore,
-			"unknown binary verification failure",
-			out.Pair("node", n.registry.ID),
-			out.Pair("binary_status", b.status.String()))
+		witness.Error(error.HandshakeDenial, error.Node, "unknown binary verification failure")
+		wr.WriteString("FAIL binary verification\n")
+		wr.Flush()
+		conn.Close()
+		return
 	}
 
 	if !connectionActivated {
@@ -253,17 +276,16 @@ func (n *node) handleConnection(conn net.Conn, reader *bufio.Reader, wr *bufio.W
 	// register parts to the event system
 	n.witnessHandler.Open(n.manifest, n.writer)
 
-	witness.Send(
-		message.Witness(
-			"handshake successful",
-			out.Pair("node", n.registry.ID)))
+	witness.Spore("handshake successful", out.Pair("node", n.registry.ID))
 
 	err = n.pending.Resolve("lazy")
 	if err != nil {
-		return err
+		witness.Error(error.HandshakeDenial, error.Node, "failed to resolve pending")
+		wr.WriteString("FAIL resolve pending\n")
+		wr.Flush()
+		conn.Close()
+		return
 	}
-
-	return nil
 }
 
 func (n *node) activateConnection(conn net.Conn, reader *bufio.Reader, writer *writer, provisional bool) {
@@ -373,10 +395,7 @@ listen:
 		raw, status, readErr := n.readMessage()
 		switch status {
 		case readClosed:
-			witness.Send(
-				message.Witness(
-					"node disconnecting",
-					out.Pair("node", n.registry.ID)))
+			witness.Spore("node disconnecting", out.Pair("node", n.registry.ID))
 			break listen
 		case readFailure:
 			if pal.IsTerminalPeerReadError(readErr) {
@@ -410,12 +429,7 @@ listen:
 			pipeMsg, ok := message.Pipe(raw, n.registry.ID)
 			if !ok {
 				// no parsed message to attach, so report internally instead of echoing raw text back over the wire
-				witness.Send(error.New(
-					error.Malformed,
-					error.Node,
-					"failed to parse pipe",
-					out.Pair("node", n.registry.ID),
-					out.Pair("raw", raw)))
+				witness.Error(error.Malformed, error.Node, "failed to parse pipe", out.Pair("node", n.registry.ID), out.Pair("raw", raw))
 				continue
 			}
 
@@ -434,12 +448,7 @@ listen:
 			broadcast, ok := message.Broadcast(raw, n.registry.ID)
 			if !ok {
 				// no parsed message to attach, so report internally instead of echoing raw text back over the wire
-				witness.Send(error.New(
-					error.Malformed,
-					error.Node,
-					"failed to publish",
-					out.Pair("node", n.registry.ID),
-					out.Pair("raw", raw)))
+				witness.Error(error.Malformed, error.Node, "failed to publish", out.Pair("node", n.registry.ID), out.Pair("raw", raw))
 				continue
 			}
 
@@ -474,19 +483,12 @@ listen:
 			response, ok := message.Response(raw, n.registry.ID)
 			if !ok {
 				// no parsed message to attach, so report internally instead of echoing raw text back over the wire
-				witness.Send(error.New(
-					error.Malformed,
-					error.Node,
-					"failed to respond",
-					out.Pair("node", n.registry.ID),
-					out.Pair("raw", raw)))
+				witness.Error(error.Malformed, error.Node, "failed to respond", out.Pair("node", n.registry.ID), out.Pair("raw", raw))
 				continue
 			}
 			err := n.bus.Response(response)
 			if err != nil {
-				if receiveErr := n.Receive(err); receiveErr != nil {
-					witness.Send(receiveErr)
-				}
+				n.returnRoutingError(err, response)
 			}
 
 			// fallback to request
@@ -496,20 +498,13 @@ listen:
 			request, ok := message.Request(raw, n.registry.ID)
 			if !ok {
 				// no parsed message to attach, so report internally instead of echoing raw text back over the wire
-				witness.Send(error.New(
-					error.Malformed,
-					error.Node,
-					"failed to request",
-					out.Pair("node", n.registry.ID),
-					out.Pair("raw", raw)))
+				witness.Error(error.Malformed, error.Node, "failed to request", out.Pair("node", n.registry.ID), out.Pair("raw", raw))
 				continue
 			}
 
 			err := n.bus.Request(request)
 			if err != nil {
-				if receiveErr := n.Receive(err); receiveErr != nil {
-					witness.Send(receiveErr)
-				}
+				n.returnRoutingError(err, request)
 			}
 		}
 	}
@@ -523,6 +518,17 @@ listen:
 	n.writer = nil
 	n.conn.Close()
 	n.conn = nil
+}
+
+func (n *node) returnRoutingError(err *error.Error, msg iface.Message) {
+	if receiveErr := n.Receive(err.WithMessage(msg)); receiveErr != nil {
+		witness.Error(
+			error.Generic,
+			error.Node,
+			"failed to return routing error",
+			out.Pair("node", n.registry.ID),
+			out.Pair("error", receiveErr.Error()))
+	}
 }
 
 func isRetryableReadError(readErr readError) bool {
@@ -619,17 +625,6 @@ func (n *node) Receive(message iface.Message) *error.Error {
 
 	n.writer.WriteMessage(message)
 	return nil
-}
-
-func (n *node) Witness(message iface.Message) {
-	n.mu.RLock()
-	defer n.mu.RUnlock()
-
-	if n.writer == nil {
-		return
-	}
-
-	n.writer.WriteWitness(message)
 }
 
 //

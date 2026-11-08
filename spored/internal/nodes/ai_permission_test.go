@@ -53,7 +53,7 @@ func TestNodeDefersPermissionChecksToBus(t *testing.T) {
 	node.permitter = permissionTestPermitter{}
 	node.conn = server
 	node.reader = bufio.NewReader(server)
-	node.writer = newWriter(server, bufio.NewWriter(server))
+	node.writer = newWriter(server, bufio.NewWriter(server), node.Id())
 
 	done := make(chan struct{})
 	go func() {

@@ -10,6 +10,7 @@ import (
 	"spored/internal/message"
 	"spored/internal/utilities/error"
 	"spored/internal/utilities/out"
+	"spored/internal/witness"
 	"strconv"
 	"strings"
 )
@@ -617,7 +618,7 @@ func (s *Spore) nodeCollisionError(part string) {
 	for i, el := range found {
 		outs = append(outs, out.Pair("node_" + strconv.Itoa(i + 1), el))
 	}
-	s.bus.Witness(message.Witness("Node collision", outs...))
+	witness.Error(error.Collision, error.Spore, "node collision", out.Pair("part", part))
 }
 
 func (s *Spore) commandCollisionError(part string) {
@@ -643,7 +644,7 @@ func (s *Spore) commandCollisionError(part string) {
 	for i, el := range f {
 		outs = append(outs, out.Pair("command_" + strconv.Itoa(i + 1), el))
 	}
-	s.bus.Witness(message.Witness("Command collision", outs...))
+	witness.Error(error.Collision, error.Spore, "command collision", outs...)
 }
 
 func (s *Spore) topicCollisionError(part string) {
@@ -669,5 +670,5 @@ func (s *Spore) topicCollisionError(part string) {
 	for i, el := range f {
 		outs = append(outs, out.Pair("topic_" + strconv.Itoa(i + 1), el))
 	}
-	s.bus.Witness(message.Witness("Topic collision", outs...))
+	witness.Error(error.Collision, error.Spore, "topic collision", outs...)
 }

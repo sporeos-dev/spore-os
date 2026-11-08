@@ -150,177 +150,119 @@ func (p *pipe) pipe(msg iface.Message, node INode) {
 		//
 		// routing
 		//
+		
+		timeout, ok := handleTimeout(&pm)
+		if !ok {
+			node.Receive(error.New(
+				error.Malformed,
+				error.Pipe,
+				"invalid timeout argument",
+				out.Pair("index", fmt.Sprint(index)),
+				out.Pair("raw", raw),
+				out.Pair("complete", complete)))
+			return
+		}
 
-		// witness
-		if strings.HasPrefix(raw, "witness") {
+		if !isLast {
+			pm.Handle = pipeHandle()
+		} else if callerHandle != "" {
+			pm.Handle = callerHandle
+		} else if pm.Handle == "" {
+			pm.Handle = pipeHandle()
+		}
+		// intermediate stages route back to the pipe itself; only the
+		// last stage responds directly to the original caller
+		stageCast := cast
+		if !isLast {
+			stageCast = message.DelegatedCast(p.Id(), origin)
+		}
+		raw = pm.Stringify()
+		witnesslog.Incoming(raw, stageCast)
 
-			raw = pm.Stringify()
-			var body string
-			if ok {
-				body = pm.Args["body"]
-			} else {
-				body = strings.TrimPrefix(raw, "witness ")
-			}
-			witnesslog.Send(message.Node(body, cast))
+		request, ok := message.Request(raw, stageCast)
+		if !ok {
+			node.Receive(error.New(
+				error.Malformed,
+				error.Pipe,
+				"failed to parse request message",
+				out.Pair("index", fmt.Sprint(index)),
+				out.Pair("raw", raw),
+				out.Pair("complete", complete)))
+			return
+		}
 
-			// broadcast
-		} else if strings.HasPrefix(raw, "publish") {
-
-			raw = pm.Stringify()
-			witnesslog.Send(message.Incoming(raw, cast))
-			broadcast, ok := message.Broadcast(raw, cast)
-			if !ok {
-				node.Receive(error.New(
-					error.Malformed,
-					error.Pipe,
-					"failed to publish",
-					out.Pair("node", cast),
-					out.Pair("index", fmt.Sprint(index)),
-					out.Pair("raw", raw),
-					out.Pair("complete", complete)))
-				return
-			}
-
-			topic := broadcast.Capability()
-			ok = false
-			for _, el := range node.GetManifest().Topics {
-				if topic == el.Name {
-					ok = true
-					break
-				}
-			}
-			if !ok {
-				node.Receive(error.New(
-					error.NotPermitted,
-					error.Pipe,
-					"topic not announced in the manifest",
-					out.Pair("topic", topic),
-					out.Pair("node", cast),
-					out.Pair("index", fmt.Sprint(index)),
-					out.Pair("raw", raw),
-					out.Pair("complete", complete)))
-				return
-			}
-
-			err := p.bus.Broadcast(broadcast)
-			if err != nil {
+		if isLast {
+			if err := p.bus.Request(request); err != nil {
 				node.Receive(err)
+			}
+			return
+		}
+
+		ch := p.pending.Await(request.Handle())
+		err := p.bus.Request(request)
+		if err != nil {
+			p.pending.Delete(request.Handle())
+			if callerRequest, ok := pipeTimeoutRequest(msg, request.Capability(), cast); ok {
+				err.WithMessage(callerRequest)
+			}
+			node.Receive(err)
+			return
+		}
+
+		response, err := p.pending.WaitForTimeout(request.Handle(), ch, timeout)
+		if err != nil {
+			callerRequest, ok := pipeTimeoutRequest(msg, request.Capability(), cast)
+			if !ok {
+				witnesslog.Error(
+					error.Missing,
+					error.Pipe,
+					"cannot report pipeline timeout without a caller handle",
+					out.Pair("complete", complete))
 				return
 			}
-
-			// request/response
-		} else {
-
-			timeout, ok := handleTimeout(&pm)
+			node.Receive(err.WithMessage(callerRequest))
+			return
+		}
+		if response.Flag("cancelled") || response.Flag("error") {
+			reply, ok := message.ResponseWithHandle(response, callerHandle)
 			if !ok {
-				node.Receive(error.New(
+				witnesslog.Error(
 					error.Malformed,
 					error.Pipe,
-					"invalid timeout argument",
-					out.Pair("index", fmt.Sprint(index)),
-					out.Pair("raw", raw),
-					out.Pair("complete", complete)))
+					"cannot return pipeline response to caller",
+					out.Pair("complete", complete))
 				return
 			}
-
-			if !isLast {
-				pm.Handle = pipeHandle()
-			} else if callerHandle != "" {
-				pm.Handle = callerHandle
-			} else if pm.Handle == "" {
-				pm.Handle = pipeHandle()
-			}
-			// intermediate stages route back to the pipe itself; only the
-			// last stage responds directly to the original caller
-			stageCast := cast
-			if !isLast {
-				stageCast = message.DelegatedCast(p.Id(), origin)
-			}
-			raw = pm.Stringify()
-			witnesslog.Send(message.Incoming(raw, stageCast))
-
-			request, ok := message.Request(raw, stageCast)
-			if !ok {
-				node.Receive(error.New(
-					error.Malformed,
-					error.Pipe,
-					"failed to parse request message",
-					out.Pair("index", fmt.Sprint(index)),
-					out.Pair("raw", raw),
-					out.Pair("complete", complete)))
-				return
-			}
-
-			if isLast {
-				if err := p.bus.Request(request); err != nil {
-					node.Receive(err)
-				}
-				return
-			}
-
-			ch := p.pending.Await(request.Handle())
-			err := p.bus.Request(request)
-			if err != nil {
-				p.pending.Delete(request.Handle())
-				if callerRequest, ok := pipeTimeoutRequest(msg, request.Capability(), cast); ok {
-					err.WithMessage(callerRequest)
-				}
-				node.Receive(err)
-				return
-			}
-
-			response, err := p.pending.WaitForTimeout(request.Handle(), ch, timeout)
-			if err != nil {
-				callerRequest, ok := pipeTimeoutRequest(msg, request.Capability(), cast)
-				if !ok {
-					witnesslog.Send(error.New(
-						error.Missing,
-						error.Pipe,
-						"cannot report pipeline timeout without a caller handle",
-						out.Pair("complete", complete)))
-					return
-				}
-				node.Receive(err.WithMessage(callerRequest))
-				return
-			}
-			if response.Flag("cancelled") || response.Flag("error") {
-				reply, ok := message.ResponseWithHandle(response, callerHandle)
-				if !ok {
-					witnesslog.Send(error.New(
-						error.Malformed,
-						error.Pipe,
-						"cannot return pipeline response to caller",
-						out.Pair("complete", complete)))
-					return
-				}
-				if err := node.Receive(reply); err != nil {
-					witnesslog.Send(err)
-				}
-				return
-			}
-			responsePipe, ok := response.(ResponsePipe)
-			if !ok {
-				node.Receive(error.New(
+			if err := node.Receive(reply); err != nil {
+				witnesslog.Error(
 					error.Generic,
 					error.Pipe,
-					"pipe response does not provide arguments and flags",
-					out.Pair("index", fmt.Sprint(index)),
-					out.Pair("raw", raw),
-					out.Pair("complete", complete)))
-				return
+					"failed to send response",
+					out.Pair("complete", complete))
 			}
-			for key, value := range responsePipe.Args() {
-				args[key] = value
+			return
+		}
+		responsePipe, ok := response.(ResponsePipe)
+		if !ok {
+			node.Receive(error.New(
+				error.Generic,
+				error.Pipe,
+				"pipe response does not provide arguments and flags",
+				out.Pair("index", fmt.Sprint(index)),
+				out.Pair("raw", raw),
+				out.Pair("complete", complete)))
+			return
+		}
+		for key, value := range responsePipe.Args() {
+			args[key] = value
+		}
+		for _, flag := range responsePipe.Flags() {
+			if flag == "ok" || flag == "error" || flag == "cancelled" {
+				continue
 			}
-			for _, flag := range responsePipe.Flags() {
-				if flag == "ok" || flag == "error" || flag == "cancelled" {
-					continue
-				}
-				if !slices.Contains(flags, flag) {
-					flags = append(flags, flag)
-				}
+			if !slices.Contains(flags, flag) {
+				flags = append(flags, flag)
 			}
-
 		}
 	}
 }

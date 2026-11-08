@@ -9,10 +9,10 @@ import (
 	"io"
 	"net"
 	"slices"
-	"spored/internal/cparser"
 	"spored/internal/iface"
 	"spored/internal/manifest"
 	"spored/internal/message"
+	"spored/internal/nodes/witness_node"
 	"spored/internal/pal"
 	"spored/internal/registry"
 	"spored/internal/utilities/await"
@@ -49,6 +49,9 @@ type node struct {
 	verificationPassed bool
 
 	pending *await.Pending
+
+	// events
+	witnessHandler *witness_node.WitnessHandler
 }
 
 type State struct {
@@ -68,6 +71,7 @@ func newNode(registry *registry.Element, manifest *manifest.Manifest) *node {
 		manifest: manifest,
 		bus:      nil,
 		pending:  await.New(error.Node).WithTimeout(time.Second * 5),
+		witnessHandler: witness_node.New(),
 	}
 
 	n.manifest.Load()
@@ -114,7 +118,7 @@ func (n *node) state() *State {
 
 func (n *node) handleConnection(conn net.Conn, reader *bufio.Reader, wr *bufio.Writer, hyphae ihyphae) *error.Error {
 
-	writer := newWriter(conn, wr)
+	writer := newWriter(conn, wr, n.manifest.ID)
 
 	err := n.checkManifestForFailure()
 	if err != nil {
@@ -245,6 +249,9 @@ func (n *node) handleConnection(conn net.Conn, reader *bufio.Reader, wr *bufio.W
 	if connectionActivated {
 		n.finishVerification(true)
 	}
+
+	// register parts to the event system
+	n.witnessHandler.Open(n.manifest, n.writer)
 
 	witness.Send(
 		message.Witness(
@@ -399,7 +406,7 @@ listen:
 		// pipe message
 		if message.IsPipe(raw) {
 
-			witness.Send(message.Incoming(raw, n.registry.ID))
+			witness.Incoming(raw, n.registry.ID)
 			pipeMsg, ok := message.Pipe(raw, n.registry.ID)
 			if !ok {
 				// no parsed message to attach, so report internally instead of echoing raw text back over the wire
@@ -415,21 +422,15 @@ listen:
 			go n.bus.Pipe(pipeMsg, n)
 
 			// witnessing starts with witness
-		} else if strings.HasPrefix(raw, "witness") {
+		} else if strings.HasPrefix(raw, "witness ") {
 
-			pm, ok := cparser.Validate(raw)
-			var body string
-			if ok {
-				body = pm.Args["body"]
-			} else {
-				body = strings.TrimPrefix(raw, "witness ")
-			}
-			witness.Send(message.Node(body, n.registry.ID))
+			msg := strings.TrimPrefix(raw, "witness ")
+			witness.Node(msg, n.registry.ID)
 
 			// publishing starts with publish
 		} else if strings.HasPrefix(raw, "publish") {
 
-			witness.Send(message.Incoming(raw, n.registry.ID))
+			witness.Incoming(raw, n.registry.ID)
 			broadcast, ok := message.Broadcast(raw, n.registry.ID)
 			if !ok {
 				// no parsed message to attach, so report internally instead of echoing raw text back over the wire
@@ -469,7 +470,7 @@ listen:
 			// response starts with handle
 		} else if strings.HasPrefix(raw, "~") {
 
-			witness.Send(message.Incoming(raw, n.registry.ID))
+			witness.Incoming(raw, n.registry.ID)
 			response, ok := message.Response(raw, n.registry.ID)
 			if !ok {
 				// no parsed message to attach, so report internally instead of echoing raw text back over the wire
@@ -491,7 +492,7 @@ listen:
 			// fallback to request
 		} else {
 
-			witness.Send(message.Incoming(raw, n.registry.ID))
+			witness.Incoming(raw, n.registry.ID)
 			request, ok := message.Request(raw, n.registry.ID)
 			if !ok {
 				// no parsed message to attach, so report internally instead of echoing raw text back over the wire
@@ -512,6 +513,9 @@ listen:
 			}
 		}
 	}
+
+	// close handlers
+	n.witnessHandler.Close()
 
 	n.mu.Lock()
 	defer n.mu.Unlock()

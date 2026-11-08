@@ -24,12 +24,14 @@ type writer struct {
 	mu     sync.Mutex
 	conn   deadlineSetter
 	writer *bufio.Writer
+	id     string
 }
 
-func newWriter(conn deadlineSetter, w *bufio.Writer) *writer {
+func newWriter(conn deadlineSetter, w *bufio.Writer, id string) *writer {
 	return &writer{
 		conn:   conn,
 		writer: w,
+		id:     id,
 	}
 }
 
@@ -56,7 +58,8 @@ func (w *writer) WriteMessage(msg iface.Message) {
 	w.writer.WriteString(msg.Wire())
 	w.writer.WriteString("\n")
 	w.flush()
-	witness.Send(msg)
+	
+	witness.Outgoing(msg.Wire(), w.id)
 }
 
 func (w *writer) WriteWitness(msg iface.Message) {

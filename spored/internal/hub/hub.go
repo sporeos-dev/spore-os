@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net"
 	"spored/internal/bus"
+	"spored/internal/event"
 	"spored/internal/hyphae"
 	"spored/internal/nodes"
 	"spored/internal/pal"
@@ -36,6 +37,8 @@ func New() (*Hub, *error.Error) {
 		spore:       spore.New(),
 		permissions: permissions.New(),
 	}
+
+	event.Init()
 
 	h.bus.Set(h.hyphae, h.nodes, h.permissions, h.spore)
 	h.hyphae.Set(h.bus, h.nodes, h.permissions, h.spore)

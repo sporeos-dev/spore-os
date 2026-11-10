@@ -9,9 +9,13 @@ import (
 	"io"
 	"net"
 	"slices"
+	"spored/internal/event"
+	message_event "spored/internal/event/message"
 	"spored/internal/iface"
 	"spored/internal/manifest"
-	"spored/internal/message"
+	"spored/internal/nodes/broadcast_node"
+	"spored/internal/nodes/request_node"
+	"spored/internal/nodes/response_node"
 	"spored/internal/nodes/witness_node"
 	"spored/internal/pal"
 	"spored/internal/registry"
@@ -51,6 +55,9 @@ type node struct {
 	pending *await.Pending
 
 	// events
+	broadcastHandler *broadcast_node.BroadcastHandler
+	requestHandler *request_node.RequestHandler
+	responseHandler *response_node.ResponseHandler
 	witnessHandler *witness_node.WitnessHandler
 }
 
@@ -71,6 +78,10 @@ func newNode(registry *registry.Element, manifest *manifest.Manifest) *node {
 		manifest: manifest,
 		bus:      nil,
 		pending:  await.New(error.Node).WithTimeout(time.Second * 5),
+
+		broadcastHandler: broadcast_node.New(),
+		requestHandler: request_node.New(),
+		responseHandler: response_node.New(),
 		witnessHandler: witness_node.New(),
 	}
 
@@ -274,6 +285,9 @@ func (n *node) handleConnection(conn net.Conn, reader *bufio.Reader, wr *bufio.W
 	}
 
 	// register parts to the event system
+	n.broadcastHandler.Open(n.manifest, n.writer)
+	n.requestHandler.Open(n.manifest, n.writer)
+	n.responseHandler.Open(n.manifest, n.writer)
 	n.witnessHandler.Open(n.manifest, n.writer)
 
 	witness.Spore("handshake successful", out.Pair("node", n.registry.ID))
@@ -419,97 +433,15 @@ listen:
 				continue
 			}
 		}
-		// i := index
-		// index++
 
-		// pipe message
-		if message.IsPipe(raw) {
-
-			witness.Incoming(raw, n.registry.ID)
-			pipeMsg, ok := message.Pipe(raw, n.registry.ID)
-			if !ok {
-				// no parsed message to attach, so report internally instead of echoing raw text back over the wire
-				witness.Error(error.Malformed, error.Node, "failed to parse pipe", out.Pair("node", n.registry.ID), out.Pair("raw", raw))
-				continue
-			}
-
-			go n.bus.Pipe(pipeMsg, n)
-
-			// witnessing starts with witness
-		} else if strings.HasPrefix(raw, "witness ") {
-
-			msg := strings.TrimPrefix(raw, "witness ")
-			witness.Node(msg, n.registry.ID)
-
-			// publishing starts with publish
-		} else if strings.HasPrefix(raw, "publish") {
-
-			witness.Incoming(raw, n.registry.ID)
-			broadcast, ok := message.Broadcast(raw, n.registry.ID)
-			if !ok {
-				// no parsed message to attach, so report internally instead of echoing raw text back over the wire
-				witness.Error(error.Malformed, error.Node, "failed to publish", out.Pair("node", n.registry.ID), out.Pair("raw", raw))
-				continue
-			}
-
-			topic := broadcast.Capability()
-			ok = false
-			for _, el := range n.manifest.Topics {
-				if topic == el.Name {
-					ok = true
-					break
-				}
-			}
-			if !ok {
-				n.Receive(error.New(
-					error.NotPermitted,
-					error.Node,
-					"topic not announced in the manifest",
-					out.Pair("node", n.registry.ID),
-					out.Pair("topic", topic)).
-					WithMessage(broadcast))
-				continue
-			}
-
-			err := n.bus.Broadcast(broadcast)
-			if err != nil {
-				n.Receive(err)
-			}
-
-			// response starts with handle
-		} else if strings.HasPrefix(raw, "~") {
-
-			witness.Incoming(raw, n.registry.ID)
-			response, ok := message.Response(raw, n.registry.ID)
-			if !ok {
-				// no parsed message to attach, so report internally instead of echoing raw text back over the wire
-				witness.Error(error.Malformed, error.Node, "failed to respond", out.Pair("node", n.registry.ID), out.Pair("raw", raw))
-				continue
-			}
-			err := n.bus.Response(response)
-			if err != nil {
-				n.returnRoutingError(err, response)
-			}
-
-			// fallback to request
-		} else {
-
-			witness.Incoming(raw, n.registry.ID)
-			request, ok := message.Request(raw, n.registry.ID)
-			if !ok {
-				// no parsed message to attach, so report internally instead of echoing raw text back over the wire
-				witness.Error(error.Malformed, error.Node, "failed to request", out.Pair("node", n.registry.ID), out.Pair("raw", raw))
-				continue
-			}
-
-			err := n.bus.Request(request)
-			if err != nil {
-				n.returnRoutingError(err, request)
-			}
-		}
+		msg := message_event.Raw(raw, n.registry.ID)
+		event.Dispatch().Message.Notify(msg)
 	}
 
 	// close handlers
+	n.broadcastHandler.Close()
+	n.requestHandler.Close()
+	n.responseHandler.Close()
 	n.witnessHandler.Close()
 
 	n.mu.Lock()

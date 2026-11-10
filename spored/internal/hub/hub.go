@@ -9,6 +9,7 @@ import (
 	"spored/internal/bus"
 	"spored/internal/event"
 	"spored/internal/hyphae"
+	"spored/internal/mycelium"
 	"spored/internal/nodes"
 	"spored/internal/pal"
 	"spored/internal/permissions"
@@ -22,6 +23,7 @@ type Hub struct {
 	bus         *bus.Bus
 	hyphae      *hyphae.Hyphae
 	nodes       *nodes.Nodes
+	mycelium    *mycelium.Mycelium
 	spore       *spore.Spore
 	permissions *permissions.Manager
 
@@ -33,12 +35,14 @@ func New() (*Hub, *error.Error) {
 	h := &Hub{
 		bus:         bus.New(),
 		hyphae:      hyphae.New(),
+		mycelium:    mycelium.New(),
 		nodes:       nodes.New(),
 		spore:       spore.New(),
 		permissions: permissions.New(),
 	}
 
 	event.Init()
+	h.mycelium.Open()
 
 	h.bus.Set(h.hyphae, h.nodes, h.permissions, h.spore)
 	h.hyphae.Set(h.bus, h.nodes, h.permissions, h.spore)
@@ -51,6 +55,8 @@ func New() (*Hub, *error.Error) {
 }
 
 func (h *Hub) Close() {
+
+	h.mycelium.Close()
 	h.bus.Close()
 	h.hyphae.Close()
 	h.nodes.Close()

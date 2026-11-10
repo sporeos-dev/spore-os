@@ -28,10 +28,12 @@ const (
 type Module string
 const (
 	Bus Module = "Bus"
+	Event Module = "Event"
 	Hub Module = "Hub"
 	Hyphae Module = "Hyphae"
 	Manifest Module = "Manifest"
 	Message Module = "Message"
+	Mycelium Module = "Mycelium"
 	Node Module = "Node"
 	Parser Module = "Parser"
 	Permission Module = "Permission"

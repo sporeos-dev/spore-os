@@ -31,4 +31,4 @@ func Broadcast(msg, origin, topic, dest string) IBroadcastContext {
 func (b *broadcast) Message() string { return b.message }
 func (b *broadcast) Origin() string { return b.origin }
 func (b *broadcast) Topic() string { return b.topic }
-func (b *broadcast) Destination() string { return b.
+func (b *broadcast) Destination() string { return b.destination }

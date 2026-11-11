@@ -150,7 +150,7 @@ func Parse(raw string) (ParsedMessage, bool) {
 
 // Validate parses raw and verifies that it satisfies the complete Spore
 // protocol grammar. Returns (zero value, false) when either phase fails.
-func Validate(raw string) (ParsedMessage, bool) {
+func ParseAndValidate(raw string) (ParsedMessage, bool) {
 	return parse(raw, true)
 }
 
@@ -161,17 +161,20 @@ func parse(raw string, validate bool) (ParsedMessage, bool) {
 	}
 
 	if strings.TrimSpace(raw) == "" {
+		witness.Error(error.Empty, error.Parser, "empty input")
 		return out, false
 	}
 
 	parser := C.spore_parser_create()
 	if parser == nil {
+		witness.Error(error.Generic, error.Parser, "failed to create parser")
 		return out, false
 	}
 	defer C.spore_parser_destroy(parser)
 
 	msg := C.spore_message_create()
 	if msg == nil {
+		witness.Error(error.Generic, error.Parser, "failed to create message")
 		return out, false
 	}
 	defer C.spore_message_destroy(msg)
@@ -205,7 +208,7 @@ func parse(raw string, validate bool) (ParsedMessage, bool) {
 	if rawArgs != nil && numArgs > 0 {
 		for _, a := range unsafe.Slice(rawArgs, int(numArgs)) {
 			key := C.GoString(a.pKey)
-			val := unquoteValue(C.GoString(a.pValue))
+			val := C.GoString(a.pValue)
 			out.Args[key] = val
 		}
 	}
@@ -219,51 +222,4 @@ func parse(raw string, validate bool) (ParsedMessage, bool) {
 	}
 
 	return out, true
-}
-
-// unquoteValue strips surrounding delimiters and decodes escape sequences,
-// mirroring what the Go tokeniser did before this layer existed.
-func unquoteValue(s string) string {
-	if len(s) >= 2 {
-		if s[0] == '"' && s[len(s)-1] == '"' {
-			return unescapeDoubleQuoted(s[1 : len(s)-1])
-		}
-		if s[0] == '\'' && s[len(s)-1] == '\'' {
-			return s[1 : len(s)-1]
-		}
-	}
-	return s
-}
-
-func unescapeDoubleQuoted(s string) string {
-	if !strings.ContainsRune(s, '\\') {
-		return s
-	}
-	var b strings.Builder
-	b.Grow(len(s))
-	i := 0
-	for i < len(s) {
-		if s[i] == '\\' && i+1 < len(s) {
-			switch s[i+1] {
-			case '\\':
-				b.WriteByte('\\')
-			case '"':
-				b.WriteByte('"')
-			case 'n':
-				b.WriteByte('\n')
-			case 'r':
-				b.WriteByte('\r')
-			case 't':
-				b.WriteByte('\t')
-			default:
-				b.WriteByte('\\')
-				b.WriteByte(s[i+1])
-			}
-			i += 2
-		} else {
-			b.WriteByte(s[i])
-			i++
-		}
-	}
-	return b.String()
 }

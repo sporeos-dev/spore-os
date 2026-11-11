@@ -1,7 +1,7 @@
 // Copyright 2026 Matt Harrison
 // SPDX-License-Identifier: AGPL-3.0-only
 
-package nodes
+package node
 
 import (
 	"errors"

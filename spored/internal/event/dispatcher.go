@@ -7,6 +7,7 @@ import (
 	message_event "spored/internal/event/message"
 	node_event "spored/internal/event/node"
 	registry_event "spored/internal/event/registry"
+	sync_event "spored/internal/event/sync"
 	witness_event "spored/internal/event/witness"
 )
 
@@ -23,6 +24,7 @@ type Dispatcher struct {
 	RegistryWithdrawal *SimpleEvent[registry_event.IRegistryWithdrawalHandler, registry_event.IRegistryContext]
 	Request *ComplexEvent[message_event.IRequestHandler, message_event.IRequestContext]
 	Response *ComplexEvent[message_event.IResponseHandler, message_event.IResponseContext]
+	SynchronizedRequest *SimpleEvent[sync_event.ISynchronizedRequestHandler, sync_event.ISynchronizedRequestContext]
 	Witness *SimpleEvent[witness_event.IWitnessHandler, witness_event.IWitnessContext]
 }
 
@@ -106,6 +108,11 @@ func New() *Dispatcher {
 				return ctx.Destination()
 			},
 		),
+		SynchronizedRequest: Simple(
+			func(sub sync_event.ISynchronizedRequestHandler, ctx sync_event.ISynchronizedRequestContext) {
+				sub.OnSynchronizedRequest(ctx)
+			},
+		),
 		Witness: Simple(
 			func(sub witness_event.IWitnessHandler, ctx witness_event.IWitnessContext) { 
 				sub.OnWitness(ctx)
@@ -127,6 +134,7 @@ func (d *Dispatcher) Sub(base base.IBase) {
 	d.RegistryWithdrawal.Sub(base)
 	d.Request.Sub(base)
 	d.Response.Sub(base)
+	d.SynchronizedRequest.Sub(base)
 	d.Witness.Sub(base)
 }
 
@@ -143,5 +151,6 @@ func (d *Dispatcher) Unsub(base base.IBase) {
 	d.RegistryWithdrawal.Unsub(base)
 	d.Request.Unsub(base)
 	d.Response.Unsub(base)
+	d.SynchronizedRequest.Unsub(base)
 	d.Witness.Unsub(base)
 }

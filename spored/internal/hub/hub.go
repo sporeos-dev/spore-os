@@ -6,26 +6,18 @@ package hub
 import (
 	"errors"
 	"net"
-	"spored/internal/bus"
 	"spored/internal/event"
-	"spored/internal/hyphae"
 	"spored/internal/mycelium"
-	"spored/internal/nodes"
+	nodes "spored/internal/nodepool"
 	"spored/internal/pal"
-	"spored/internal/permissions"
-	"spored/internal/spore"
 	"spored/internal/utilities/error"
 	"spored/internal/utilities/out"
 	"spored/internal/witness"
 )
 
 type Hub struct {
-	bus         *bus.Bus
-	hyphae      *hyphae.Hyphae
-	nodes       *nodes.Nodes
-	mycelium    *mycelium.Mycelium
-	spore       *spore.Spore
-	permissions *permissions.Manager
+	mycelium *mycelium.Mycelium
+	nodepool *nodes.Pool
 
 	listener net.Listener
 }
@@ -33,22 +25,13 @@ type Hub struct {
 func New() (*Hub, *error.Error) {
 
 	h := &Hub{
-		bus:         bus.New(),
-		hyphae:      hyphae.New(),
-		mycelium:    mycelium.New(),
-		nodes:       nodes.New(),
-		spore:       spore.New(),
-		permissions: permissions.New(),
+		mycelium: mycelium.New(),
+		nodepool: nodes.New(),
 	}
 
 	event.Init()
 	h.mycelium.Open()
-
-	h.bus.Set(h.hyphae, h.nodes, h.permissions, h.spore)
-	h.hyphae.Set(h.bus, h.nodes, h.permissions, h.spore)
-	h.nodes.Set(h.bus, h.hyphae, h.permissions, h.spore)
-	h.permissions.Set(h.bus, h.hyphae, h.nodes, h.spore)
-	h.spore.Set(h.bus, h.hyphae, h.nodes, h.permissions)
+	h.nodepool.Open()
 
 	go h.listen()
 	return h, nil
@@ -57,11 +40,7 @@ func New() (*Hub, *error.Error) {
 func (h *Hub) Close() {
 
 	h.mycelium.Close()
-	h.bus.Close()
-	h.hyphae.Close()
-	h.nodes.Close()
-	h.permissions.Close()
-	h.spore.Close()
+	h.nodepool.Close()
 
 	if h.listener != nil {
 		h.listener.Close()
@@ -97,7 +76,10 @@ func (h *Hub) listen() {
 	h.listener = listener
 	defer h.listener.Close()
 
-	h.nodes.Autostart()
+	// TODO
+	// autostart should be handled by nodes
+	// as their manifests get read in
+	// h.nodes.Autostart()
 
 	for {
 		conn, err := h.listener.Accept()
@@ -113,6 +95,6 @@ func (h *Hub) listen() {
 			continue
 		}
 
-		go h.nodes.HandleConnection(conn)
+		go h.nodepool.HandleConnection(conn)
 	}
 }

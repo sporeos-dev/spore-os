@@ -35,6 +35,7 @@ const (
 	Message Module = "Message"
 	Mycelium Module = "Mycelium"
 	Node Module = "Node"
+	NodePool Module = "NodePool"
 	Parser Module = "Parser"
 	Permission Module = "Permission"
 	Pipe Module = "Pipe"

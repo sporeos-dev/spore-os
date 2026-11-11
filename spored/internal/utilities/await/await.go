@@ -4,8 +4,7 @@
 package await
 
 import (
-	"spored/internal/iface"
-	"spored/internal/message"
+	message_event "spored/internal/event/message"
 	"spored/internal/utilities/error"
 	"spored/internal/utilities/out"
 	"spored/internal/witness"
@@ -16,14 +15,14 @@ import (
 type Pending struct {
 	module error.Module
 	mu sync.Mutex
-	channels map[string]chan iface.Message
+	channels map[string]chan message_event.IResponseContext
 	timeout time.Duration
 }
 
 func New(module error.Module) *Pending {
 	return &Pending{
 		module: module,
-		channels: make(map[string]chan iface.Message),
+		channels: make(map[string]chan message_event.IResponseContext),
 		timeout: 0,
 	}
 }
@@ -32,8 +31,8 @@ func (p *Pending) WithTimeout(timeout time.Duration) *Pending {
 	p.timeout = timeout
 	return p
 }
-func (p *Pending) Await(handle string) chan iface.Message {
-	ch := make(chan iface.Message, 1)
+func (p *Pending) Await(handle string) chan message_event.IResponseContext {
+	ch := make(chan message_event.IResponseContext, 1)
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.channels[handle] = ch
@@ -45,11 +44,11 @@ func (p *Pending) Delete(handle string) {
 	defer p.mu.Unlock()
 	delete(p.channels, handle)
 }
-func (p *Pending) WaitFor(handle string, ch chan iface.Message) (iface.Message, *error.Error) {
+func (p *Pending) WaitFor(handle string, ch chan message_event.IResponseContext) (message_event.IResponseContext, bool) {
 	return p.WaitForTimeout(handle, ch, nil)
 }
 
-func (p *Pending) WaitForTimeout(handle string, ch chan iface.Message, override *time.Duration) (iface.Message, *error.Error) {
+func (p *Pending) WaitForTimeout(handle string, ch chan message_event.IResponseContext, override *time.Duration) (message_event.IResponseContext, bool) {
 	timeout := p.timeout
 	if override != nil {
 		timeout = *override
@@ -57,25 +56,22 @@ func (p *Pending) WaitForTimeout(handle string, ch chan iface.Message, override 
 
 	if timeout <= 0 {
 		msg := <-ch
-		return msg, nil
+		return msg, true
 	}
 
 	select {
 	case msg := <-ch:
-		return msg, nil
+		return msg, true
 	case <-time.After(timeout):
 		p.mu.Lock()
 		defer p.mu.Unlock()
 		delete(p.channels, handle)
-		return nil, error.New(
-			error.Timeout,
-			p.module,
-			"timed out pending",
-			out.Pair("handle", handle))
+		witness.Error(error.Timeout, p.module, "wait timed out", out.Pair("handle", handle))
+		return nil, false
 	}
 }
 
-func (p *Pending) Receive(msg iface.Message) *error.Error {
+func (p *Pending) Receive(msg message_event.IResponseContext) {
 	handle := msg.Handle()
 
 	p.mu.Lock()
@@ -92,8 +88,6 @@ func (p *Pending) Receive(msg iface.Message) *error.Error {
 		// no waiter left for this handle (already timed out or never registered) - message would otherwise vanish silently
 		witness.Error(error.Missing, p.module, "dropped response for unknown or expired handle", out.Pair("handle", handle))
 	}
-
-	return nil
 }
 
 func (p *Pending) Resolve(handle string) *error.Error {
@@ -105,7 +99,7 @@ func (p *Pending) Resolve(handle string) *error.Error {
 	}
 
 	if ok {
-		signal := message.Signal(handle)
+		signal := message_event.Response("resolution signal", "n/a", handle, "n/a")
 		ch <- signal
 	}
 

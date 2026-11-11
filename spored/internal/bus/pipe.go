@@ -280,10 +280,6 @@ func (p *pipe) IsConnected() bool {
 	return true
 }
 
-func (p *pipe) IsWitness() bool {
-	return false
-}
-
 func (p *pipe) GetManifest() *manifest.Manifest {
 	return nil
 }

@@ -377,10 +377,6 @@ func (h *Hyphae) IsConnected() bool {
 	return true
 }
 
-func (h *Hyphae) IsWitness() bool {
-	return false
-}
-
 func (h *Hyphae) GetManifest() *manifest.Manifest {
 	return nil
 }

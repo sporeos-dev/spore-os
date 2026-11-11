@@ -64,10 +64,6 @@ func (s *Spore) IsConnected() bool {
 	return true
 }
 
-func (s *Spore) IsWitness() bool {
-	return false
-}
-
 func (s *Spore) GetManifest() *manifest.Manifest {
 	return s.manifest
 }

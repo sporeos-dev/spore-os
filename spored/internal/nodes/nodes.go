@@ -38,7 +38,6 @@ type nodesSelf struct {
 
 func (s *nodesSelf) Id() string                             { return selfNodeId }
 func (s *nodesSelf) IsConnected() bool                      { return true }
-func (s *nodesSelf) IsWitness() bool                        { return false }
 func (s *nodesSelf) GetManifest() *manifest.Manifest        { return nil }
 func (s *nodesSelf) Receive(msg iface.Message) *error.Error { return s.nodes.pending.Receive(msg) }
 func (s *nodesSelf) Witness(msg iface.Message)              {}

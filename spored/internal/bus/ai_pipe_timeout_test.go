@@ -23,7 +23,6 @@ type pipeTimeoutNode struct {
 
 func (n *pipeTimeoutNode) Id() string                      { return n.id }
 func (n *pipeTimeoutNode) IsConnected() bool               { return true }
-func (n *pipeTimeoutNode) IsWitness() bool                 { return false }
 func (n *pipeTimeoutNode) GetManifest() *manifest.Manifest { return n.manifest }
 func (n *pipeTimeoutNode) Witness(iface.Message)           {}
 func (n *pipeTimeoutNode) Receive(msg iface.Message) *sporeerror.Error {

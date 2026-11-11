@@ -505,10 +505,6 @@ func (m *Manager) IsConnected() bool {
 	return true
 }
 
-func (m *Manager) IsWitness() bool {
-	return false
-}
-
 func (m *Manager) GetManifest() *manifest.Manifest {
 	return nil
 }

@@ -22,7 +22,6 @@ type cancellationTestNode struct {
 
 func (n *cancellationTestNode) Id() string                      { return n.id }
 func (n *cancellationTestNode) IsConnected() bool               { return true }
-func (n *cancellationTestNode) IsWitness() bool                 { return false }
 func (n *cancellationTestNode) GetManifest() *manifest.Manifest { return n.manifest }
 func (n *cancellationTestNode) Witness(iface.Message)           {}
 func (n *cancellationTestNode) Receive(msg iface.Message) *sporeerror.Error {

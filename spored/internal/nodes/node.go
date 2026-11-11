@@ -8,7 +8,6 @@ import (
 	"errors"
 	"io"
 	"net"
-	"slices"
 	"spored/internal/event"
 	message_event "spored/internal/event/message"
 	"spored/internal/iface"
@@ -489,18 +488,6 @@ func (n *node) IsConnected() bool {
 	n.mu.RLock()
 	defer n.mu.RUnlock()
 	return n.conn != nil
-}
-
-func (n *node) IsWitness() bool {
-	if n.manifest == nil {
-		return false
-
-		// deprecated
-	} else if n.manifest.Witness {
-		return true
-	}
-
-	return slices.Contains(n.manifest.Roles, "witness")
 }
 
 func (n *node) GetManifest() *manifest.Manifest {

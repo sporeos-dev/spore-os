@@ -5,40 +5,19 @@ package hyphae
 
 import (
 	"fmt"
-	"spored/internal/bus"
-	"spored/internal/iface"
-	"spored/internal/message"
-	sporeerror "spored/internal/utilities/error"
+	"spored/internal/base"
+	"spored/internal/cparser"
+	"spored/internal/event"
+	message_event "spored/internal/event/message"
+	sync_event "spored/internal/event/sync"
 	"sync"
 	"testing"
 )
-
-type testBus struct {
-	hyphae *Hyphae
-}
-
-func (b *testBus) Register(bus.INode)   {}
-func (b *testBus) Unregister(bus.INode) {}
-
-func (b *testBus) Request(request iface.Message) *sporeerror.Error {
-	response, ok := message.Response(
-		fmt.Sprintf("~%s:dev.sporeos.HYPHAE.binary.hash hash=expected ok", request.Handle()),
-		"dev.sporeos.HYPHAE")
-	if !ok {
-		return sporeerror.New(
-			sporeerror.Malformed,
-			sporeerror.Hyphae,
-			"failed to construct test response")
-	}
-	return b.hyphae.Receive(response)
-}
 
 // TestHandleUnique guards against the index++ race that let concurrent
 // requests (e.g. node.spawn racing a binary hash check) collide on the same
 // handle and misroute their responses.
 func TestHandleUnique(t *testing.T) {
-	h := &Hyphae{}
-
 	const goroutines = 500
 	handles := make([]string, goroutines)
 	var wg sync.WaitGroup
@@ -46,7 +25,7 @@ func TestHandleUnique(t *testing.T) {
 	for i := 0; i < goroutines; i++ {
 		go func(i int) {
 			defer wg.Done()
-			handles[i] = h.handle()
+			handles[i] = makeHandle()
 		}(i)
 	}
 	wg.Wait()
@@ -60,15 +39,30 @@ func TestHandleUnique(t *testing.T) {
 	}
 }
 
-func TestHashBinaryReturnsHashResponseArgument(t *testing.T) {
-	h := New()
-	h.bus = &testBus{hyphae: h}
+func TestBinaryHashReturnsHashResponseArgument(t *testing.T) {
+	event.Init()
+	handler := &syncAPITestHandler{
+		Base: base.New().SetName("hyphae-test"),
+		handle: func(ctx sync_event.ISynchronizedRequestContext) {
+			request, ok := cparser.ParseAndValidate(ctx.Message())
+			if !ok {
+				t.Fatalf("invalid request: %q", ctx.Message())
+			}
+			if request.Command != "dev.sporeos.HYPHAE.binary.hash" || request.Args["pid"] != "123" || request.Handle == "" {
+				t.Fatalf("unexpected request: %+v", request)
+			}
+			raw := fmt.Sprintf("~%s:%s hash=expected ok", request.Handle, request.Command)
+			ctx.Respond(message_event.Response(raw, "dev.sporeos.HYPHAE", request.Handle, ctx.Origin()))
+		},
+	}
+	event.Subscribe(handler)
+	t.Cleanup(func() { event.Unsubscribe(handler) })
 
-	hash, err := h.HashBinary(123)
-	if err != nil {
-		t.Fatalf("HashBinary() returned an error: %v", err)
+	hash, ok := BinaryHash(123)
+	if !ok {
+		t.Fatal("BinaryHash() failed")
 	}
 	if hash != "expected" {
-		t.Fatalf("HashBinary() = %q, want %q", hash, "expected")
+		t.Fatalf("BinaryHash() = %q, want %q", hash, "expected")
 	}
 }

@@ -8,9 +8,10 @@ import (
 	"net"
 	"spored/internal/base"
 	"spored/internal/event"
+	registry_event "spored/internal/event/registry"
 	"spored/internal/manifest"
 	"spored/internal/node"
-	"spored/internal/registry"
+	reg_el "spored/internal/registry/element"
 	"spored/internal/utilities/await"
 	"spored/internal/utilities/out"
 	"spored/internal/witness"
@@ -23,13 +24,13 @@ import (
 )
 
 const handshakeTimeout = 5 * time.Second
+var _ registry_event.IRegistryAnnouncementHandler = (*Pool)(nil)
+var _ registry_event.IRegistryWithdrawalHandler = (*Pool)(nil)
 
 type Pool struct {
 	*base.Base
 	index   atomic.Int64
 	pending *await.Pending
-
-	registry *registry.Registry
 
 	mu    sync.RWMutex
 	nodes map[string]*node.Single
@@ -37,7 +38,7 @@ type Pool struct {
 
 type installation struct {
 	manifest *manifest.Manifest
-	registry *registry.Element
+	registry *reg_el.Element
 }
 
 func New() *Pool {
@@ -94,4 +95,51 @@ func (p *Pool) HandleConnection(conn net.Conn) {
 	// failures will be handled in the function
 	// (including witness & replies)
 	node.HandleConnection(conn, reader, writer)
+}
+
+// registry announcment
+func (p *Pool) OnRegistryAnnouncement(ctx registry_event.IRegistryContext) {
+	el := ctx.Registry()
+	witness.Spore("registry announcement", out.Pair("node", el.ID))
+
+	{
+		p.mu.Lock()
+
+		_, ok := p.nodes[el.ID]
+		if ok {
+			p.mu.Unlock()
+			witness.Error(error.Collision, error.NodePool, "cannot add to registry", out.Pair("node", el.ID))
+			return
+		}
+
+		node := node.New(el)
+		p.nodes[el.ID] = node
+		
+		p.mu.Unlock()
+	}
+
+	witness.Spore("node added to registry", out.Pair("node", el.ID))
+}
+
+// registry withdawal
+func (p *Pool) OnRegistryWithdrawal(ctx registry_event.IRegistryContext) {
+	el := ctx.Registry()
+	witness.Spore("registry withdrawal", out.Pair("node", el.ID))
+
+	{
+		p.mu.Lock()
+
+		node, ok := p.nodes[el.ID]
+		if ok {
+			node.Close()
+			delete(p.nodes, el.ID)
+			p.mu.Unlock()
+			witness.Spore("node removed from registry", out.Pair("node", el.ID))
+			return
+		}
+
+		p.mu.Unlock()
+	}
+
+	witness.Error(error.Missing, error.NodePool, "cannot withdraw from registry", out.Pair("node", el.ID))
 }

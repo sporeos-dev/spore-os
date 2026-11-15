@@ -16,7 +16,6 @@ type Namespace string
 const (
 	Spore  Namespace = "spore"
 	Hyphae Namespace = "hyphae"
-	Any    Namespace = "any"
 )
 
 type Trust string

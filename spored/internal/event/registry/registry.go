@@ -1,9 +1,11 @@
 package registry_event
 
-import "spored/internal/registry"
+import (
+	reg_el "spored/internal/registry/element"
+)
 
 type IRegistryContext interface {
-	Registry() *registry.Element
+	Registry() *reg_el.Element
 }
 
 type IRegistryAnnouncementHandler interface {
@@ -15,16 +17,16 @@ type IRegistryWithdrawalHandler interface {
 }
 
 type reg struct {
-	elem *registry.Element
+	elem *reg_el.Element
 }
 
-func New(elem *registry.Element) *reg {
+func New(elem *reg_el.Element) *reg {
 	return &reg{
 		elem: elem,
 	}
 }
 
-func (r *reg) Registry() *registry.Element {
+func (r *reg) Registry() *reg_el.Element {
 	return r.elem
 }
 

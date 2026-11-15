@@ -4,132 +4,104 @@
 package spore
 
 import (
+	"fmt"
 	"log/slog"
-	"spored/internal/iface"
+	"spored/internal/base"
+	"spored/internal/cparser"
+	"spored/internal/event"
+	manifest_event "spored/internal/event/manifest"
+	message_event "spored/internal/event/message"
 	"spored/internal/manifest"
 	"spored/internal/pal"
-	"spored/internal/utilities/error"
-	"spored/internal/utilities/out"
 	"spored/internal/utilities/status"
+	"spored/internal/witness"
 )
 
-type Spore struct {
-	manifest *manifest.Manifest
+var _ message_event.IRequestHandler = (*Spore)(nil)
 
-	bus         ibus
-	hyphae      ihyphae
-	permissions ipermissions
-	nodes       inodes
+type Spore struct {
+	*base.Base
+	manifest *manifest.Manifest
 }
 
 func New() *Spore {
+	return &Spore{
+		Base: base.New().SetName("spore"),
+		manifest: nil,
+	}
+}
+
+func (s *Spore) Open() {
 	m := &manifest.Manifest{
 		Status:           status.New(),
 		Path:             pal.FileSporeManifest(),
 		ExpectedChecksum: "n/a",
 	}
-	m.Load()
 	m.Status.Set(status.Verified)
 	slog.Debug("Spore manifest loaded.", "manifest", m.Path)
 
-	return &Spore{
-		manifest: m,
-	}
-}
+	s.manifest = m
+	m.Load()
 
-func (s *Spore) Set(bus ibus, hyphae ihyphae, nodes inodes, permissions ipermissions) {
-	s.bus = bus
-	s.hyphae = hyphae
-	s.nodes = nodes
-	s.permissions = permissions
-
-	s.bus.Register(s)
-	s.permissions.RegisterNode(s.manifest)
+	event.Subscribe(s)
 }
 
 func (s *Spore) Close() {
-	s.bus.Unregister(s)
+	event.Unsubscribe(s)
+
+	man := manifest_event.New(s.manifest)
+	event.Dispatch().ManifestWithdrawal.Notify(man)
 }
 
-//
-//
-// INode
-//
-
-func (s *Spore) Id() string {
-	return s.manifest.ID
+func (s *Spore) Announce() {
+	man := manifest_event.New(s.manifest)
+	event.Dispatch().ManifestAnnouncement.Notify(man)
 }
 
-func (s *Spore) IsConnected() bool {
-	return true
+func(s *Spore) OnRequest(ctx message_event.IRequestContext) {
+
+	raw := ctx.Message()
+	// origin := ctx.Origin()
+	cmd := ctx.Command()
+
+	go func() {
+
+		_, ok := cparser.ParseAndValidate(raw)
+		if !ok {
+			return
+		}
+
+		witness.Spore(
+			fmt.Sprintf("raw: %s", raw))
+
+		switch cmd {
+		case "dev.sporeos.SPORE.node.install":
+		case "dev.sporeos.SPORE.node.uninstall":
+		case "dev.sporeos.SPORE.node.reinstall":
+
+		case "dev.sporeos.SPORE.node.spawn":
+		case "dev.sporeos.SPORE.node.kill":
+
+		case "dev.sporeos.SPORE.topic.subscribe":
+		case "dev.sporeos.SPORE.topic.unsubscribe":
+			
+		case "dev.sporeos.SPORE.permission.request":
+		case "dev.sporeos.SPORE.permission.grant":
+		case "dev.sporeos.SPORE.permission.revoke":
+
+		case "dev.sporeos.SPORE.state.persist":
+		case "dev.sporeos.SPORE.state.retrieve":
+
+		default:
+			
+		}
+	}()
 }
 
-func (s *Spore) GetManifest() *manifest.Manifest {
-	return s.manifest
-}
-
-func (s *Spore) Receive(request iface.Message) *error.Error {
-	capability := request.Capability()
-	fqCap := s.bus.FullyQualifiedRequest(capability)
-
-	switch fqCap {
-	case "dev.sporeos.SPORE.help":
-		return s.help(request)
-	case "dev.sporeos.SPORE.state":
-		return s.state(request)
-	case "dev.sporeos.SPORE.list":
-		return s.list(request)
-	case "dev.sporeos.SPORE.complete":
-		return s.complete(request)
-	case "dev.sporeos.SPORE.hint":
-		return s.hint(request)
-
-	case "dev.sporeos.SPORE.node.install":
-		return s.nodeInstall(request)
-	case "dev.sporeos.SPORE.node.uninstall":
-		return s.nodeUninstall(request)
-	case "dev.sporeos.SPORE.node.reinstall":
-		return s.nodeReinstall(request)
-	case "dev.sporeos.SPORE.node.spawn":
-		return s.nodeSpawn(request)
-	case "dev.sporeos.SPORE.node.kill":
-		return s.nodeKill(request)
-	case "dev.sporeos.SPORE.node.reload":
-		return s.nodeReload(request)
-
-	case "dev.sporeos.SPORE.topic.subscribe":
-		return s.topicSubscribe(request)
-	case "dev.sporeos.SPORE.topic.unsubscribe":
-		return s.topicUnsubscribe(request)
-
-	case "dev.sporeos.SPORE.permission.request":
-		return s.permissionRequest(request)
-	case "dev.sporeos.SPORE.permission.grant":
-		return s.permissionGrant(request)
-	case "dev.sporeos.SPORE.permission.revoke":
-		return s.permissionRevoke(request)
-
-	case "dev.sporeos.SPORE.state.persist":
-		return s.statePersist(request)
-	case "dev.sporeos.SPORE.state.retrieve":
-		return s.stateRetrieve(request)
-
-	case "dev.sporeos.SPORE.security.keyring.grant":
-		return s.securityKeyringGrant(request)
-	case "dev.sporeos.SPORE.security.keyring.revoke":
-		return s.securityKeyringRevoke(request)
-	case "dev.sporeos.SPORE.security.signature.sign":
-		return s.securitySignatureSign(request)
-	case "dev.sporeos.SPORE.security.signature.verify":
-		return s.securitySignatureVerify(request)
+func (s *Spore) Api() []string {
+	api := []string{}
+	for _, el := range s.manifest.Api {
+		api = append(api, el.Name)
 	}
-
-	return error.New(
-		error.Missing,
-		error.Spore,
-		"spore command unhandled",
-		out.Pair("command", request.Capability())).
-		WithMessage(request)
+	return api
 }
-
-func (s *Spore) Witness(message iface.Message) {}

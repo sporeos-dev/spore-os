@@ -1,5 +1,11 @@
 package message_event
 
+// before message event
+type IBeforeMessageHandler interface {
+	OnBeforeMessage()
+}
+
+// message event
 type IMessageContext interface {
 	Message() string
 	Origin() string

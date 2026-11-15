@@ -23,10 +23,10 @@ type program struct {
 func (p *program) Start(s service.Service) error {
 	slog.Debug("Starting program as a service")
 
-	hub, err := hub.New()
-	if err != nil {
-		slog.Error("Failed to start hub", "error", err)
-		return err
+	hub, ok := hub.New()
+	if !ok {
+		slog.Error("Failed to start hub")
+		return nil
 	}
 	p.hub = hub
 	return nil
@@ -45,9 +45,9 @@ func (p *program) Stop(s service.Service) error {
 func (p *program) run() {
 	slog.Debug("Starting program as a console app")
 
-	hub, err := hub.New()
-	if err != nil {
-		slog.Error("Failed to start hub", "error", err)
+	hub, ok := hub.New()
+	if !ok {
+		slog.Error("Failed to start hub")
 		os.Exit(1)
 	}
 	p.hub = hub

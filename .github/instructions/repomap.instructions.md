@@ -13,6 +13,7 @@ All potentially relevant repos of the Spore OS project.
 - spec documentation
 - manifest schemas for validation
 - historical releases
+- multiple versions present; use largest number if not specified
 
 ### Releases
 - found at ../spore-os-releases

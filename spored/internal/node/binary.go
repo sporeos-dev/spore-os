@@ -8,7 +8,7 @@ import (
 	"net"
 	"spored/internal/manifest"
 	"spored/internal/pal"
-	"spored/internal/registry"
+	reg_el "spored/internal/registry/element"
 	"spored/internal/utilities/file"
 	"spored/internal/utilities/status"
 	"strings"
@@ -20,7 +20,7 @@ type binary struct {
 	expectedChecksum string
 }
 
-func newBinary(registry *registry.Element) *binary {
+func newBinary(registry *reg_el.Element) *binary {
 	b := &binary{
 		status:           status.New(),
 		path:             registry.Binary,
@@ -34,7 +34,7 @@ func newBinary(registry *registry.Element) *binary {
 	return b
 }
 
-func newDeveloperBinary(registry *registry.Element) *binary {
+func newDeveloperBinary(registry *reg_el.Element) *binary {
 	b := &binary{
 		status:           status.New(),
 		path:             registry.Binary,

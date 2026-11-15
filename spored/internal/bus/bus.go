@@ -1,113 +1,113 @@
-// Copyright 2026 Matt Harrison
-// SPDX-License-Identifier: AGPL-3.0-only
+// // Copyright 2026 Matt Harrison
+// // SPDX-License-Identifier: AGPL-3.0-only
 
 package bus
 
-import (
-	"spored/internal/iface"
-	"spored/internal/utilities/error"
-)
+// import (
+// 	"spored/internal/iface"
+// 	"spored/internal/utilities/error"
+// )
 
-type Bus struct {
-	api       *api
-	broadcast *broadcast
-	responses *responses
-	pipe      *pipe
+// type Bus struct {
+// 	api       *api
+// 	broadcast *broadcast
+// 	responses *responses
+// 	pipe      *pipe
 
-	hyphae      ihyphae
-	nodes       inodes
-	permissions ipermissions
-	spore       ispore
-}
+// 	hyphae      ihyphae
+// 	nodes       inodes
+// 	permissions ipermissions
+// 	spore       ispore
+// }
 
-func New() *Bus {
-	b := &Bus{
-		api:       newApi(),
-		broadcast: newBroadcast(),
-		responses: newResponses(),
-		pipe:      newPipe(),
-	}
-	b.pipe.setBus(b)
-	b.responses.register(b.pipe)
-	return b
-}
+// func New() *Bus {
+// 	b := &Bus{
+// 		api:       newApi(),
+// 		broadcast: newBroadcast(),
+// 		responses: newResponses(),
+// 		pipe:      newPipe(),
+// 	}
+// 	b.pipe.setBus(b)
+// 	b.responses.register(b.pipe)
+// 	return b
+// }
 
-func (b *Bus) Set(hyphae ihyphae, nodes inodes, permissions ipermissions, spore ispore) {
-	b.hyphae = hyphae
-	b.nodes = nodes
-	b.permissions = permissions
-	b.spore = spore
-	b.api.setPermissions(permissions)
-}
+// func (b *Bus) Set(hyphae ihyphae, nodes inodes, permissions ipermissions, spore ispore) {
+// 	b.hyphae = hyphae
+// 	b.nodes = nodes
+// 	b.permissions = permissions
+// 	b.spore = spore
+// 	b.api.setPermissions(permissions)
+// }
 
-func (b *Bus) Close() {
-	b.api.close()
-	b.broadcast.close()
-	b.responses.close()
-	b.pipe.close()
-}
+// func (b *Bus) Close() {
+// 	b.api.close()
+// 	b.broadcast.close()
+// 	b.responses.close()
+// 	b.pipe.close()
+// }
 
-func (b *Bus) Register(n INode) {
-	b.api.register(n)
-	b.broadcast.register(n)
-	b.responses.register(n)
-}
+// func (b *Bus) Register(n INode) {
+// 	b.api.register(n)
+// 	b.broadcast.register(n)
+// 	b.responses.register(n)
+// }
 
-func (b *Bus) Unregister(n INode) {
-	b.api.unregister(n)
-	b.broadcast.unregister(n)
-	b.responses.unregister(n)
-}
+// func (b *Bus) Unregister(n INode) {
+// 	b.api.unregister(n)
+// 	b.broadcast.unregister(n)
+// 	b.responses.unregister(n)
+// }
 
-//
-// pipe
-// routing
-//
+// //
+// // pipe
+// // routing
+// //
 
-func (b *Bus) Pipe(msg iface.Message, node INode) {
-	b.pipe.pipe(msg, node)
-}
+// func (b *Bus) Pipe(msg iface.Message, node INode) {
+// 	b.pipe.pipe(msg, node)
+// }
 
-//
-// broadcast
-// routing
-//
+// //
+// // broadcast
+// // routing
+// //
 
-func (b *Bus) Broadcast(msg iface.Message) *error.Error {
-	return b.broadcast.broadcast(msg)
-}
+// func (b *Bus) Broadcast(msg iface.Message) *error.Error {
+// 	return b.broadcast.broadcast(msg)
+// }
 
-func (b *Bus) Subscribe(cast string, topic string) *error.Error {
-	return b.broadcast.subscribe(cast, topic)
-}
+// func (b *Bus) Subscribe(cast string, topic string) *error.Error {
+// 	return b.broadcast.subscribe(cast, topic)
+// }
 
-func (b *Bus) Unsubscribe(cast string, topic string) *error.Error {
-	return b.broadcast.unsubscribe(cast, topic)
-}
+// func (b *Bus) Unsubscribe(cast string, topic string) *error.Error {
+// 	return b.broadcast.unsubscribe(cast, topic)
+// }
 
-//
-// request
-// response
-//
+// //
+// // request
+// // response
+// //
 
-func (b *Bus) Request(msg iface.Message) *error.Error {
-	err := b.responses.request(msg)
-	if err != nil {
-		return err
-	}
+// func (b *Bus) Request(msg iface.Message) *error.Error {
+// 	err := b.responses.request(msg)
+// 	if err != nil {
+// 		return err
+// 	}
 
-	err = b.api.request(msg)
-	if err != nil {
-		b.responses.cancel(msg.Handle())
-		return err
-	}
-	return nil
-}
+// 	err = b.api.request(msg)
+// 	if err != nil {
+// 		b.responses.cancel(msg.Handle())
+// 		return err
+// 	}
+// 	return nil
+// }
 
-func (b *Bus) Response(msg iface.Message) *error.Error {
-	return b.responses.response(msg)
-}
+// func (b *Bus) Response(msg iface.Message) *error.Error {
+// 	return b.responses.response(msg)
+// }
 
-func (b *Bus) FullyQualifiedRequest(command string) string {
-	return b.api.fullyQualifiedRequest(command)
-}
+// func (b *Bus) FullyQualifiedRequest(command string) string {
+// 	return b.api.fullyQualifiedRequest(command)
+// }

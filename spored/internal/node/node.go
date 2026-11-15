@@ -8,18 +8,18 @@ import (
 	"errors"
 	"io"
 	"net"
+	"spored/internal/base"
 	"spored/internal/event"
+	manifest_event "spored/internal/event/manifest"
 	message_event "spored/internal/event/message"
 	"spored/internal/hyphae"
-	"spored/internal/iface"
 	"spored/internal/manifest"
-	"spored/internal/nodes/broadcast_node"
-	"spored/internal/nodes/request_node"
-	"spored/internal/nodes/response_node"
-	"spored/internal/nodes/witness_node"
+	"spored/internal/node/broadcast_node"
+	"spored/internal/node/request_node"
+	"spored/internal/node/response_node"
+	"spored/internal/node/witness_node"
 	"spored/internal/pal"
-	"spored/internal/registry"
-	"spored/internal/utilities/await"
+	reg_el "spored/internal/registry/element"
 	"spored/internal/utilities/error"
 	"spored/internal/utilities/out"
 	"spored/internal/utilities/status"
@@ -29,19 +29,19 @@ import (
 	"time"
 )
 
+var _ message_event.IBeforeMessageHandler = (*Single)(nil)
+
 type Single struct {
-	registry  *registry.Element
+	*base.Base
+	registry  *reg_el.Element
 	manifest  *manifest.Manifest
 
 	mu     sync.RWMutex
 	conn   net.Conn
 	reader *bufio.Reader
 	writer *writer
-
 	verificationDone   chan struct{}
 	verificationPassed bool
-
-	pending *await.Pending
 
 	// events
 	broadcastHandler *broadcast_node.BroadcastHandler
@@ -60,12 +60,12 @@ type State struct {
 // ctor/dtor
 //
 
-func New(registry *registry.Element) *Single {
+func New(registry *reg_el.Element) *Single {
 
 	n := &Single{
+		Base: base.New().Set("node", registry.ID),
 		registry: registry,
 		manifest: nil,
-		pending:  await.New(error.Node).WithTimeout(time.Second * 5),
 
 		broadcastHandler: broadcast_node.New(),
 		requestHandler: request_node.New(),
@@ -73,15 +73,79 @@ func New(registry *registry.Element) *Single {
 		witnessHandler: witness_node.New(),
 	}
 
+	n.manifest = manifest.New(registry, n)
 	n.manifest.Load()
 	n.manifest.Verify()
 
 	return n
 }
 
+func (s *Single) Close() {
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.broadcastHandler.Close()
+	s.requestHandler.Close()
+	s.responseHandler.Close()
+	s.witnessHandler.Close()
+
+	if s.manifest != nil {
+		s.manifest.Close()
+	}
+
+	if s.conn != nil {
+		s.conn.Close()
+	}
+}
+
+// before message event
+func (s *Single) OnBeforeMessage() {
+	if s.manifest == nil {
+		return
+	}
+
+	switch s.manifest.Status.Get() {
+	case status.Unverified:
+		s.manifest.Verify()
+	case status.RequiresUserSpace:
+		s.manifest.Verify()
+	case status.RequiresDeveloper:
+		s.manifest.Verify()
+	default:
+		// already verified
+		// or failed verification
+		// either way, nothing to do
+		return
+	}
+}
+
+// inotifier
+// used in manifest to run events
+func (s *Single) Announce(m *manifest.Manifest) {
+	man := manifest_event.New(m)
+	event.Dispatch().ManifestAnnouncement.Notify(man)
+	event.Subscribe(s)
+
+	s.broadcastHandler.Open(s.manifest)
+	s.requestHandler.Open(s.manifest)
+	s.responseHandler.Open(s.manifest)
+	s.witnessHandler.Open(s.manifest)
+}
+
+func (s *Single) Withdraw(m *manifest.Manifest) {
+	s.broadcastHandler.Close()
+	s.requestHandler.Close()
+	s.responseHandler.Close()
+	s.witnessHandler.Close()
+	man := manifest_event.New(m)
+	event.Dispatch().ManifestWithdrawal.Notify(man)
+	event.Unsubscribe(s)
+}
+
+// 
 //
-//
-// inode
+// handles incoming connection
 //
 
 func (s *Single) HandleConnection(conn net.Conn, reader *bufio.Reader, wr *bufio.Writer) {
@@ -191,8 +255,8 @@ func (s *Single) HandleConnection(conn net.Conn, reader *bufio.Reader, wr *bufio
 			return
 		}
 
-		checksum, err := hyphae.HashBinary(pid)
-		if err != nil {
+		checksum, ok := hyphae.BinaryHash(pid)
+		if !ok {
 			witness.Error(error.HandshakeDenial, error.Node, "failed binary hash")
 			wr.WriteString("FAIL binary hash\n")
 			wr.Flush()
@@ -240,21 +304,12 @@ func (s *Single) HandleConnection(conn net.Conn, reader *bufio.Reader, wr *bufio
 	}
 
 	// register parts to the event system
-	s.broadcastHandler.Open(s.manifest, s.writer)
-	s.requestHandler.Open(s.manifest, s.writer)
-	s.responseHandler.Open(s.manifest, s.writer)
-	s.witnessHandler.Open(s.manifest, s.writer)
+	s.broadcastHandler.Connect(s.writer)
+	s.requestHandler.Connect(s.writer)
+	s.responseHandler.Connect(s.writer)
+	s.witnessHandler.Connect(s.writer)
 
 	witness.Spore("handshake successful", out.Pair("node", s.registry.ID))
-
-	err = s.pending.Resolve("lazy")
-	if err != nil {
-		witness.Error(error.HandshakeDenial, error.Node, "failed to resolve pending")
-		wr.WriteString("FAIL resolve pending\n")
-		wr.Flush()
-		conn.Close()
-		return
-	}
 }
 
 func (s *Single) activateConnection(conn net.Conn, reader *bufio.Reader, writer *writer, provisional bool) {
@@ -368,15 +423,20 @@ listen:
 			break listen
 		case readFailure:
 			if pal.IsTerminalPeerReadError(readErr) {
+				witness.Spore(
+					"node connection ended",
+					out.Pair("node", s.registry.ID),
+					out.Pair("error", readErr.Error()))
 				break listen
 			}
-			s.Receive(
-				error.New(
-					error.InitializationFailure,
-					error.Node,
-					"read failure",
-					out.Pair("node", s.registry.ID),
-					out.Pair("error", readErr.Error())))
+				
+			witness.Error(
+				error.ConnectionFailure,
+				error.Node,
+				"read failure",
+				out.Pair("node", s.registry.ID),
+				out.Pair("error", readErr.Error()))
+
 			if !isRetryableReadError(readErr) {
 				break listen
 			}
@@ -405,17 +465,6 @@ listen:
 	s.writer = nil
 	s.conn.Close()
 	s.conn = nil
-}
-
-func (s *Single) returnRoutingError(err *error.Error, msg iface.Message) {
-	if receiveErr := s.Receive(err.WithMessage(msg)); receiveErr != nil {
-		witness.Error(
-			error.Generic,
-			error.Node,
-			"failed to return routing error",
-			out.Pair("node", s.registry.ID),
-			out.Pair("error", receiveErr.Error()))
-	}
 }
 
 func isRetryableReadError(readErr readError) bool {

@@ -9,8 +9,10 @@ import (
 	"sync"
 )
 
+var _ message_event.IResponseHandler = (*ResponseHandler)(nil)
+
 type iwriter interface {
-	WriteRaw(s string)
+	WriteMessage(s string)
 }
 
 type ResponseHandler struct {
@@ -26,14 +28,25 @@ func New() *ResponseHandler {
 	}
 }
 
-func (r *ResponseHandler) Open(manifest *manifest.Manifest, writer iwriter) {
+func (r *ResponseHandler) Open(manifest *manifest.Manifest) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	
 	r.manifest = manifest
-	r.writer = writer
 	r.Base.SetId(manifest.ID)
 	event.Subscribe(r)
+}
+
+func (r *ResponseHandler) Connect(writer iwriter) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.writer = writer
+}
+
+func (r *ResponseHandler) Disconnect() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.writer = nil
 }
 
 func (r *ResponseHandler) Close() {
@@ -49,11 +62,15 @@ func (r *ResponseHandler) OnResponse(ctx message_event.IResponseContext) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
+	if r.writer == nil {
+		return
+	}
+
 	raw := fmt.Sprintf(
 		`%s capture=%s`,
 		ctx.Message(),
 		ctx.Origin())
-	r.writer.WriteRaw(raw)
+	r.writer.WriteMessage(raw)
 	
 	ctx.Handled()
 }

@@ -53,6 +53,9 @@ func (m *Mycelium) OnMessage(ctx message_event.IMessageContext) {
 	raw := ctx.Message()
 	origin := ctx.Origin()
 
+	// allows nodes to set themselves up in case they haven't yet
+	event.Dispatch().BeforeMessage.Notify()
+
 	// pipe message
 	if message.IsPipe(raw) {
 
@@ -76,6 +79,9 @@ func (m *Mycelium) OnMessage(ctx message_event.IMessageContext) {
 	} else if strings.HasPrefix(raw, "publish") { // pub/sub starts with 'publish'
 
 		witness.Incoming(raw, origin)
+		if !ensureNoCast(raw) {
+			return
+		}
 		
 		raw = strings.TrimPrefix(raw, "publish ")
 
@@ -99,6 +105,9 @@ func (m *Mycelium) OnMessage(ctx message_event.IMessageContext) {
 	} else if strings.HasPrefix(raw, "~") { // response starts with a handle
 
 		witness.Incoming(raw, origin)
+		if !ensureNoCapture(raw) {
+			return
+		}
 
 		handle, ok := extractHandleFromResponse(raw)
 		if !ok {
@@ -115,8 +124,11 @@ func (m *Mycelium) OnMessage(ctx message_event.IMessageContext) {
 		}
 
 		response := message_event.Response(raw, origin, handle, destination)
-		m.pending.Receive(response)
-		event.Dispatch().Response.Notify(response)
+		if m.pending.Has(handle) {
+			m.pending.Receive(response)
+		} else {
+			event.Dispatch().Response.Notify(response)
+		}
 
 	} else { // fallback to request
 
@@ -136,6 +148,12 @@ func (m *Mycelium) OnMessage(ctx message_event.IMessageContext) {
 			return
 		}
 
+		if !ensureNoCast(raw) {
+			reserr := message_event.ResponseError(error.ReservedLanguage, error.Mycelium, "cast is hub-reserved", handle, command, origin)
+			event.Dispatch().Response.Notify(reserr)
+			return
+		}
+
 		ok = m.handles.mapHandle(handle, origin)
 		if !ok {
 			reserr := message_event.ResponseError(error.Collision, error.Mycelium, "handle collision", handle, command, origin)
@@ -143,14 +161,15 @@ func (m *Mycelium) OnMessage(ctx message_event.IMessageContext) {
 			return
 		}
 
-		node, ok := m.commands.retrieveNode(command)
+		node, fqName, ok := m.commands.retrieveNodeAndFqName(command)
 		if !ok {
 			reserr := message_event.ResponseError(error.Missing, error.Mycelium, "unknown command", handle, command, origin)
 			event.Dispatch().Response.Notify(reserr)
+			m.handles.deleteHandle(handle)
 			return
 		}
 
-		request := message_event.Request(raw, origin, command, node)
+		request := message_event.Request(raw, origin, fqName, node)
 		event.Dispatch().Request.Notify(request)
 	}
 }
@@ -196,6 +215,12 @@ func (m *Mycelium) OnSynchronizedRequest(ctx sync_event.ISynchronizedRequestCont
 			return
 		}
 
+		if !ensureNoCast(raw) {
+			res := message_event.ResponseError(error.ReservedLanguage, error.Mycelium, "cast is hub-reserved", handle, command, ctx.Origin())
+			ctx.Respond(res)
+			return
+		}
+
 		ok = m.handles.mapHandle(handle, ctx.Origin())
 		if !ok {
 			res := message_event.ResponseError(error.Collision, error.Mycelium, "handle collision", handle, command, ctx.Origin())
@@ -203,14 +228,14 @@ func (m *Mycelium) OnSynchronizedRequest(ctx sync_event.ISynchronizedRequestCont
 			return
 		}
 
-		node, ok := m.commands.retrieveNode(command)
+		node, fqCmd, ok := m.commands.retrieveNodeAndFqName(command)
 		if !ok {
 			res := message_event.ResponseError(error.Missing, error.Mycelium, "unknown command", handle, command, ctx.Origin())
 			ctx.Respond(res)
 			return
 		}
 
-		request := message_event.Request(raw, ctx.Origin(), command, node)
+		request := message_event.Request(raw, ctx.Origin(), fqCmd, node)
 		ch := m.pending.Await(handle)
 		event.Dispatch().Request.Notify(request)
 		response, ok := m.pending.WaitFor(handle, ch) 

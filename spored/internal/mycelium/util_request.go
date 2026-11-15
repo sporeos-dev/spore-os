@@ -8,6 +8,10 @@ import (
 	"unicode/utf8"
 )
 
+func ensureNoCast(raw string) bool {
+	return ensureNoReservedArgument(raw, "cast")
+}
+
 func extractHandleFromRequest(raw string) (string, bool) {
 	var delimiters []rune
 	previousSpace := true
@@ -42,6 +46,17 @@ func extractHandleFromRequest(raw string) (string, bool) {
 			}
 			previousSpace = false
 			i += size
+			continue
+		}
+
+		if ch == '<' && i > 0 && raw[i-1] == '=' && strings.HasPrefix(raw[i:], "<<") {
+			end := blockEnd(raw, i+2)
+			if end < 0 {
+				witness.Error(error.Malformed, error.Mycelium, "request block is not closed")
+				return "", false
+			}
+			i = end
+			previousSpace = false
 			continue
 		}
 

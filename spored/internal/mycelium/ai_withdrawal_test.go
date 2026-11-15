@@ -27,7 +27,7 @@ func TestWithdrawalPreservesOtherAbbreviationCandidates(t *testing.T) {
 		topics.OnManifestAnnouncement(manifest_event.New(m))
 	}
 	topics.subscribers["timer.tick"] = []string{}
-	if _, ok := commands.retrieveNode("tick"); ok {
+	if _, _, ok := commands.retrieveNodeAndFqName("tick"); ok {
 		t.Error("ambiguous command unexpectedly resolved")
 	}
 	if _, ok := topics.retrieveSubs("tick", second.ID); ok {
@@ -36,8 +36,8 @@ func TestWithdrawalPreservesOtherAbbreviationCandidates(t *testing.T) {
 
 	commands.OnManifestWithdrawal(manifest_event.New(first))
 	topics.OnManifestWithdrawal(manifest_event.New(first))
-	if node, ok := commands.retrieveNode("tick"); !ok || node != "timer" {
-		t.Errorf("command = %q, %t; want timer, true", node, ok)
+	if node, fqName, ok := commands.retrieveNodeAndFqName("tick"); !ok || node != "timer" || fqName != "timer.tick" {
+		t.Errorf("command = %q, %q, %t; want timer, timer.tick, true", node, fqName, ok)
 	}
 	if subs, ok := topics.retrieveSubs("tick", "timer"); !ok || len(subs) != 0 {
 		t.Errorf("subscribers = %v, %t; want empty, true", subs, ok)
@@ -57,14 +57,14 @@ func TestAbbreviationCollisionWithinManifest(t *testing.T) {
 	commands.OnManifestAnnouncement(manifest_event.New(m))
 	topics.OnManifestAnnouncement(manifest_event.New(m))
 	topics.subscribers["node.spawn.x"] = []string{}
-	if _, ok := commands.retrieveNode("x"); ok {
+	if _, _, ok := commands.retrieveNodeAndFqName("x"); ok {
 		t.Error("ambiguous command unexpectedly resolved")
 	}
 	if _, ok := topics.retrieveSubs("x", "node"); ok {
 		t.Error("ambiguous topic unexpectedly resolved")
 	}
-	if node, ok := commands.retrieveNode("spawn.x"); !ok || node != "node" {
-		t.Errorf("qualified command = %q, %t; want node, true", node, ok)
+	if node, fqName, ok := commands.retrieveNodeAndFqName("spawn.x"); !ok || node != "node" || fqName != "node.spawn.x" {
+		t.Errorf("qualified command = %q, %q, %t; want node, node.spawn.x, true", node, fqName, ok)
 	}
 	if _, ok := topics.retrieveSubs("spawn.x", "node"); !ok {
 		t.Error("qualified topic did not resolve")

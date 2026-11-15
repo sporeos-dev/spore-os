@@ -32,25 +32,26 @@ func (c *commandMap) mapCommand(cmd, node string) {
 	c.commands[cmd] = node
 }
 
-func (c *commandMap) retrieveNode(cmd string) (string, bool) {
+// nodeid, fqname, ok
+func (c *commandMap) retrieveNodeAndFqName(cmd string) (string, string, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
 	arr, ok := c.abbreviations[cmd]
 	if !ok || len(arr) == 0 {
 		witness.Error(error.Missing, error.Mycelium, "command not found")
-		return "", false
+		return "", "", false
 	} else if len(arr) > 1 {
 		witness.Error(error.Collision, error.Mycelium, "command collision", out.Pair("command", cmd))
-		return "", false
+		return "", "", false
 	}
 
 	node, ok := c.commands[arr[0]]
 	if !ok {
 		witness.Error(error.Missing, error.Mycelium, "command not found")
-		return "", false
+		return "", "", false
 	}
-	return node, true
+	return node, arr[0], true
 }
 
 // manifest announcement

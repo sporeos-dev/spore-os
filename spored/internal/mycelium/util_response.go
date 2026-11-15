@@ -5,6 +5,10 @@ import (
 	"spored/internal/witness"
 )
 
+func ensureNoCapture(raw string) bool {
+	return ensureNoReservedArgument(raw, "capture")
+}
+
 func extractHandleFromResponse(raw string) (string, bool) {
 	if len(raw) < 3 || raw[0] != '~' {
 		witness.Error(error.Missing, error.Mycelium, "response handle not found")

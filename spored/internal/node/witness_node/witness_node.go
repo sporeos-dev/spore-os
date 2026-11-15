@@ -10,7 +10,9 @@ import (
 	"sync"
 )
 
-type writer interface {
+var _ witness_event.IWitnessHandler = (*WitnessHandler)(nil)
+
+type iwriter interface {
 	WriteRaw(s string)
 }
 
@@ -18,7 +20,7 @@ type WitnessHandler struct {
 	*base.Base
 	mu sync.RWMutex
 	manifest *manifest.Manifest
-	writer writer
+	writer iwriter
 }
 
 func New() *WitnessHandler {
@@ -27,17 +29,28 @@ func New() *WitnessHandler {
 	}
 }
 
-func (w *WitnessHandler) Open(manifest *manifest.Manifest, writer writer) {
+func (w *WitnessHandler) Open(manifest *manifest.Manifest) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
 	w.manifest = manifest
-	w.writer = writer
 	w.Base.SetId(manifest.ID)
 
 	if slices.Contains(w.manifest.Roles, "witness") {
 		event.Subscribe(w)
 	}
+}
+
+func (w *WitnessHandler) Connect(writer iwriter) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.writer = writer
+}
+
+func (w *WitnessHandler) Disconnect() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.writer = nil
 }
 
 func (w *WitnessHandler) Close() {
@@ -52,6 +65,10 @@ func (w *WitnessHandler) Close() {
 func (w *WitnessHandler) OnWitness(ctx witness_event.IWitnessContext) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+
+	if w.writer == nil {
+		return
+	}
 
 	var prep string
 	switch ctx.Type() {

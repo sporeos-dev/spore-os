@@ -48,3 +48,9 @@ func (h *handleMap) consumeHandle(handle string) (string, bool) {
 	return "", false
 }
 
+func (h *handleMap) deleteHandle(handle string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	delete(h.handles, handle)
+}
+

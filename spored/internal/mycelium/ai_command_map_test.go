@@ -44,8 +44,8 @@ func TestManifestWithdrawal(t *testing.T) {
 	if !reflect.DeepEqual(commands.abbreviations, wantAbbreviations) {
 		t.Errorf("abbreviations = %v; want %v", commands.abbreviations, wantAbbreviations)
 	}
-	if node, ok := commands.retrieveNode("r.x.y"); !ok || node != second.ID {
-		t.Errorf("retrieveNode(r.x.y) = %q, %t; want %q, true", node, ok, second.ID)
+	if node, fqName, ok := commands.retrieveNodeAndFqName("r.x.y"); !ok || node != second.ID || fqName != "p.r.x.y" {
+		t.Errorf("retrieveNodeAndFqName(r.x.y) = %q, %q, %t; want %q, %q, true", node, fqName, ok, second.ID, "p.r.x.y")
 	}
 
 	event.Dispatch().ManifestWithdrawal.Notify(firstCtx)
@@ -64,8 +64,25 @@ func TestManifestWithdrawal(t *testing.T) {
 	if len(commands.commands) != 0 || len(commands.abbreviations) != 0 {
 		t.Errorf("final withdrawal left entries: commands=%v abbreviations=%v", commands.commands, commands.abbreviations)
 	}
-	if node, ok := commands.retrieveNode("y"); ok {
-		t.Errorf("retrieveNode(y) = %q, true after withdrawal; want failure", node)
+	if node, fqName, ok := commands.retrieveNodeAndFqName("y"); ok || node != "" || fqName != "" {
+		t.Errorf("retrieveNodeAndFqName(y) = %q, %q, %t after withdrawal; want empty values and false", node, fqName, ok)
+	}
+}
+
+func TestRetrieveNodeAndFqName(t *testing.T) {
+	event.Init()
+	commands := newCommandMap()
+	m := &manifest.Manifest{ID: "p.r", Api: []manifest.Command{{Name: "x.y"}}}
+	commands.OnManifestAnnouncement(manifest_event.New(m))
+
+	for _, command := range []string{"p.r.x.y", "r.x.y", "x.y", "y"} {
+		t.Run(command, func(t *testing.T) {
+			node, fqName, ok := commands.retrieveNodeAndFqName(command)
+			if !ok || node != "p.r" || fqName != "p.r.x.y" {
+				t.Errorf("retrieveNodeAndFqName(%q) = %q, %q, %t; want %q, %q, true",
+					command, node, fqName, ok, "p.r", "p.r.x.y")
+			}
+		})
 	}
 }
 

@@ -9,8 +9,10 @@ import (
 	"sync"
 )
 
+var _ message_event.IBroadcastHandler = (*BroadcastHandler)(nil)
+
 type iwriter interface {
-	WriteRaw(s string)
+	WriteMessage(s string)
 }
 
 type BroadcastHandler struct {
@@ -26,14 +28,25 @@ func New() *BroadcastHandler {
 	}
 }
 
-func (b *BroadcastHandler) Open(manifest *manifest.Manifest, writer iwriter) {
+func (b *BroadcastHandler) Open(manifest *manifest.Manifest) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
 	b.manifest = manifest
-	b.writer = writer
 	b.Base.SetId(manifest.ID)
 	event.Subscribe(b)
+}
+
+func (b *BroadcastHandler) Connect(writer iwriter) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.writer = writer
+}
+
+func (b *BroadcastHandler) Disconnect() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.writer = nil
 }
 
 func (b *BroadcastHandler) Close() {
@@ -49,9 +62,17 @@ func (b *BroadcastHandler) OnBroadcast(ctx message_event.IBroadcastContext) {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 
+	if b.writer == nil {
+		return
+	}
+
 	raw := fmt.Sprintf(
 		`publish %s cast=%s`,
 		ctx.Message(),
 		ctx.Origin())
-	b.writer.WriteRaw(raw)
+	b.writer.WriteMessage(raw)
+}
+
+func (b *BroadcastHandler) Ids() []string {
+	return []string{b.manifest.ID}
 }

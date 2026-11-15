@@ -3,6 +3,7 @@ package message_event
 import (
 	"fmt"
 	"spored/internal/utilities/error"
+	"strings"
 )
 
 type IResponseContext interface {
@@ -37,8 +38,9 @@ func Response(msg, origin, handle, dest string) IResponseContext {
 }
 
 func ResponseError(code error.Code, module error.Module, what, handle, command, dest string) IResponseContext {
+	what = strings.NewReplacer("\\", "\\\\", "\"", "\\\"", "\n", "\\n", "\r", "\\r", "\t", "\\t").Replace(what)
 	return &response {
-		message: fmt.Sprintf("~%s:%s error code=%s.%s what=%s", handle, command, string(code), string(module), what),
+		message: fmt.Sprintf("~%s:%s error code=%s.%s what=\"%s\"", handle, command, string(code), string(module), what),
 		origin: "dev.sporeos.SPORE",
 		handle: handle,
 		destination: dest,

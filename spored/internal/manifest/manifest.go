@@ -5,13 +5,27 @@ package manifest
 
 import (
 	"path/filepath"
-	"spored/internal/registry"
+	reg_el "spored/internal/registry/element"
 	"spored/internal/utilities/file"
 	"spored/internal/utilities/status"
 	"strings"
+	"sync"
 
 	"gopkg.in/yaml.v3"
 )
+
+// manifest context interface
+// to avoid package cycling
+type inotifier interface {
+	Announce(*Manifest)
+	Withdraw(*Manifest)
+}
+
+//
+//
+// manifest
+// implementation
+//
 
 type Manifest struct {
 	ID          string          `yaml:"id"`
@@ -32,6 +46,8 @@ type Manifest struct {
 	Status           status.Status
 	Path             string
 	ExpectedChecksum string
+	notifier         inotifier
+	once             sync.Once
 }
 
 type Command struct {
@@ -71,46 +87,16 @@ type Output struct {
 	Description string `yaml:"description"`
 }
 
-func New(registry *registry.Element) *Manifest {
+func New(registry *reg_el.Element, notifier inotifier) *Manifest {
 	m := &Manifest{
 		Status:           status.New(),
 		Path:             registry.Manifest,
 		ExpectedChecksum: registry.Checksum,
+		notifier:        notifier,
 	}
 
 	if !file.Exists(m.Path) {
 		m.Status.Set(status.Missing)
-	}
-
-	return m
-}
-
-func ManifestFromPath(path string) *Manifest {
-	m := &Manifest{
-		Status: status.New(),
-		Path:   path,
-	}
-
-	contents, err := file.Read(path)
-	if err != nil {
-		return nil
-	}
-
-	err = yaml.Unmarshal([]byte(contents), m)
-	if err != nil {
-		m.Status.Set(status.Malformed)
-		return nil
-	}
-	m.applyDefaults()
-
-	if m.Trust == Developer {
-		m.ExpectedChecksum = "developer"
-	} else {
-		checksum, sp_err := file.CalculateChecksum(path)
-		if sp_err != nil {
-			return nil
-		}
-		m.ExpectedChecksum = checksum
 	}
 
 	return m
@@ -126,7 +112,11 @@ func (m *Manifest) applyDefaults() {
 	}
 }
 
-func (m *Manifest) Close() {}
+func (m *Manifest) Close() {
+	if m.notifier != nil {
+		m.notifier.Withdraw(m)
+	}
+}
 
 func (m *Manifest) Verify() {
 	if m.Status.Get() == status.Missing {
@@ -169,16 +159,30 @@ func (m *Manifest) Load() {
 	err = yaml.Unmarshal([]byte(contents), m)
 	if err != nil {
 		m.Status.Set(status.Malformed)
+		return
 	}
 	m.applyDefaults()
+
+	m.once.Do(func() {
+		if m.notifier != nil {
+			m.notifier.Announce(m)
+		}
+	})
 }
 
 func (m *Manifest) LoadContent(content string) {
 	err := yaml.Unmarshal([]byte(content), m) // nolint:errcheck
 	if err != nil {
 		m.Status.Set(status.Malformed)
+		return
 	}
 	m.applyDefaults()
+
+	m.once.Do(func() {
+		if m.notifier != nil {
+			m.notifier.Announce(m)
+		}
+	})
 }
 
 //

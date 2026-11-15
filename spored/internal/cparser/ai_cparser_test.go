@@ -44,7 +44,7 @@ func TestParse_Request_MissingHandle(t *testing.T) {
 		t.Fatal("expected parse-only mode to accept a request before a handle is added")
 	}
 
-	_, ok = Validate("clock.get_time timezone=UTC")
+	_, ok = ParseAndValidate("clock.get_time timezone=UTC")
 	if ok {
 		t.Fatal("expected validation to reject a request without a handle")
 	}
@@ -79,7 +79,7 @@ func TestParse_Response_Ok(t *testing.T) {
 }
 
 func TestParse_Response_MissingOkOrError(t *testing.T) {
-	_, ok := Validate("~h1:clock.get_time time=1234 cast=node.id")
+	_, ok := ParseAndValidate("~h1:clock.get_time time=1234 cast=node.id")
 	if ok {
 		t.Fatal("expected not ok — response lacks ok/error flag")
 	}

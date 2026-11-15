@@ -14,6 +14,7 @@ import (
 type Dispatcher struct {
 	AppEntry *EmptyEvent[app_event.IAppEntryHandler]
 	AppExit *EmptyEvent[app_event.IAppExitHandler]
+	BeforeMessage *EmptyEvent[message_event.IBeforeMessageHandler]
 	Broadcast *ComplexEvent[message_event.IBroadcastHandler, message_event.IBroadcastContext]
 	ManifestAnnouncement *SimpleEvent[manifest_event.IManifestAnnouncmentHandler, manifest_event.IManifestAnnouncementContext]
 	ManifestWithdrawal *SimpleEvent[manifest_event.IManifestWithdrawalHandler, manifest_event.IManifestWithdrawalContext]
@@ -38,6 +39,11 @@ func New() *Dispatcher {
 		AppExit: Empty(
 			func(sub app_event.IAppExitHandler) {
 				sub.OnAppExit()
+			},
+		),
+		BeforeMessage: Empty(
+			func(sub message_event.IBeforeMessageHandler) {
+				sub.OnBeforeMessage()
 			},
 		),
 		Broadcast: Complex(
@@ -124,6 +130,7 @@ func New() *Dispatcher {
 func (d *Dispatcher) Sub(base base.IBase) {
 	d.AppEntry.Sub(base)
 	d.AppExit.Sub(base)
+	d.BeforeMessage.Sub(base)
 	d.Broadcast.Sub(base)
 	d.ManifestAnnouncement.Sub(base)
 	d.ManifestWithdrawal.Sub(base)
@@ -141,6 +148,7 @@ func (d *Dispatcher) Sub(base base.IBase) {
 func (d *Dispatcher) Unsub(base base.IBase) {
 	d.AppEntry.Unsub(base)
 	d.AppExit.Unsub(base)
+	d.BeforeMessage.Unsub(base)
 	d.Broadcast.Unsub(base)
 	d.ManifestAnnouncement.Unsub(base)
 	d.ManifestWithdrawal.Unsub(base)

@@ -4,6 +4,7 @@
 package witness
 
 import (
+	"fmt"
 	"log/slog"
 	"spored/internal/event"
 	witness_event "spored/internal/event/witness"
@@ -12,18 +13,22 @@ import (
 )
 
 func Incoming(msg, orig string) {
+	slog.Info(fmt.Sprintf("incoming: %s (%s)", msg, orig))
 	event.Dispatch().Witness.Notify(witness_event.Incoming(msg, orig))
 }
 
 func Outgoing(msg, orig string) {
+	slog.Info(fmt.Sprintf("outgoing: %s (%s)", msg, orig))
 	event.Dispatch().Witness.Notify(witness_event.Outgoing(msg, orig))
 }
 
 func Spore(msg string, outs ...out.IOut) {
+	slog.Info(fmt.Sprintf("spore: %s (%s)", msg, out.Join(outs...)))
 	event.Dispatch().Witness.Notify(witness_event.Spore(msg, outs...))
 }
 
 func Node(msg, orig string) {
+	slog.Info(fmt.Sprintf("node: %s (%s)", msg, orig))
 	event.Dispatch().Witness.Notify(witness_event.Node(msg, orig))
 }
 

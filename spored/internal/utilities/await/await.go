@@ -90,7 +90,7 @@ func (p *Pending) Receive(msg message_event.IResponseContext) {
 	}
 }
 
-func (p *Pending) Resolve(handle string) *error.Error {
+func (p *Pending) Resolve(handle string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	ch, ok := p.channels[handle]
@@ -102,8 +102,6 @@ func (p *Pending) Resolve(handle string) *error.Error {
 		signal := message_event.Response("resolution signal", "n/a", handle, "n/a")
 		ch <- signal
 	}
-
-	return nil
 }
 
 func (p *Pending) Has(handle string) bool {

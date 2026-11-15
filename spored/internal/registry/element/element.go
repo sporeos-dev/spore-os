@@ -1,9 +1,18 @@
 // Copyright 2026 Matt Harrison
 // SPDX-License-Identifier: AGPL-3.0-only
 
-package registry
+package reg_el
 
 import "spored/internal/utilities/file"
+
+type imanifest interface {
+	GetId() string
+	GetName() string
+	GetTrust() string
+	GetManifestPath() string
+	GetManifestChecksum() string
+	GetBinaryPath() string
+}
 
 type Element struct {
 	ID			   string `yaml:"id"`

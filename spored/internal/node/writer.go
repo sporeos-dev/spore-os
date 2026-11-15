@@ -6,7 +6,6 @@ package node
 import (
 	"bufio"
 	"log/slog"
-	"spored/internal/iface"
 	"spored/internal/witness"
 	"sync"
 	"time"
@@ -52,13 +51,8 @@ func (w *writer) WriteRaw(s string) {
 	w.flush()
 }
 
-func (w *writer) WriteMessage(msg iface.Message) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	w.writer.WriteString(msg.Wire())
-	w.writer.WriteString("\n")
-	w.flush()
-	
-	witness.Outgoing(msg.Wire(), w.id)
+func (w *writer) WriteMessage(s string) {
+	w.WriteRaw(s)
+	witness.Outgoing(s, w.id)
 }
 

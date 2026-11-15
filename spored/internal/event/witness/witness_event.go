@@ -68,7 +68,7 @@ func Spore(msg string, outs ...out.IOut) IWitnessContext {
 }
 
 func Error(code error.Code, module error.Module, what string, outs ...out.IOut) IWitnessContext {
-	msg := error.Stringify(code, module, what, outs)
+	msg := error.Stringify(code, module, what, outs...)
 	return &witness{
 		message: msg,
 		origin: "dev.sporeos.SPORE",

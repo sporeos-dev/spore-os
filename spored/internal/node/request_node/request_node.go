@@ -83,15 +83,16 @@ func (r *RequestHandler) Close() {
 }
 
 func (r *RequestHandler) OnRequest(ctx message_event.IRequestContext) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	r.mu.RLock()
+	connected := r.writer != nil
+	r.mu.RUnlock()
 
 	// handle lazy launch
-	if r.writer == nil {
+	if !connected {
 		if r.manifest.Launch == manifest.Lazy {
 			ch := r.pending.Await("lazy")
 			if r.manifest.Namespace == manifest.Hyphae {
-				ok := hyphae.Hspawn(r.manifest.Path)
+				ok := hyphae.Hspawn(r.manifest.GetBinaryPath())
 				if !ok {
 					witness.Error(error.ConnectionFailure, error.Node, "lazy hyphae spawn failure")
 					r.pending.Delete("lazy")
@@ -121,6 +122,9 @@ func (r *RequestHandler) OnRequest(ctx message_event.IRequestContext) {
 		`%s cast=%s`,
 		ctx.Message(),
 		ctx.Origin())
+
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	r.writer.WriteMessage(raw)
 }
 

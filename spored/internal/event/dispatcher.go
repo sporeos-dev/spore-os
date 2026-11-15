@@ -21,6 +21,8 @@ type Dispatcher struct {
 	Message *SimpleEvent[message_event.IMessageHandler, message_event.IMessageContext]
 	NodeConnection *IdentityEvent[node_event.INodeConnectionHandler]
 	NodeDisconnection *IdentityEvent[node_event.INodeDisconnectionHandler]
+	NodeInstallation *SimpleEvent[node_event.INodeInstallationHandler, node_event.INodeInstallationContext]
+	NodeUninstallation *IdentityEvent[node_event.INodeUninstallationHandler]
 	RegistryAnnouncement *SimpleEvent[registry_event.IRegistryAnnouncementHandler, registry_event.IRegistryContext]
 	RegistryWithdrawal *SimpleEvent[registry_event.IRegistryWithdrawalHandler, registry_event.IRegistryContext]
 	Request *ComplexEvent[message_event.IRequestHandler, message_event.IRequestContext]
@@ -82,6 +84,16 @@ func New() *Dispatcher {
 				sub.OnNodeDisconnection(id)
 			},
 		),
+		NodeInstallation: Simple(
+			func(sub node_event.INodeInstallationHandler, ctx node_event.INodeInstallationContext) {
+				sub.OnNodeInstallation(ctx)
+			},
+		),
+		NodeUninstallation: Identity(
+			func(sub node_event.INodeUninstallationHandler, id string) {
+				sub.OnNodeUninstallation(id)
+			},
+		),
 		RegistryAnnouncement: Simple(
 			func(sub registry_event.IRegistryAnnouncementHandler, ctx registry_event.IRegistryContext) {
 				sub.OnRegistryAnnouncement(ctx)
@@ -137,6 +149,8 @@ func (d *Dispatcher) Sub(base base.IBase) {
 	d.Message.Sub(base)
 	d.NodeConnection.Sub(base)
 	d.NodeDisconnection.Sub(base)
+	d.NodeInstallation.Sub(base)
+	d.NodeUninstallation.Sub(base)
 	d.RegistryAnnouncement.Sub(base)
 	d.RegistryWithdrawal.Sub(base)
 	d.Request.Sub(base)
@@ -155,6 +169,8 @@ func (d *Dispatcher) Unsub(base base.IBase) {
 	d.Message.Unsub(base)
 	d.NodeConnection.Unsub(base)
 	d.NodeDisconnection.Unsub(base)
+	d.NodeInstallation.Unsub(base)
+	d.NodeUninstallation.Unsub(base)
 	d.RegistryAnnouncement.Unsub(base)
 	d.RegistryWithdrawal.Unsub(base)
 	d.Request.Unsub(base)

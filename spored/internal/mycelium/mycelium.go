@@ -169,7 +169,7 @@ func (m *Mycelium) OnMessage(ctx message_event.IMessageContext) {
 			return
 		}
 
-		request := message_event.Request(raw, origin, fqName, node)
+		request := message_event.Request(raw, origin, fqName, node, handle)
 		event.Dispatch().Request.Notify(request)
 	}
 }
@@ -235,7 +235,7 @@ func (m *Mycelium) OnSynchronizedRequest(ctx sync_event.ISynchronizedRequestCont
 			return
 		}
 
-		request := message_event.Request(raw, ctx.Origin(), fqCmd, node)
+		request := message_event.Request(raw, ctx.Origin(), fqCmd, node, handle)
 		ch := m.pending.Await(handle)
 		event.Dispatch().Request.Notify(request)
 		response, ok := m.pending.WaitFor(handle, ch) 

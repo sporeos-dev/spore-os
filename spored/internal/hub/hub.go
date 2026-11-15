@@ -5,14 +5,19 @@ package hub
 
 import (
 	"errors"
+	"log/slog"
 	"net"
 	"spored/internal/event"
+	manifest_event "spored/internal/event/manifest"
+	"spored/internal/manifest"
+	"spored/internal/manifestloader"
 	"spored/internal/mycelium"
 	nodes "spored/internal/nodepool"
 	"spored/internal/pal"
 	"spored/internal/registry"
 	"spored/internal/utilities/error"
 	"spored/internal/utilities/out"
+	"spored/internal/utilities/status"
 	"spored/internal/witness"
 )
 
@@ -22,6 +27,7 @@ type Hub struct {
 	registry *registry.Registry
 
 	listener net.Listener
+	manifest *manifest.Manifest
 }
 
 func New() (*Hub, bool) {
@@ -30,12 +36,20 @@ func New() (*Hub, bool) {
 		mycelium: mycelium.New(),
 		nodepool: nodes.New(),
 		registry: registry.New(),
+		manifest: nil,
 	}
 
 	event.Init()
 	h.mycelium.Open()
 	h.nodepool.Open()
 	h.registry.Open()
+
+	if !h.loadAndAnnounceSporeManifest() {
+		h.registry.Close()
+		h.nodepool.Close()
+		h.mycelium.Close()
+		return nil, false
+	}
 
 	go h.listen()
 	h.registry.Load()
@@ -99,4 +113,30 @@ func (h *Hub) listen() {
 
 		go h.nodepool.HandleConnection(conn)
 	}
+}
+
+func (h *Hub) loadAndAnnounceSporeManifest() bool {
+	h.manifest = &manifest.Manifest {
+		Status: status.New(),
+		Path: pal.FileSporeManifest(),
+		ExpectedChecksum: "n/a",
+		Notifier: h,
+	}
+	h.manifest.Status.Set(status.Verified)
+	if !manifestloader.Load(h.manifest) {
+		return false
+	}
+	slog.Debug("Spore manifest loaded")
+	return true
+}
+
+// inotifier
+func (h *Hub) Announce(m *manifest.Manifest) {
+	ctx := manifest_event.New(m)
+	event.Dispatch().ManifestAnnouncement.Notify(ctx)
+}
+
+func (h *Hub) Withdraw(m *manifest.Manifest) {
+	ctx := manifest_event.New(m)
+	event.Dispatch().ManifestWithdrawal.Notify(ctx)
 }

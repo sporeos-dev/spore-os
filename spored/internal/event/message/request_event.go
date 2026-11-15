@@ -5,6 +5,7 @@ type IRequestContext interface {
 	Origin() string
 	Command() string
 	Node() string
+	Handle() string
 }
 
 type IRequestHandler interface {
@@ -17,14 +18,16 @@ type request struct {
 	origin string
 	command string
 	node string
+	handle string
 }
 
-func Request(msg, origin, cmd, node string) IRequestContext {
+func Request(msg, origin, cmd, node, handle string) IRequestContext {
 	return &request{
 		message: msg, 
 		origin: origin, 
 		command: cmd,
 		node: node,
+		handle: handle,
 	}
 }
 
@@ -42,4 +45,8 @@ func (r *request) Command() string {
 
 func (r *request) Node() string { 
 	return r.node 
+}
+
+func (r *request) Handle() string {
+	return r.handle
 }

@@ -9,7 +9,7 @@ import (
 
 	"spored/internal/base"
 	"spored/internal/event"
-	message_event "spored/internal/event/message"
+	node_event "spored/internal/event/node"
 	registry_event "spored/internal/event/registry"
 	"spored/internal/pal"
 	reg_el "spored/internal/registry/element"
@@ -21,7 +21,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var _ message_event.IRequestHandler = (*Registry)(nil)
+var _ node_event.INodeInstallationHandler = (*Registry)(nil)
+var _ node_event.INodeUninstallationHandler = (*Registry)(nil)
 
 type Registry struct {
 	*base.Base
@@ -45,46 +46,6 @@ func (r *Registry) Open() {
 
 func (r *Registry) Close() {
 	event.Unsubscribe(r)
-}
-
-func (r *Registry) Add(el *reg_el.Element) bool {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	r.Elements = append(r.Elements, el)
-	saved := r.save()
-	if saved {
-		ctx := registry_event.New(el)
-		event.Dispatch().RegistryAnnouncement.Notify(ctx)
-	}
-	return saved
-}
-
-func (r *Registry) Remove(id string) bool {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	for i, el := range r.Elements {
-		if id != el.ID {
-			continue
-		}
-
-		r.Elements = append(r.Elements[:i], r.Elements[i+1:]...)
-		saved :=r.save()
-		if saved {
-			ctx := registry_event.New(el)
-			event.Dispatch().RegistryWithdrawal.Notify(ctx)
-		}
-		return saved
-	}
-
-	witness.Error(
-		error.Missing,
-		error.Registry,
-		"element not found",
-		out.Pair("node", id))
-
-		return false
 }
 
 func (r *Registry) Load() bool {
@@ -158,4 +119,56 @@ func (r *Registry) save() bool {
 	}
 
 	return true
+}
+
+// node installation
+// node uninstallation
+func (r *Registry) OnNodeInstallation(ctx node_event.INodeInstallationContext) {
+	man := ctx.Manifest()
+	el := reg_el.ElementFromManifest(man)
+	if el == nil {
+		witness.Error(error.RuntimeFailure, error.Registry, "registry element not created")
+		return
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.Elements = append(r.Elements, el)
+	saved := r.save()
+	if saved {
+		ctx := registry_event.New(el)
+		event.Dispatch().RegistryAnnouncement.Notify(ctx)
+	} else {
+		witness.Error(error.RuntimeFailure, error.Registry, "save failed")
+	}
+
+	witness.Spore("node installed", out.Pair("node", el.ID))
+}
+
+func (r *Registry) OnNodeUninstallation(node string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	for i, el := range r.Elements {
+		if node != el.ID {
+			continue
+		}
+
+		r.Elements = append(r.Elements[:i], r.Elements[i+1:]...)
+		saved :=r.save()
+		if saved {
+			ctx := registry_event.New(el)
+			event.Dispatch().RegistryWithdrawal.Notify(ctx)
+
+			witness.Spore("node uninstalled", out.Pair("node", node))
+			return
+		}
+	}
+
+	witness.Error(
+		error.Missing,
+		error.Registry,
+		"element not found",
+		out.Pair("node", node))
 }

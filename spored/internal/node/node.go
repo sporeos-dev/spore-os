@@ -14,6 +14,7 @@ import (
 	message_event "spored/internal/event/message"
 	"spored/internal/hyphae"
 	"spored/internal/manifest"
+	"spored/internal/manifestloader"
 	"spored/internal/node/broadcast_node"
 	"spored/internal/node/request_node"
 	"spored/internal/node/response_node"
@@ -74,8 +75,9 @@ func New(registry *reg_el.Element) *Single {
 	}
 
 	n.manifest = manifest.New(registry, n)
-	n.manifest.Load()
-	n.manifest.Verify()
+	if manifestloader.Load(n.manifest) {
+		n.manifest.Verify()
+	}
 
 	return n
 }
@@ -97,6 +99,20 @@ func (s *Single) Close() {
 	if s.conn != nil {
 		s.conn.Close()
 	}
+}
+
+func (s *Single) GetPath() (string, bool) {
+	if s.manifest == nil {
+		return "", false
+	}
+	return s.manifest.Path, true
+}
+
+func (s *Single) GetSpawnInfo() (string, manifest.Namespace, bool) {
+	if s.manifest == nil || s.manifest.ID == "" || s.registry == nil || s.registry.Binary == "" {
+		return "", "", false
+	}
+	return s.registry.Binary, s.manifest.Namespace, true
 }
 
 // before message event
@@ -205,7 +221,13 @@ func (s *Single) HandleConnection(conn net.Conn, reader *bufio.Reader, wr *bufio
 		return
 	}
 
-	s.manifest.Load()
+	if !manifestloader.Load(s.manifest) {
+		witness.Error(error.HandshakeDenial, error.Node, "manifest load failed")
+		wr.WriteString("FAIL manifest load failed\n")
+		wr.Flush()
+		conn.Close()
+		return
+	}
 	err = s.checkManifestForFailure()
 	if err != nil {
 		witness.Error(error.HandshakeDenial, error.Node, "manifest failure")
@@ -473,8 +495,13 @@ func isRetryableReadError(readErr readError) bool {
 }
 
 func (s *Single) ProcessID() (int, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.conn == nil {
+		return 0, false
+	}
 	pid, err := pal.ProcessID(s.conn)
-	if err != nil {
+	if err != nil || pid <= 0 {
 		return 0, false
 	}
 	return pid, true

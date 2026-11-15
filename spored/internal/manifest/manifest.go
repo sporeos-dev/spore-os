@@ -46,7 +46,7 @@ type Manifest struct {
 	Status           status.Status
 	Path             string
 	ExpectedChecksum string
-	notifier         inotifier
+	Notifier         inotifier
 	once             sync.Once
 }
 
@@ -92,7 +92,7 @@ func New(registry *reg_el.Element, notifier inotifier) *Manifest {
 		Status:           status.New(),
 		Path:             registry.Manifest,
 		ExpectedChecksum: registry.Checksum,
-		notifier:        notifier,
+		Notifier:        notifier,
 	}
 
 	if !file.Exists(m.Path) {
@@ -102,19 +102,29 @@ func New(registry *reg_el.Element, notifier inotifier) *Manifest {
 	return m
 }
 
+func Empty(path, checksum string) *Manifest {
+	m := &Manifest{
+		Status: status.New(),
+		Path: path,
+		ExpectedChecksum: checksum,
+		Notifier: nil,
+	}
+	return m
+}
+
 // applyDefaults fills fields left blank in the YAML with their default values.
 func (m *Manifest) applyDefaults() {
 	if m.Namespace == "" {
 		m.Namespace = Hyphae
 	}
 	if m.Launch == "" {
-		m.Launch = Auto
+		m.Launch = Manual
 	}
 }
 
 func (m *Manifest) Close() {
-	if m.notifier != nil {
-		m.notifier.Withdraw(m)
+	if m.Notifier != nil {
+		m.Notifier.Withdraw(m)
 	}
 }
 
@@ -150,39 +160,20 @@ func (m *Manifest) Verify() {
 	m.Status.Set(status.Verified)
 }
 
-func (m *Manifest) Load() {
-	contents, err := file.Read(m.Path)
-	if err != nil {
-		return
-	}
-
-	err = yaml.Unmarshal([]byte(contents), m)
+func (m *Manifest) LoadContent(content string) error {
+	err := yaml.Unmarshal([]byte(content), m)
 	if err != nil {
 		m.Status.Set(status.Malformed)
-		return
+		return err
 	}
 	m.applyDefaults()
 
 	m.once.Do(func() {
-		if m.notifier != nil {
-			m.notifier.Announce(m)
+		if m.Notifier != nil {
+			m.Notifier.Announce(m)
 		}
 	})
-}
-
-func (m *Manifest) LoadContent(content string) {
-	err := yaml.Unmarshal([]byte(content), m) // nolint:errcheck
-	if err != nil {
-		m.Status.Set(status.Malformed)
-		return
-	}
-	m.applyDefaults()
-
-	m.once.Do(func() {
-		if m.notifier != nil {
-			m.notifier.Announce(m)
-		}
-	})
+	return nil
 }
 
 //

@@ -21,6 +21,7 @@ const (
 	NotPermitted Code = "NotPermitted"
 	NotReady Code = "NotReady"
 	ReservedLanguage Code = "ReservedLanguage"
+	RuntimeFailure Code = "RuntimeFailure"
 	Timeout Code = "Timeout"
 	UserDenial Code = "UserDenial"
 )

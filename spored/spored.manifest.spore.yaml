@@ -25,17 +25,11 @@ api:
     risk: admin
     usage:
       - node.install path=/path/to/manifest/node.manifest.spore.yaml
-      - node.install path=/path/to/manifest/node.manifest.spore.yaml load
     inputs:
       - name: path
         type: string
         description: Path to .manifest.spore.yaml file.
         required: true
-      - name: load
-        type: flag
-        description: Spawn the node after it is installed.
-        required: false
-    outputs: []
 
   - name: node.uninstall
     description: Uninstall a node.
@@ -47,7 +41,6 @@ api:
         type: string
         description: Node ID.
         required: false
-    outputs: []
 
   - name: node.reinstall
     description: Reinstall a node from its registered manifest path.
@@ -64,7 +57,6 @@ api:
         type: flag
         description: Spawn the node after it is reinstalled.
         required: false
-    outputs: []
 
   - name: node.spawn
     description: Start a node.
@@ -76,19 +68,17 @@ api:
         type: string
         description: Node ID.
         required: true
-    outputs: []
 
-  - name: node.reload
+  - name: node.respawn
     description: Restart a node.
     risk: standard
     usage:
-      - node.reload node=node
+      - node.respawn node=node
     inputs:
       - name: node
         type: string
         description: Node ID.
         required: true
-    outputs: []
 
   - name: node.kill
     description: Stop a node.
@@ -100,7 +90,6 @@ api:
         type: string
         description: Node ID.
         required: true
-    outputs: []
 
 # ==================================================================================
 # SPORE.topic
@@ -230,6 +219,26 @@ api:
 # ==================================================================================
 # other
 
-topics: []
-permissions: []
+  - name: confirm
+    description: Confirm an action.
+    risk: standard
+    usage:
+      - confirm body="Do you want to proceed?" lines=[ "Reasons", " - reason A", " - reason B" ]
+    inputs:
+      - name: body
+        type: string
+        description: Confirmation message, displayed to user.
+        required: true
+      - name: lines
+        type: array
+        description: Reasons for confirmation.
+        required: false
+    outputs:
+      - name: yes
+        type: flag
+        description: Present when the user confirms an action.
+      - name: no
+        type: flag
+        description: Present when the user confirms an action.
+
           

@@ -230,6 +230,7 @@ func (m *Mycelium) OnSynchronizedRequest(ctx sync_event.ISynchronizedRequestCont
 
 		node, fqCmd, ok := m.commands.retrieveNodeAndFqName(command)
 		if !ok {
+			m.handles.deleteHandle(handle)
 			res := message_event.ResponseError(error.Missing, error.Mycelium, "unknown command", handle, command, ctx.Origin())
 			ctx.Respond(res)
 			return
@@ -240,10 +241,12 @@ func (m *Mycelium) OnSynchronizedRequest(ctx sync_event.ISynchronizedRequestCont
 		event.Dispatch().Request.Notify(request)
 		response, ok := m.pending.WaitFor(handle, ch) 
 		if !ok {
+			m.handles.deleteHandle(handle)
 			res := message_event.ResponseError(error.Timeout, error.Mycelium, "wait timed out", handle, command, ctx.Origin())
 			ctx.Respond(res)
 			return
 		}
+
 		ctx.Respond(response)
 	}
 }

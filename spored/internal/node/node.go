@@ -87,11 +87,6 @@ func (s *Single) Close() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.broadcastHandler.Close()
-	s.requestHandler.Close()
-	s.responseHandler.Close()
-	s.witnessHandler.Close()
-
 	if s.manifest != nil {
 		s.manifest.Close()
 	}
@@ -101,11 +96,8 @@ func (s *Single) Close() {
 	}
 }
 
-func (s *Single) GetPath() (string, bool) {
-	if s.manifest == nil {
-		return "", false
-	}
-	return s.manifest.Path, true
+func (s *Single) Manifest() *manifest.Manifest {
+	return s.manifest
 }
 
 func (s *Single) GetSpawnInfo() (string, manifest.Namespace, bool) {
@@ -475,11 +467,10 @@ listen:
 		event.Dispatch().Message.Notify(msg)
 	}
 
-	// close handlers
-	s.broadcastHandler.Close()
-	s.requestHandler.Close()
-	s.responseHandler.Close()
-	s.witnessHandler.Close()
+	s.broadcastHandler.Disconnect()
+	s.requestHandler.Disconnect()
+	s.responseHandler.Disconnect()
+	s.witnessHandler.Disconnect()
 
 	s.mu.Lock()
 	defer s.mu.Unlock()

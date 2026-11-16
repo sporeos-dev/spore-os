@@ -8,9 +8,7 @@ import "strings"
 // reservedArgNames are protocol keywords that may not be used as input/output names.
 var reservedArgNames = map[string]bool{
 	"cast": true, "capture": true, "ok": true, "error": true, "cancelled": true,
-	"code": true, "what": true, "module": true,
-	"spore.incoming": true, "spore.outgoing": true, "spore.event": true, "spore.node": true, "spore.time": true,
-	"json": true,
+	"code": true, "what": true,
 }
 
 // ValidateReservedLanguage returns an error string if the manifest violates any
@@ -62,7 +60,7 @@ func checkArgs(inputs *[]Input) string {
 		return ""
 	}
 	for _, in := range *inputs {
-		if strings.HasPrefix(in.Name, "spore_") || reservedArgNames[in.Name] {
+		if strings.HasPrefix(in.Name, "spore.") || reservedArgNames[in.Name] {
 			return "reserved argument name in input: " + in.Name
 		}
 	}
@@ -74,7 +72,7 @@ func checkOutputs(outputs *[]Output) string {
 		return ""
 	}
 	for _, out := range *outputs {
-		if strings.HasPrefix(out.Name, "spore_") || reservedArgNames[out.Name] {
+		if strings.HasPrefix(out.Name, "spore.") || reservedArgNames[out.Name] {
 			return "reserved argument name in output: " + out.Name
 		}
 	}

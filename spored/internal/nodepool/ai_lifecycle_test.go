@@ -17,10 +17,12 @@ import (
 	"spored/internal/event"
 	message_event "spored/internal/event/message"
 	sync_event "spored/internal/event/sync"
+	witness_event "spored/internal/event/witness"
 	"spored/internal/manifest"
 	"spored/internal/node"
 	reg_el "spored/internal/registry/element"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -43,6 +45,20 @@ func (h *lifecycleMessages) OnMessage(ctx message_event.IMessageContext) {
 	h.messages <- ctx.Message()
 }
 
+type lifecycleWitness struct {
+	*base.Base
+	disconnected chan struct{}
+}
+
+func (h *lifecycleWitness) OnWitness(ctx witness_event.IWitnessContext) {
+	if strings.HasPrefix(ctx.Message(), "node disconnecting") || strings.HasPrefix(ctx.Message(), "node connection ended") {
+		select {
+		case h.disconnected <- struct{}{}:
+		default:
+		}
+	}
+}
+
 func lifecycleNode(t *testing.T, id string, namespace manifest.Namespace, binary string) *node.Single {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "node.manifest.spore.yaml")
@@ -56,38 +72,36 @@ func lifecycleNode(t *testing.T, id string, namespace manifest.Namespace, binary
 }
 
 func TestNodeSpawnThroughHyphae(t *testing.T) {
-	for _, namespace := range []manifest.Namespace{manifest.Hyphae, manifest.Any} {
-		for _, success := range []bool{true, false} {
-			t.Run(fmt.Sprintf("namespace=%s/success=%t", namespace, success), func(t *testing.T) {
-				event.Init()
-				const id = "com.example.clock"
-				binary := filepath.Join(t.TempDir(), "example binary")
-				p := New()
-				p.nodes[id] = lifecycleNode(t, id, namespace, binary)
+	for _, success := range []bool{true, false} {
+		t.Run(fmt.Sprintf("success=%t", success), func(t *testing.T) {
+			event.Init()
+			const id = "com.example.clock"
+			binary := filepath.Join(t.TempDir(), "example binary")
+			p := New()
+			p.nodes[id] = lifecycleNode(t, id, manifest.Hyphae, binary)
 
-				handler := &lifecycleHyphae{
-					Base: base.New().SetName("lifecycle-hyphae-test"),
-					handle: func(ctx sync_event.ISynchronizedRequestContext) {
-						req, ok := cparser.ParseAndValidate(ctx.Message())
-						if !ok || req.Command != "dev.sporeos.HYPHAE.hspawn" || req.Args["binary"] != binary {
-							t.Fatalf("unexpected Hyphae request: %q", ctx.Message())
-						}
-						result := "ok"
-						if !success {
-							result = `error code=Generic.Hyphae what="spawn failed"`
-						}
-						raw := fmt.Sprintf("~%s:%s %s", req.Handle, req.Command, result)
-						ctx.Respond(message_event.Response(raw, "dev.sporeos.HYPHAE", req.Handle, ctx.Origin()))
-					},
-				}
-				event.Subscribe(handler)
-				t.Cleanup(func() { event.Unsubscribe(handler) })
+			handler := &lifecycleHyphae{
+				Base: base.New().SetName("lifecycle-hyphae-test"),
+				handle: func(ctx sync_event.ISynchronizedRequestContext) {
+					req, ok := cparser.ParseAndValidate(ctx.Message())
+					if !ok || req.Command != "dev.sporeos.HYPHAE.hspawn" || req.Args["binary"] != binary {
+						t.Fatalf("unexpected Hyphae request: %q", ctx.Message())
+					}
+					result := "ok"
+					if !success {
+						result = `error code=Generic.Hyphae what="spawn failed"`
+					}
+					raw := fmt.Sprintf("~%s:%s %s", req.Handle, req.Command, result)
+					ctx.Respond(message_event.Response(raw, "dev.sporeos.HYPHAE", req.Handle, ctx.Origin()))
+				},
+			}
+			event.Subscribe(handler)
+			t.Cleanup(func() { event.Unsubscribe(handler) })
 
-				if got := p.nodeSpawn("clock"); got != success {
-					t.Fatalf("nodeSpawn() = %t, want %t", got, success)
-				}
-			})
-		}
+			if got := p.nodeSpawn("clock"); got != success {
+				t.Fatalf("nodeSpawn() = %t, want %t", got, success)
+			}
+		})
 	}
 }
 
@@ -95,20 +109,16 @@ func TestNodeSpawnInSporeSpace(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("uses a Unix executable")
 	}
-	for _, namespace := range []manifest.Namespace{manifest.Spore, manifest.Any} {
-		t.Run(string(namespace), func(t *testing.T) {
-			event.Init()
-			binary := filepath.Join(t.TempDir(), "node")
-			if err := os.WriteFile(binary, []byte("#!/bin/sh\nexit 0\n"), 0700); err != nil {
-				t.Fatal(err)
-			}
-			const id = "com.example.local"
-			p := New()
-			p.nodes[id] = lifecycleNode(t, id, namespace, binary)
-			if !p.nodeSpawn(id) {
-				t.Fatal("nodeSpawn() failed")
-			}
-		})
+	event.Init()
+	binary := filepath.Join(t.TempDir(), "node")
+	if err := os.WriteFile(binary, []byte("#!/bin/sh\nexit 0\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	const id = "com.example.local"
+	p := New()
+	p.nodes[id] = lifecycleNode(t, id, manifest.Spore, binary)
+	if !p.nodeSpawn(id) {
+		t.Fatal("nodeSpawn() failed")
 	}
 }
 
@@ -136,6 +146,13 @@ func TestNodeKillThroughHyphae(t *testing.T) {
 	p := New()
 	single := lifecycleNode(t, id, manifest.Hyphae, executable)
 	p.nodes[id] = single
+
+	witness := &lifecycleWitness{
+		Base:         base.New().SetName("lifecycle-disconnect-test"),
+		disconnected: make(chan struct{}, 1),
+	}
+	event.Subscribe(witness)
+	t.Cleanup(func() { event.Unsubscribe(witness) })
 
 	listener, err := net.Listen("unix", filepath.Join(t.TempDir(), "node.sock"))
 	if err != nil {
@@ -174,6 +191,14 @@ func TestNodeKillThroughHyphae(t *testing.T) {
 	t.Cleanup(func() { event.Unsubscribe(handler) })
 	if !p.nodeKill(id) {
 		t.Fatal("nodeKill() failed")
+	}
+	if err := client.Close(); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-witness.disconnected:
+	case <-time.After(time.Second):
+		t.Fatal("node did not report disconnect")
 	}
 }
 

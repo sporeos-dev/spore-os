@@ -51,5 +51,5 @@ func NodeSpawn(node string) bool {
 
 var index atomic.Int64
 func makeHandle() string {
-	return fmt.Sprintf("hyphae-%d", index.Add(1))
+	return fmt.Sprintf("spore-%d", index.Add(1))
 }

@@ -34,8 +34,6 @@ import (
 	"time"
 
 	"spored/internal/utilities/error"
-
-	"gopkg.in/yaml.v3"
 )
 
 const handshakeTimeout = 5 * time.Second
@@ -287,6 +285,27 @@ func (p *Pool) OnRequest(ctx message_event.IRequestContext) {
 				return
 			}
 
+		} else if command == "path" || strings.HasSuffix(command, ".path") {
+			node, ok := pm.Args["node"]
+			if !ok {
+				witness.Error(error.Missing, error.NodePool, "missing argument", out.Pair("arg", "node"))
+				response := message_event.ResponseError(error.Missing, error.NodePool, "missing argument 'node'", pm.Handle, pm.Command, origin)
+				event.Dispatch().Response.Notify(response)
+				return
+			}
+			path, ok := p.nodePath(node)
+			if !ok {
+				witness.Error(error.RuntimeFailure, error.NodePool, "path failure")
+				response := message_event.ResponseError(error.RuntimeFailure, error.NodePool, "path failure", pm.Handle, pm.Command, origin)
+				event.Dispatch().Response.Notify(response)
+				return
+			}
+			response := message_event.Raw(
+				fmt.Sprintf("~%s:%s ok path='%s'", handle, command, path),
+				"dev.sporeos.SPORE")
+			event.Dispatch().Message.Notify(response)
+			return
+
 		} else {
 
 			witness.Error(error.NotImplemented, error.NodePool, "unknown command")
@@ -310,6 +329,7 @@ func (p *Pool) Api() []string {
 		"dev.sporeos.SPORE.node.spawn",
 		"dev.sporeos.SPORE.node.kill",
 		"dev.sporeos.SPORE.node.respawn",
+		"dev.sporeos.SPORE.node.path",
 	}
 }
 
@@ -348,7 +368,7 @@ func (p *Pool) nodeInstall(path string) bool {
 			Path: path,
 			ExpectedChecksum: checksum,
 		}
-		err := yaml.Unmarshal([]byte(contents), m)
+		err := m.LoadContent(contents)
 		if err != nil {
 			witness.Error(error.Malformed, error.NodePool, "invalid manifest", out.Pair("path", path), out.Pair("err", err.Error()))
 			return false
@@ -415,6 +435,10 @@ func (p *Pool) nodeInstall(path string) bool {
 		man := node_event.New(m)
 		event.Dispatch().NodeInstallation.Notify(man)
 
+		if !man.Installed() {
+			witness.Error(error.RuntimeFailure, error.NodePool, "registry installation failed")
+			return false
+		}
 		return true
 }
 
@@ -445,8 +469,8 @@ func (p *Pool) nodeReinstall(node string) bool {
 		p.mu.RUnlock()
 		return false
 	}
-	path, ok := single.GetPath()
-	if !ok {
+	m := single.Manifest()
+	if m == nil {
 		witness.Error(error.Missing, error.NodePool, "no manifest path")
 		p.mu.RUnlock()
 		return false
@@ -458,7 +482,7 @@ func (p *Pool) nodeReinstall(node string) bool {
 		witness.Error(error.Missing, error.NodePool, "uninstall failed")
 		return false
 	}
-	return p.nodeInstall(path)
+	return p.nodeInstall(m.Path)
 }
 
 
@@ -533,12 +557,21 @@ func (p *Pool) nodeRespawn(node string) bool {
 		witness.Error(error.RuntimeFailure, error.NodePool, "failed to kill node")
 		return false
 	}
-	ok = p.nodeSpawn(node)
-	if !ok {
-		witness.Error(error.RuntimeFailure, error.NodePool, "failed to spawn node")
-		return false
-	}
 	return p.nodeSpawn(node)
+}
+
+func (p *Pool) nodePath(node string) (string, bool) {
+	single, ok := p.findNode(node)
+	if !ok {
+		witness.Error(error.Missing, error.NodePool, "node not found")
+		return "", false
+	}
+	m := single.Manifest()
+	if m == nil {
+		witness.Error(error.Missing, error.NodePool, "no manifest")
+		return "", false
+	}
+	return m.GetBinaryPath(), true
 }
 
 //

@@ -74,5 +74,5 @@ func (b *BroadcastHandler) OnBroadcast(ctx message_event.IBroadcastContext) {
 }
 
 func (b *BroadcastHandler) Ids() []string {
-	return []string{b.manifest.ID}
+	return []string{b.Base.Id()}
 }

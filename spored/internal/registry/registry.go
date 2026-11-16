@@ -27,6 +27,7 @@ var _ node_event.INodeUninstallationHandler = (*Registry)(nil)
 type Registry struct {
 	*base.Base
 	mu       sync.RWMutex
+	path     string
 	Version  int        `yaml:"version"`
 	Elements []*reg_el.Element `yaml:"nodes"`
 }
@@ -35,6 +36,7 @@ func New() *Registry {
 	
 	reg := &Registry{
 		Base: base.New().SetName("registry"),
+		path: pal.FileRegistry(),
 	}
 	
 	return reg
@@ -57,7 +59,7 @@ func (r *Registry) Load() bool {
 
 func (r *Registry) load() bool {
 	
-	data, err := os.ReadFile(pal.FileRegistry())
+	data, err := os.ReadFile(r.path)
 	if err != nil {
 		witness.Error(
 			error.Missing,
@@ -108,7 +110,7 @@ func (r *Registry) save() bool {
 		return false
 	}
 
-	err = os.WriteFile(pal.FileRegistry(), data, 0600) // only readable/writable by the spore
+	err = os.WriteFile(r.path, data, 0600) // only readable/writable by the spore
 	if err != nil {
 		witness.Error(
 			error.Generic,
@@ -135,14 +137,15 @@ func (r *Registry) OnNodeInstallation(ctx node_event.INodeInstallationContext) {
 	defer r.mu.Unlock()
 
 	r.Elements = append(r.Elements, el)
-	saved := r.save()
-	if saved {
-		ctx := registry_event.New(el)
-		event.Dispatch().RegistryAnnouncement.Notify(ctx)
-	} else {
+	if !r.save() {
+		r.Elements = r.Elements[:len(r.Elements)-1]
 		witness.Error(error.RuntimeFailure, error.Registry, "save failed")
+		return
 	}
 
+	announcement := registry_event.New(el)
+	event.Dispatch().RegistryAnnouncement.Notify(announcement)
+	ctx.SetInstalled()
 	witness.Spore("node installed", out.Pair("node", el.ID))
 }
 

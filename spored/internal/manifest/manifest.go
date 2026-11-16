@@ -4,6 +4,7 @@
 package manifest
 
 import (
+	"fmt"
 	"path/filepath"
 	reg_el "spored/internal/registry/element"
 	"spored/internal/utilities/file"
@@ -167,6 +168,15 @@ func (m *Manifest) LoadContent(content string) error {
 		return err
 	}
 	m.applyDefaults()
+
+	if m.Namespace != Spore && m.Namespace != Hyphae {
+		m.Status.Set(status.Malformed)
+		return fmt.Errorf("invalid namespace: %s", m.Namespace)
+	}
+	if message := m.ValidateReservedLanguage(); message != "" {
+		m.Status.Set(status.Malformed)
+		return fmt.Errorf("%s", message)
+	}
 
 	m.once.Do(func() {
 		if m.Notifier != nil {

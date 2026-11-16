@@ -39,6 +39,7 @@ const (
 	NodePool Module = "NodePool"
 	Parser Module = "Parser"
 	Permission Module = "Permission"
+	Persistence Module = "Persistence"
 	Pipe Module = "Pipe"
 	Policy Module = "Policy"
 	Registry Module = "Registry"

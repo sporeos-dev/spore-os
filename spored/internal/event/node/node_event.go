@@ -3,7 +3,8 @@ package node_event
 import "spored/internal/manifest"
 
 type INodeInstallationContext interface {
-	Manifest() *manifest.Manifest	
+	Manifest() *manifest.Manifest
+	SetInstalled()
 }
 
 type INodeInstallationHandler interface {
@@ -23,7 +24,8 @@ type INodeDisconnectionHandler interface {
 }
 
 type manifestWrap struct {
-	m *manifest.Manifest
+	m         *manifest.Manifest
+	installed bool
 }
 
 func New(m *manifest.Manifest) *manifestWrap {
@@ -36,4 +38,10 @@ func (m *manifestWrap) Manifest() *manifest.Manifest {
 	return m.m
 }
 
+func (m *manifestWrap) SetInstalled() {
+	m.installed = true
+}
 
+func (m *manifestWrap) Installed() bool {
+	return m.installed
+}

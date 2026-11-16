@@ -14,6 +14,7 @@ import (
 	"spored/internal/mycelium"
 	nodes "spored/internal/nodepool"
 	"spored/internal/pal"
+	"spored/internal/persist"
 	"spored/internal/registry"
 	"spored/internal/utilities/error"
 	"spored/internal/utilities/out"
@@ -24,10 +25,11 @@ import (
 type Hub struct {
 	mycelium *mycelium.Mycelium
 	nodepool *nodes.Pool
+	persistence *persist.Storage
 	registry *registry.Registry
 
 	listener net.Listener
-	manifest *manifest.Manifest
+	sporeManifest *manifest.Manifest
 }
 
 func New() (*Hub, bool) {
@@ -35,19 +37,22 @@ func New() (*Hub, bool) {
 	h := &Hub{
 		mycelium: mycelium.New(),
 		nodepool: nodes.New(),
+		persistence: persist.New(),
 		registry: registry.New(),
-		manifest: nil,
+		sporeManifest: nil,
 	}
 
 	event.Init()
 	h.mycelium.Open()
 	h.nodepool.Open()
+	h.persistence.Open()
 	h.registry.Open()
 
 	if !h.loadAndAnnounceSporeManifest() {
-		h.registry.Close()
-		h.nodepool.Close()
 		h.mycelium.Close()
+		h.nodepool.Close()
+		h.persistence.Close()
+		h.registry.Close()
 		return nil, false
 	}
 
@@ -56,11 +61,11 @@ func New() (*Hub, bool) {
 
 	return h, true
 }
-
 func (h *Hub) Close() {
 
 	h.mycelium.Close()
 	h.nodepool.Close()
+	h.persistence.Close()
 	h.registry.Close()
 
 	if h.listener != nil {
@@ -116,14 +121,14 @@ func (h *Hub) listen() {
 }
 
 func (h *Hub) loadAndAnnounceSporeManifest() bool {
-	h.manifest = &manifest.Manifest {
+	h.sporeManifest = &manifest.Manifest {
 		Status: status.New(),
 		Path: pal.FileSporeManifest(),
 		ExpectedChecksum: "n/a",
 		Notifier: h,
 	}
-	h.manifest.Status.Set(status.Verified)
-	if !manifestloader.Load(h.manifest) {
+	h.sporeManifest.Status.Set(status.Verified)
+	if !manifestloader.Load(h.sporeManifest) {
 		return false
 	}
 	slog.Debug("Spore manifest loaded")

@@ -91,6 +91,21 @@ api:
         description: Node ID.
         required: true
 
+  - name: node.path
+    description: Get node path.
+    risk: standard
+    usage:
+      - node.path node=node
+    inputs:
+      - name: node
+        type: string
+        description: Node ID.
+        required: true
+    outputs:
+      - name: path
+        type: string
+        description: Node path.
+
 # ==================================================================================
 # SPORE.topic
 
@@ -192,7 +207,6 @@ api:
         type: string
         description: String blob to persist.
         required: true
-    outputs: []
     notes:
       - Data persisted stays associated to the node.
   
@@ -215,7 +229,7 @@ api:
         description: Flag present if no data is found for the given key.
     notes:
       - Nodes can only retrieve data they have persisted.
-  
+
 # ==================================================================================
 # other
 

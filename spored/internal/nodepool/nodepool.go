@@ -117,19 +117,22 @@ func (p *Pool) OnRegistryAnnouncement(ctx registry_event.IRegistryContext) {
 	witness.Spore("registry announcement", out.Pair("node", el.ID))
 
 	{
-		p.mu.Lock()
-
+		p.mu.RLock()
 		_, ok := p.nodes[el.ID]
+		p.mu.RUnlock()
+
 		if ok {
-			p.mu.Unlock()
 			witness.Error(error.Collision, error.NodePool, "cannot add to nodepool", out.Pair("node", el.ID))
 			return
 		}
 
 		node := node.New(el)
-		p.nodes[el.ID] = node
-		
+
+		p.mu.Lock()
+		p.nodes[el.ID] = node		
 		p.mu.Unlock()
+
+		node.Autostart()
 	}
 
 	witness.Spore("node added to registry", out.Pair("node", el.ID))

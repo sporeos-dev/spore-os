@@ -12,6 +12,7 @@ import (
 	"spored/internal/event"
 	manifest_event "spored/internal/event/manifest"
 	message_event "spored/internal/event/message"
+	node_event "spored/internal/event/node"
 	"spored/internal/hyphae"
 	"spored/internal/manifest"
 	"spored/internal/manifestloader"
@@ -21,6 +22,7 @@ import (
 	"spored/internal/node/witness_node"
 	"spored/internal/pal"
 	reg_el "spored/internal/registry/element"
+	"spored/internal/spore"
 	"spored/internal/utilities/error"
 	"spored/internal/utilities/out"
 	"spored/internal/utilities/status"
@@ -31,6 +33,7 @@ import (
 )
 
 var _ message_event.IBeforeMessageHandler = (*Single)(nil)
+var _ node_event.INodeConnectionHandler = (*Single)(nil)
 
 type Single struct {
 	*base.Base
@@ -151,10 +154,50 @@ func (s *Single) Withdraw(m *manifest.Manifest) {
 	event.Unsubscribe(s)
 }
 
+func (s *Single) Autostart() {
+	if s.manifest == nil {
+		return
+	}
+
+	if s.manifest.Launch != manifest.Auto {
+		return
+	}
+
+	if s.IsConnected() {
+		return
+	}
+	
+	if s.manifest.Launch == manifest.Auto {
+		if s.manifest.Namespace == manifest.Hyphae {
+			ok := hyphae.Hspawn(s.manifest.GetBinaryPath())
+			if !ok {
+				witness.Error(error.ConnectionFailure, error.Node, "auto-spawn failure")
+			}
+		} else {
+			ok := spore.NodeSpawn(s.manifest.ID)
+			if !ok {
+				witness.Error(error.ConnectionFailure, error.Node, "auto-spawn failure")
+			}
+		}
+	}
+}
+
+func (s *Single) OnNodeConnection(id string) {
+	if id == "dev.sporeos.HYPHAE" {
+		s.Autostart()
+	}
+}
+
 // 
 //
 // handles incoming connection
 //
+
+func (s *Single) IsConnected() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.conn != nil
+}
 
 func (s *Single) HandleConnection(conn net.Conn, reader *bufio.Reader, wr *bufio.Writer) {
 
@@ -324,6 +367,7 @@ func (s *Single) HandleConnection(conn net.Conn, reader *bufio.Reader, wr *bufio
 	s.witnessHandler.Connect(s.writer)
 
 	witness.Spore("handshake successful", out.Pair("node", s.registry.ID))
+	event.Dispatch().NodeConnection.Notify(s.registry.ID)
 }
 
 func (s *Single) activateConnection(conn net.Conn, reader *bufio.Reader, writer *writer, provisional bool) {

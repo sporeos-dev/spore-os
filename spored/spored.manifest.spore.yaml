@@ -47,16 +47,11 @@ api:
     risk: admin
     usage:
       - node.reinstall node=node
-      - node.reinstall node=node load
     inputs:
       - name: node
         type: string
         description: Installed node ID.
         required: true
-      - name: load
-        type: flag
-        description: Spawn the node after it is reinstalled.
-        required: false
 
   - name: node.spawn
     description: Start a node.

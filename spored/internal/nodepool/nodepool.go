@@ -181,8 +181,7 @@ func (p *Pool) OnRequest(ctx message_event.IRequestContext) {
 		
 		pm, ok := cparser.ParseAndValidate(message)
 		if !ok {
-			response := message_event.ResponseError(error.Malformed, error.NodePool, "bad message", pm.Handle, pm.Command, origin)
-			event.Dispatch().Response.Notify(response)
+			respondError(error.Malformed, "bad message")
 			return
 		}
 
@@ -191,15 +190,13 @@ func (p *Pool) OnRequest(ctx message_event.IRequestContext) {
 			path, ok := pm.Args["path"]
 			if !ok {
 				witness.Error(error.Missing, error.NodePool, "missing argument", out.Pair("arg", "path"))
-				response := message_event.ResponseError(error.Missing, error.NodePool, "missing argument 'path'", pm.Handle, pm.Command, origin)
-				event.Dispatch().Response.Notify(response)
+				respondError(error.Missing, "missing argument 'path'")
 				return
 			}
 
 			ok = p.nodeInstall(path)
 			if !ok {
-				response := message_event.ResponseError(error.Generic, error.NodePool, "installation failure", pm.Handle, pm.Command, origin)
-				event.Dispatch().Response.Notify(response)
+				respondError(error.Generic, "installation failure")
 				return
 			}
 
@@ -208,15 +205,13 @@ func (p *Pool) OnRequest(ctx message_event.IRequestContext) {
 			node, ok := pm.Args["node"]
 			if !ok {
 				witness.Error(error.Missing, error.NodePool, "missing argument", out.Pair("arg", "node"))
-				response := message_event.ResponseError(error.Missing, error.NodePool, "missing argument 'node'", pm.Handle, pm.Command, origin)
-				event.Dispatch().Response.Notify(response)
+				respondError(error.Missing, "missing argument 'node'")
 				return
 			}
 
 			ok = p.nodeUninstall(node)
 			if !ok {
-				response := message_event.ResponseError(error.Generic, error.NodePool, "uninstall failure", pm.Handle, pm.Command, origin)
-				event.Dispatch().Response.Notify(response)
+				respondError(error.Generic, "uninstall failure")
 				return
 			}
 			
@@ -225,16 +220,14 @@ func (p *Pool) OnRequest(ctx message_event.IRequestContext) {
 			node, ok := pm.Args["node"]
 			if !ok {
 				witness.Error(error.Missing, error.NodePool, "missing argument", out.Pair("arg", "node"))
-				response := message_event.ResponseError(error.Missing, error.NodePool, "missing argument 'node'", pm.Handle, pm.Command, origin)
-				event.Dispatch().Response.Notify(response)
+				respondError(error.Missing, "missing argument 'node'")
 				return
 			}
 			
 			ok = p.nodeReinstall(node)
 			if !ok {
 				witness.Error(error.Generic, error.NodePool, "reinstall failed")
-				response := message_event.ResponseError(error.Generic, error.NodePool, "reinstall failed", pm.Handle, pm.Command, origin)
-				event.Dispatch().Response.Notify(response)
+				respondError(error.Generic, "reinstall failed")
 				return
 			}
 			
@@ -275,16 +268,14 @@ func (p *Pool) OnRequest(ctx message_event.IRequestContext) {
 			node, ok := pm.Args["node"]
 			if !ok {
 				witness.Error(error.Missing, error.NodePool, "missing argument", out.Pair("arg", "node"))
-				response := message_event.ResponseError(error.Missing, error.NodePool, "missing argument 'node'", pm.Handle, pm.Command, origin)
-				event.Dispatch().Response.Notify(response)
+				respondError(error.Missing, "missing argument 'node'")
 				return
 			}
 			
 			ok = p.nodeRespawn(node)
 			if !ok {
 				witness.Error(error.Generic, error.NodePool, "respawn failed")
-				response := message_event.ResponseError(error.Generic, error.NodePool, "respawn failed", pm.Handle, pm.Command, origin)
-				event.Dispatch().Response.Notify(response)
+				respondError(error.Generic, "respawn failed")
 				return
 			}
 
@@ -292,15 +283,13 @@ func (p *Pool) OnRequest(ctx message_event.IRequestContext) {
 			node, ok := pm.Args["node"]
 			if !ok {
 				witness.Error(error.Missing, error.NodePool, "missing argument", out.Pair("arg", "node"))
-				response := message_event.ResponseError(error.Missing, error.NodePool, "missing argument 'node'", pm.Handle, pm.Command, origin)
-				event.Dispatch().Response.Notify(response)
+				respondError(error.Missing, "missing argument 'node'")
 				return
 			}
 			path, ok := p.nodePath(node)
 			if !ok {
 				witness.Error(error.RuntimeFailure, error.NodePool, "path failure")
-				response := message_event.ResponseError(error.RuntimeFailure, error.NodePool, "path failure", pm.Handle, pm.Command, origin)
-				event.Dispatch().Response.Notify(response)
+				respondError(error.RuntimeFailure, "path failure")
 				return
 			}
 			response := message_event.Raw(
@@ -312,8 +301,7 @@ func (p *Pool) OnRequest(ctx message_event.IRequestContext) {
 		} else {
 
 			witness.Error(error.NotImplemented, error.NodePool, "unknown command")
-			response := message_event.ResponseError(error.NotImplemented, error.NodePool, "unknown command", pm.Handle, pm.Command, origin)
-			event.Dispatch().Response.Notify(response)
+			respondError(error.NotImplemented, "unknown command")
 			return
 		}
 
@@ -446,41 +434,40 @@ func (p *Pool) nodeInstall(path string) bool {
 }
 
 func (p *Pool) nodeUninstall(node string) bool {
-	p.mu.RLock()
-	n, ok := p.nodes[node]
-	p.mu.RUnlock()
+	n, ok := p.findNode(node)
 	if !ok {
-		witness.Error(error.Missing, error.NodePool, "node not found", out.Pair("node", node))
 		return false
 	}
 
-	p.nodeKill(node)
-	n.Close()
-	p.mu.Lock()
-	delete(p.nodes, node)
-	p.mu.Unlock()
+	id := n.Id()
+	if n.IsConnected() && !p.nodeKill(id) {
+		witness.Error(error.RuntimeFailure, error.NodePool, "cannot uninstall running node", out.Pair("node", id))
+		return false
+	}
+	event.Dispatch().NodeUninstallation.Notify(id)
 
-	event.Dispatch().NodeUninstallation.Notify(node)
+	p.mu.RLock()
+	_, stillInstalled := p.nodes[id]
+	p.mu.RUnlock()
+	if stillInstalled {
+		witness.Error(error.RuntimeFailure, error.NodePool, "registry uninstallation failed", out.Pair("node", id))
+		return false
+	}
 	return true
 }
 
 func (p *Pool) nodeReinstall(node string) bool {
-	p.mu.RLock()
-	single, ok := p.nodes[node]
+	single, ok := p.findNode(node)
 	if !ok {
-		witness.Error(error.Missing, error.NodePool, "node not found")
-		p.mu.RUnlock()
 		return false
 	}
 	m := single.Manifest()
 	if m == nil {
 		witness.Error(error.Missing, error.NodePool, "no manifest path")
-		p.mu.RUnlock()
 		return false
 	}
-	p.mu.RUnlock()
 
-	ok = p.nodeUninstall(node)
+	ok = p.nodeUninstall(single.Id())
 	if !ok {
 		witness.Error(error.Missing, error.NodePool, "uninstall failed")
 		return false

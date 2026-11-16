@@ -158,15 +158,19 @@ func (r *Registry) OnNodeUninstallation(node string) {
 			continue
 		}
 
-		r.Elements = append(r.Elements[:i], r.Elements[i+1:]...)
-		saved :=r.save()
-		if saved {
-			ctx := registry_event.New(el)
-			event.Dispatch().RegistryWithdrawal.Notify(ctx)
-
-			witness.Spore("node uninstalled", out.Pair("node", node))
+		previous := r.Elements
+		r.Elements = append(append([]*reg_el.Element(nil), previous[:i]...), previous[i+1:]...)
+		if !r.save() {
+			r.Elements = previous
+			witness.Error(error.RuntimeFailure, error.Registry, "uninstallation save failed", out.Pair("node", node))
 			return
 		}
+
+		ctx := registry_event.New(el)
+		event.Dispatch().RegistryWithdrawal.Notify(ctx)
+
+		witness.Spore("node uninstalled", out.Pair("node", node))
+		return
 	}
 
 	witness.Error(

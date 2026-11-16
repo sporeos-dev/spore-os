@@ -114,7 +114,6 @@ api:
         type: string
         description: Subscription topic.
         required: true
-    outputs: []
 
   - name: topic.unsubscribe
     description: Unsubscribe to a topic.
@@ -126,7 +125,6 @@ api:
         type: string
         description: Subscription topic.
         required: true
-    outputs: []
 
 # ==================================================================================
 # SPORE.permission

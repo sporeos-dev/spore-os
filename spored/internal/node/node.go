@@ -522,6 +522,8 @@ listen:
 	s.writer = nil
 	s.conn.Close()
 	s.conn = nil
+
+	event.Dispatch().NodeDisconnection.Notify(s.registry.ID)
 }
 
 func isRetryableReadError(readErr readError) bool {

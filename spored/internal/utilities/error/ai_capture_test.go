@@ -6,28 +6,34 @@ package error_test
 import (
 	"spored/internal/cparser"
 	"spored/internal/iface"
-	"spored/internal/message"
 	sporeerror "spored/internal/utilities/error"
 	"testing"
 )
 
-func TestErrorCapture(t *testing.T) {
-	request, ok := message.Request("missing ~h1", "caller")
-	if !ok {
-		t.Fatal("invalid request")
-	}
-	response, ok := message.Response(`~h1:missing error code=Generic.Node what="failed"`, "responder")
-	if !ok {
-		t.Fatal("invalid response")
-	}
+type captureMessage struct {
+	capture string
+}
 
+func (m captureMessage) Capability() string                  { return "missing" }
+func (m captureMessage) Cast() string                        { return "caller" }
+func (m captureMessage) Actor() string                       { return "caller" }
+func (m captureMessage) Origin() string                      { return "caller" }
+func (m captureMessage) Capture() string                     { return m.capture }
+func (m captureMessage) Arg(string) (string, bool)           { return "", false }
+func (m captureMessage) ArgIf(_ string, value string) string { return value }
+func (m captureMessage) Flag(string) bool                    { return false }
+func (m captureMessage) Handle() string                      { return "h1" }
+func (m captureMessage) Wire() string                        { return "" }
+func (m captureMessage) Witness() string                     { return "" }
+
+func TestErrorCapture(t *testing.T) {
 	for _, tt := range []struct {
 		name    string
 		message iface.Message
 		want    string
 	}{
-		{name: "request", message: request, want: "dev.sporeos.SPORE"},
-		{name: "response", message: response, want: "responder"},
+		{name: "request", message: captureMessage{capture: "n/a"}, want: "dev.sporeos.SPORE"},
+		{name: "response", message: captureMessage{capture: "responder"}, want: "responder"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			err := sporeerror.New(sporeerror.Generic, sporeerror.Bus, "failed").WithMessage(tt.message)

@@ -16,6 +16,7 @@ type commandMap struct {
 	mu            sync.RWMutex
 	commands      map[string]string   // cmd -> node
 	abbreviations map[string][]string // [abbr] -> cmd; multiple implies collision
+	inputs        map[string]map[string]struct{}
 }
 
 func newCommandMap() *commandMap {
@@ -23,7 +24,25 @@ func newCommandMap() *commandMap {
 		Base:          base.New().Set("mycelium", "command-map"),
 		commands:      make(map[string]string),
 		abbreviations: make(map[string][]string),
+		inputs:        make(map[string]map[string]struct{}),
 	}
+}
+
+func (c *commandMap) retrieveInputs(cmd string) (map[string]struct{}, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	candidates := c.abbreviations[cmd]
+	if len(candidates) != 1 {
+		witness.Error(error.Missing, error.Mycelium, "command not uniquely resolved", out.Pair("command", cmd))
+		return nil, false
+	}
+	inputs, ok := c.inputs[candidates[0]]
+	if !ok {
+		witness.Error(error.Missing, error.Mycelium, "command inputs not found", out.Pair("command", cmd))
+		return nil, false
+	}
+	return inputs, true
 }
 
 func (c *commandMap) mapCommand(cmd, node string) {
@@ -67,6 +86,13 @@ func (c *commandMap) OnManifestAnnouncement(ctx manifest_event.IManifestAnnounce
 			}
 		}
 		c.commands[fqName] = ctx.Manifest().ID
+		inputs := make(map[string]struct{})
+		if cmd.Inputs != nil {
+			for _, input := range *cmd.Inputs {
+				inputs[input.Name] = struct{}{}
+			}
+		}
+		c.inputs[fqName] = inputs
 	}
 }
 
@@ -82,6 +108,7 @@ func (c *commandMap) OnManifestWithdrawal(ctx manifest_event.IManifestWithdrawal
 			continue
 		}
 		delete(c.commands, fqName)
+		delete(c.inputs, fqName)
 		for _, abbr := range commandAbbreviations(fqName) {
 			remaining := slices.DeleteFunc(c.abbreviations[abbr], func(candidate string) bool {
 				return candidate == fqName

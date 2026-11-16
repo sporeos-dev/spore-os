@@ -1,8 +1,11 @@
 package message_event
 
+import "strings"
+
 type IRequestContext interface {
 	Message() string
 	Origin() string
+	Cast() string
 	Command() string
 	Node() string
 	Handle() string
@@ -36,7 +39,15 @@ func (r *request) Message() string {
 }
 
 func (r *request) Origin() string { 
-	return r.origin 
+	_, origin, delegated := strings.Cut(r.origin, ":")
+	if delegated {
+		return origin
+	}
+	return r.origin
+}
+
+func (r *request) Cast() string {
+	return r.origin
 }
 
 func (r *request) Command() string { 

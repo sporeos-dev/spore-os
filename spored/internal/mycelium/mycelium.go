@@ -5,7 +5,6 @@ import (
 	"spored/internal/event"
 	message_event "spored/internal/event/message"
 	sync_event "spored/internal/event/sync"
-	"spored/internal/message"
 	"spored/internal/utilities/await"
 	"spored/internal/utilities/error"
 	"spored/internal/utilities/out"
@@ -57,17 +56,9 @@ func (m *Mycelium) OnMessage(ctx message_event.IMessageContext) {
 	event.Dispatch().BeforeMessage.Notify()
 
 	// pipe message
-	if message.IsPipe(raw) {
-
-		// witness.Incoming(raw, n.registry.ID)
-		// pipeMsg, ok := message.Pipe(raw, n.registry.ID)
-		// if !ok {
-		// 	// no parsed message to attach, so report internally instead of echoing raw text back over the wire
-		// 	witness.Error(error.Malformed, error.Node, "failed to parse pipe", out.Pair("node", n.registry.ID), out.Pair("raw", raw))
-		// 	continue
-		// }
-
-		// go n.bus.Pipe(pipeMsg, n)
+	if len(splitPipe(raw)) > 1 {
+		witness.Incoming(raw, origin)
+		m.startPipe(raw, origin)
 
 		// witnessing starts with witness
 	} else if strings.HasPrefix(raw, "witness ") { // witnessing starts with 'witness'
@@ -177,7 +168,7 @@ func (m *Mycelium) OnMessage(ctx message_event.IMessageContext) {
 func (m *Mycelium) OnSynchronizedRequest(ctx sync_event.ISynchronizedRequestContext) {
 	raw := ctx.Message()
 
-	if message.IsPipe(raw) {
+	if len(splitPipe(raw)) > 1 {
 
 		res := message_event.ResponseError(error.NotApplicable, error.Mycelium, "pipe does not support synchronized requests", "n/a", "n/a", "n/a")
 		ctx.Respond(res)
@@ -238,11 +229,19 @@ func (m *Mycelium) OnSynchronizedRequest(ctx sync_event.ISynchronizedRequestCont
 
 		request := message_event.Request(raw, ctx.Origin(), fqCmd, node, handle)
 		ch := m.pending.Await(handle)
-		event.Dispatch().Request.Notify(request)
-		response, ok := m.pending.WaitFor(handle, ch) 
+		var timeout *time.Duration
+		timeoutModule := error.Mycelium
+		if timed, ok := ctx.(interface{ TimeoutOverride() *time.Duration }); ok {
+			timeout = timed.TimeoutOverride()
+			timeoutModule = error.Pipe
+			go event.Dispatch().Request.Notify(request)
+		} else {
+			event.Dispatch().Request.Notify(request)
+		}
+		response, ok := m.pending.WaitForTimeout(handle, ch, timeout)
 		if !ok {
 			m.handles.deleteHandle(handle)
-			res := message_event.ResponseError(error.Timeout, error.Mycelium, "wait timed out", handle, command, ctx.Origin())
+			res := message_event.ResponseError(error.Timeout, timeoutModule, "wait timed out", handle, command, ctx.Origin())
 			ctx.Respond(res)
 			return
 		}

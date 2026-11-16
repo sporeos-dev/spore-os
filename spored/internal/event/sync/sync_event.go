@@ -1,6 +1,9 @@
 package sync_event
 
-import message_event "spored/internal/event/message"
+import (
+	message_event "spored/internal/event/message"
+	"time"
+)
 
 type ISynchronizedRequestContext interface {
 	Message() string
@@ -19,12 +22,25 @@ type request struct {
 	res message_event.IResponseContext
 }
 
+type timedRequest struct {
+	*request
+	timeout *time.Duration
+}
+
 func Request(msg, origin string) ISynchronizedRequestContext {
 	return &request{
 		message: msg,
 		origin: origin,
 		res: nil,
 	}
+}
+
+func RequestWithTimeout(msg, origin string, timeout *time.Duration) ISynchronizedRequestContext {
+	return &timedRequest{request: &request{message: msg, origin: origin}, timeout: timeout}
+}
+
+func (r *timedRequest) TimeoutOverride() *time.Duration {
+	return r.timeout
 }
 
 func (r *request) Message() string {

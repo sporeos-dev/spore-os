@@ -55,6 +55,9 @@ func setupPipeTest(t *testing.T, reply func(message_event.IRequestContext) strin
 	event.Init()
 	m := New()
 	m.Open()
+	m.allowance.OnManifestAnnouncement(manifest_event.New(&manifest.Manifest{
+		ID: "caller", Trust: manifest.System,
+	}))
 	endpoint := &pipeTestEndpoint{
 		Base:      base.New(),
 		calls:     make(chan message_event.IRequestContext, 8),

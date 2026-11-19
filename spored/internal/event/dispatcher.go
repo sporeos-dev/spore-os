@@ -16,7 +16,7 @@ type Dispatcher struct {
 	AppExit *EmptyEvent[app_event.IAppExitHandler]
 	BeforeMessage *EmptyEvent[message_event.IBeforeMessageHandler]
 	Broadcast *ComplexEvent[message_event.IBroadcastHandler, message_event.IBroadcastContext]
-	ManifestAnnouncement *SimpleEvent[manifest_event.IManifestAnnouncmentHandler, manifest_event.IManifestAnnouncementContext]
+	ManifestAnnouncement *SimpleEvent[manifest_event.IManifestAnnouncementHandler, manifest_event.IManifestAnnouncementContext]
 	ManifestWithdrawal *SimpleEvent[manifest_event.IManifestWithdrawalHandler, manifest_event.IManifestWithdrawalContext]
 	Message *SimpleEvent[message_event.IMessageHandler, message_event.IMessageContext]
 	NodeConnection *IdentityEvent[node_event.INodeConnectionHandler]
@@ -60,7 +60,7 @@ func New() *Dispatcher {
 			},
 		),
 		ManifestAnnouncement: Simple(
-			func(sub manifest_event.IManifestAnnouncmentHandler, ctx manifest_event.IManifestAnnouncementContext) {
+			func(sub manifest_event.IManifestAnnouncementHandler, ctx manifest_event.IManifestAnnouncementContext) {
 				sub.OnManifestAnnouncement(ctx)
 			},
 		),

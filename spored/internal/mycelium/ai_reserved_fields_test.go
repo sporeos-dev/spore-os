@@ -86,6 +86,9 @@ func TestReservedFieldsRejectedBeforeRouting(t *testing.T) {
 	m.commands.OnManifestAnnouncement(manifest_event.New(&manifest.Manifest{
 		ID: "node", Api: []manifest.Command{{Name: "time"}},
 	}))
+	m.allowance.OnManifestAnnouncement(manifest_event.New(&manifest.Manifest{
+		ID: "caller", Trust: manifest.System,
+	}))
 	m.topics.abbreviations["node.tick"] = []string{"node.tick"}
 	m.topics.publishers["node.tick"] = "node"
 	m.topics.subscribers["node.tick"] = []string{"subscriber"}

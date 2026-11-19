@@ -2,6 +2,7 @@ package mycelium
 
 import (
 	"spored/internal/utilities/error"
+	"spored/internal/utilities/message"
 	"spored/internal/witness"
 	"strings"
 	"unicode"
@@ -50,7 +51,7 @@ func extractHandleFromRequest(raw string) (string, bool) {
 		}
 
 		if ch == '<' && i > 0 && raw[i-1] == '=' && strings.HasPrefix(raw[i:], "<<") {
-			end := blockEnd(raw, i+2)
+			end := message.BlockEnd(raw, i+2)
 			if end < 0 {
 				witness.Error(error.Malformed, error.Mycelium, "request block is not closed")
 				return "", false

@@ -165,7 +165,6 @@ api:
         type: string
         description: Fully-qualified capability ID.
         required: true
-    outputs: []
   
   - name: permission.revoke
     description: Revoke permission from a node for a capability.
@@ -181,7 +180,6 @@ api:
         type: string
         description: Fully-qualified capability ID.
         required: true
-    outputs: []
 
 # ==================================================================================
 # SPORE.persistence

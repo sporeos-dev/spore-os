@@ -5,8 +5,10 @@ import (
 	"spored/internal/event"
 	message_event "spored/internal/event/message"
 	sync_event "spored/internal/event/sync"
+	"spored/internal/permission"
 	"spored/internal/utilities/await"
 	"spored/internal/utilities/error"
+	"spored/internal/utilities/message"
 	"spored/internal/utilities/out"
 	"spored/internal/witness"
 	"strings"
@@ -21,6 +23,7 @@ type Mycelium struct {
 	commands *commandMap
 	topics   *topics
 	pending *await.Pending
+	allowance *permission.Allowance
 }
 
 func New() *Mycelium {
@@ -30,6 +33,7 @@ func New() *Mycelium {
 		commands: newCommandMap(),
 		topics: newTopics(),
 		pending: await.New(error.Mycelium).WithTimeout(defaultTimeout),
+		allowance: permission.New(),
 	}
 }
 
@@ -38,12 +42,14 @@ func (m *Mycelium) Open() {
 	event.Subscribe(m.handles)
 	event.Subscribe(m.commands)
 	event.Subscribe(m.topics)
+	event.Subscribe(m.allowance)
 }
 
 func (m *Mycelium) Close() {
 	event.Unsubscribe(m.handles)
 	event.Unsubscribe(m.commands)
 	event.Unsubscribe(m.topics)
+	event.Unsubscribe(m.allowance)
 	event.Unsubscribe(m)
 }
 
@@ -160,6 +166,15 @@ func (m *Mycelium) OnMessage(ctx message_event.IMessageContext) {
 			return
 		}
 
+		can := m.allowance.Can(origin, fqName, raw)
+		if !can {
+			reserr := message_event.ResponseError(error.NotPermitted, error.Mycelium, "not allowed", handle, command, origin)
+			event.Dispatch().Response.Notify(reserr)
+			m.handles.deleteHandle(handle)
+			return
+		}
+
+		raw = message.RemoveFlag(raw, "request.permission")
 		request := message_event.Request(raw, origin, fqName, node, handle)
 		event.Dispatch().Request.Notify(request)
 	}
@@ -227,6 +242,22 @@ func (m *Mycelium) OnSynchronizedRequest(ctx sync_event.ISynchronizedRequestCont
 			return
 		}
 
+		origin := ctx.Origin()
+		if actor, caller, delegated := strings.Cut(origin, ":"); delegated {
+			origin = caller
+			if actor == "dev.sporeos.SPORE" && fqCmd == "dev.sporeos.SPORE.permission.request" {
+				origin = actor
+			}
+		}
+		can := m.allowance.Can(origin, fqCmd, raw)
+		if !can {
+			m.handles.deleteHandle(handle)
+			res := message_event.ResponseError(error.NotPermitted, error.Mycelium, "not allowed", handle, command, ctx.Origin())
+			ctx.Respond(res)
+			return
+		}
+
+		raw = message.RemoveFlag(raw, "request.permission")
 		request := message_event.Request(raw, ctx.Origin(), fqCmd, node, handle)
 		ch := m.pending.Await(handle)
 		var timeout *time.Duration

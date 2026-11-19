@@ -7,7 +7,7 @@ type IManifestAnnouncementContext interface {
 	Manifest() *manifest.Manifest
 }
 
-type IManifestAnnouncmentHandler interface {
+type IManifestAnnouncementHandler interface {
 	OnManifestAnnouncement(ctx IManifestAnnouncementContext)
 }
 

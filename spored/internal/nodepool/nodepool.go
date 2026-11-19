@@ -111,7 +111,7 @@ func (p *Pool) HandleConnection(conn net.Conn) {
 	node.HandleConnection(conn, reader, writer)
 }
 
-// registry announcment
+// registry Announcement
 func (p *Pool) OnRegistryAnnouncement(ctx registry_event.IRegistryContext) {
 	el := ctx.Registry()
 	witness.Spore("registry announcement", out.Pair("node", el.ID))

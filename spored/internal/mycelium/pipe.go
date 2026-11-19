@@ -9,6 +9,7 @@ import (
 	message_event "spored/internal/event/message"
 	sync_event "spored/internal/event/sync"
 	"spored/internal/utilities/error"
+	"spored/internal/utilities/message"
 	"spored/internal/witness"
 	"strconv"
 	"strings"
@@ -177,7 +178,7 @@ func splitPipe(raw string) []string {
 			continue
 		}
 		if len(delimiters) == 0 && r == '<' && i > 0 && raw[i-1] == '=' && strings.HasPrefix(raw[i:], "<<") {
-			end := blockEnd(raw, i+2)
+			end := message.BlockEnd(raw, i+2)
 			if end < 0 {
 				break
 			}
@@ -315,7 +316,7 @@ func pipeFields(raw string) ([]string, bool) {
 				break
 			}
 			if i == valueStart && strings.HasPrefix(raw[i:], "<<") {
-				end := blockEnd(raw, i+2)
+				end := message.BlockEnd(raw, i+2)
 				if end < 0 {
 					return nil, false
 				}

@@ -3,6 +3,7 @@ package mycelium
 import (
 	"spored/internal/cparser"
 	"spored/internal/utilities/error"
+	"spored/internal/utilities/message"
 	"spored/internal/utilities/out"
 	"spored/internal/witness"
 	"strings"
@@ -55,7 +56,7 @@ func hasReservedArgument(raw, reserved string) bool {
 				break
 			}
 			if i == valueStart && strings.HasPrefix(raw[i:], "<<") {
-				end := blockEnd(raw, i+2)
+				end := message.BlockEnd(raw, i+2)
 				if end < 0 {
 					return false
 				}
@@ -85,23 +86,4 @@ func hasReservedArgument(raw, reserved string) bool {
 		}
 	}
 	return false
-}
-
-func blockEnd(raw string, start int) int {
-	for start < len(raw) {
-		offset := strings.Index(raw[start:], "\n>>")
-		if offset < 0 {
-			return -1
-		}
-		end := start + offset + len("\n>>")
-		if end == len(raw) {
-			return end
-		}
-		r, _ := utf8.DecodeRuneInString(raw[end:])
-		if unicode.IsSpace(r) {
-			return end
-		}
-		start = end
-	}
-	return -1
 }

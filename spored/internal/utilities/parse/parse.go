@@ -118,9 +118,9 @@ func tokenize(raw string) ([]string, string) {
 	return tokens, ""
 }
 
-// unquoteValue strips surrounding quote delimiters and decodes escape
+// UnquoteValue strips surrounding quote delimiters and decodes escape
 // sequences for double-quoted strings. Arrays and objects are returned as-is.
-func unquoteValue(s string) string {
+func UnquoteValue(s string) string {
 	if len(s) >= 2 {
 		if s[0] == '"' && s[len(s)-1] == '"' {
 			return unescapeDoubleQuoted(s[1 : len(s)-1])
@@ -183,7 +183,7 @@ func ArrayToStrings(s string) []string {
 	result := make([]string, 0, len(tokens))
 	for _, tok := range tokens {
 		if tok != "" {
-			result = append(result, unquoteValue(tok))
+			result = append(result, UnquoteValue(tok))
 		}
 	}
 	return result

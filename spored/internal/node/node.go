@@ -66,7 +66,7 @@ type State struct {
 
 func New(registry *reg_el.Element) *Single {
 
-	n := &Single{
+	s := &Single{
 		Base: base.New().Set("node", registry.ID),
 		registry: registry,
 		manifest: nil,
@@ -77,12 +77,12 @@ func New(registry *reg_el.Element) *Single {
 		witnessHandler: witness_node.New(),
 	}
 
-	n.manifest = manifest.New(registry, n)
-	if manifestloader.Load(n.manifest) {
-		n.manifest.Verify()
+	s.manifest = manifest.New(registry, s)
+	if manifestloader.Load(s.manifest) {
+		s.manifest.Verify()
 	}
 
-	return n
+	return s
 }
 
 func (s *Single) Close() {
